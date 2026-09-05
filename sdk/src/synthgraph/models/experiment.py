@@ -13,4 +13,4 @@ class Experiment(BaseModel):
     name: str = Field(min_length=1)
     description: str | None = None
     created_at: datetime
-    updated_at: datetime
+    updated_at: datetime | None = None

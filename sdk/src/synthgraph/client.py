@@ -2,6 +2,7 @@ from types import TracebackType
 from typing import Any, Self
 
 from .config import SynthGraphConfig
+from .experiments import ExperimentsAPI
 from .http import SynthGraphHTTPClient
 from .projects import ProjectsAPI
 
@@ -48,7 +49,7 @@ class SynthGraphClient:
         )
 
         self.projects = ProjectsAPI(self._http)
-
+        self.experiments = ExperimentsAPI(self._http)
     def close(self) -> None:
         """Close the underlying HTTP client."""
         self._http.close()

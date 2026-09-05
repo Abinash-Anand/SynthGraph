@@ -7,7 +7,7 @@ from .config import SynthGraphConfig
 
 
 class SynthGraphHTTPError(Exception):
-    """Raised when the SynthGraph API returns an error response."""
+    """Raised when a SynthGraph API request fails."""
 
     def __init__(self, status_code: int, message: str) -> None:
         self.status_code = status_code
@@ -25,39 +25,37 @@ class SynthGraphHTTPClient:
     def __init__(
         self,
         config: SynthGraphConfig,
+        *,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         self.config = config
 
-        self._client = httpx.Client(
-            base_url=config.api_url,
-            timeout=config.timeout,
-            headers=self._build_headers(),
-            transport=transport,
-        )
-
-    def _build_headers(self) -> dict[str, str]:
-        """Build default HTTP headers."""
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
         }
 
-        if self.config.api_key is not None:
-            headers["Authorization"] = f"Bearer {self.config.api_key}"
+        if config.api_key is not None:
+            headers["Authorization"] = f"Bearer {config.api_key}"
 
-        return headers
+        self._client = httpx.Client(
+            base_url=config.api_url.rstrip("/"),
+            headers=headers,
+            timeout=config.timeout,
+            transport=transport,
+        )
 
-    def get(
-        self,
-        path: str,
-        *,
-        params: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """Send a GET request."""
-        response = self._client.get(path, params=params)
+    def get(self, path: str) -> dict[str, Any]:
+        """Send a GET request expecting a JSON object response."""
+        response = self._client.get(path)
 
         return self._handle_response(response)
+
+    def get_list(self, path: str) -> list[dict[str, Any]]:
+        """Send a GET request expecting a JSON array response."""
+        response = self._client.get(path)
+
+        return self._handle_list_response(response)
 
     def post(
         self,
@@ -65,43 +63,13 @@ class SynthGraphHTTPClient:
         *,
         json: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Send a POST request."""
-        response = self._client.post(path, json=json)
+        """Send a POST request, optionally with a JSON body."""
+        if json is None:
+            response = self._client.post(path)
+        else:
+            response = self._client.post(path, json=json)
 
         return self._handle_response(response)
-
-    @staticmethod
-    def _handle_response(response: httpx.Response) -> dict[str, Any]:
-        """Validate and decode an API response."""
-        if response.is_error:
-            try:
-                data = response.json()
-                message = str(
-                    data.get(
-                        "detail",
-                        data.get("message", response.text),
-                    )
-                )
-            except ValueError:
-                message = response.text
-
-            raise SynthGraphHTTPError(
-                status_code=response.status_code,
-                message=message,
-            )
-
-        if not response.content:
-            return {}
-
-        data = response.json()
-
-        if not isinstance(data, dict):
-            raise SynthGraphHTTPError(
-                status_code=response.status_code,
-                message="API response must be a JSON object",
-            )
-
-        return data
 
     def close(self) -> None:
         """Close the underlying HTTP client."""
@@ -117,3 +85,76 @@ class SynthGraphHTTPClient:
         traceback: TracebackType | None,
     ) -> None:
         self.close()
+
+    @staticmethod
+    def _handle_response(
+        response: httpx.Response,
+    ) -> dict[str, Any]:
+        """Validate and decode an API object response."""
+        if response.is_error:
+            raise SynthGraphHTTPClient._create_http_error(response)
+
+        if not response.content:
+            return {}
+
+        data = response.json()
+
+        if not isinstance(data, dict):
+            raise SynthGraphHTTPError(
+                status_code=response.status_code,
+                message="API response must be a JSON object",
+            )
+
+        return data
+
+    @staticmethod
+    def _handle_list_response(
+        response: httpx.Response,
+    ) -> list[dict[str, Any]]:
+        """Validate and decode an API list response."""
+        if response.is_error:
+            raise SynthGraphHTTPClient._create_http_error(response)
+
+        if not response.content:
+            return []
+
+        data = response.json()
+
+        if not isinstance(data, list):
+            raise SynthGraphHTTPError(
+                status_code=response.status_code,
+                message="API response must be a JSON array",
+            )
+
+        if not all(isinstance(item, dict) for item in data):
+            raise SynthGraphHTTPError(
+                status_code=response.status_code,
+                message="API response array must contain JSON objects",
+            )
+
+        return data
+
+    @staticmethod
+    def _create_http_error(
+        response: httpx.Response,
+    ) -> SynthGraphHTTPError:
+        """Create a consistent API error from an HTTP response."""
+        try:
+            data = response.json()
+
+            if isinstance(data, dict):
+                message = str(
+                    data.get(
+                        "detail",
+                        data.get("message", response.text),
+                    )
+                )
+            else:
+                message = response.text
+        except ValueError:
+            message = response.text
+
+        return SynthGraphHTTPError(
+            status_code=response.status_code,
+            message=message,
+        )
