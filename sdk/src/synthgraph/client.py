@@ -3,6 +3,7 @@ from typing import Any, Self
 
 from .config import SynthGraphConfig
 from .experiments import ExperimentsAPI
+from .generations import GenerationsAPI
 from .http import SynthGraphHTTPClient
 from .projects import ProjectsAPI
 
@@ -50,6 +51,8 @@ class SynthGraphClient:
 
         self.projects = ProjectsAPI(self._http)
         self.experiments = ExperimentsAPI(self._http)
+        self.generations = GenerationsAPI(self._http)
+
     def close(self) -> None:
         """Close the underlying HTTP client."""
         self._http.close()

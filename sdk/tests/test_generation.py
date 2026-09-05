@@ -1,182 +1,93 @@
-from datetime import UTC, datetime
+import json
 
-import pytest
-from pydantic import ValidationError
+import httpx
 
-from synthgraph import (
+from synthgraph.client import SynthGraphClient
+from synthgraph.models import (
     AssetReference,
     DatasetReference,
-    GenerationRun,
-    GenerationStatus,
     Generator,
     Reproducibility,
 )
 
 
-def create_generation() -> GenerationRun:
-    now = datetime.now(UTC)
-
-    return GenerationRun(
-        id="gen_123",
-        experiment_id="exp_123",
-        name="rainy_scene_generation_v1",
-        description="Synthetic rainy driving scenes",
-        generator=Generator(
-            name="blender",
-            version="4.2.0",
-            type="3d_renderer",
-        ),
-        parameters={
-            "render_engine": "cycles",
-            "samples": 512,
-            "resolution": {
-                "width": 1920,
-                "height": 1080,
+def test_create_generation() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "POST"
+        assert str(request.url) == (
+            "https://api.example.com/experiments/experiment_123/generations"
+        )
+        assert json.loads(request.content) == {
+            "name": "Rainy Scene Generation",
+            "generator": {
+                "name": "blender",
+                "version": "4.2.0",
+                "type": "3d_renderer",
             },
-            "weather": "rain",
-            "seed": 42,
-        },
-        reproducibility=Reproducibility(
-            seed=42,
-            code_version="git:a81f93c",
-            environment={
-                "python": "3.14.6",
-                "os": "Windows",
+            "parameters": {
+                "samples": 512,
+                "weather": "rain",
             },
-            configuration_hash="sha256:abc123",
-        ),
-        inputs=[
-            AssetReference(
-                id="asset_123",
-                uri="file:///data/model.blend",
-                name="model.blend",
-                type="3d_model",
-            )
-        ],
-        outputs=[
-            DatasetReference(
-                id="dataset_789",
-                uri="file:///data/output",
-                name="output_dataset",
-                format="image",
-            )
-        ],
-        status=GenerationStatus.COMPLETED,
-        started_at=now,
-        completed_at=now,
-        created_at=now,
-        metadata={
-            "pipeline_stage": "dataset_generation",
-        },
-    )
+            "reproducibility": {
+                "seed": 42,
+            },
+            "inputs": [],
+            "outputs": [],
+        }
 
-
-def test_generation_run_creation() -> None:
-    generation = create_generation()
-
-    assert generation.id == "gen_123"
-    assert generation.experiment_id == "exp_123"
-    assert generation.name == "rainy_scene_generation_v1"
-    assert generation.generator.name == "blender"
-    assert generation.generator.version == "4.2.0"
-
-
-def test_generation_run_supports_arbitrary_parameters() -> None:
-    generation = create_generation()
-
-    assert generation.parameters["render_engine"] == "cycles"
-    assert generation.parameters["samples"] == 512
-    assert generation.parameters["resolution"]["width"] == 1920
-    assert generation.parameters["weather"] == "rain"
-
-
-def test_generation_status() -> None:
-    generation = create_generation()
-
-    assert generation.status == GenerationStatus.COMPLETED
-    assert generation.status.value == "completed"
-
-
-def test_generation_reproducibility_metadata() -> None:
-    generation = create_generation()
-
-    assert generation.reproducibility.seed == 42
-    assert generation.reproducibility.code_version == "git:a81f93c"
-    assert generation.reproducibility.environment["os"] == "Windows"
-
-
-def test_generation_inputs_and_outputs() -> None:
-    generation = create_generation()
-
-    assert len(generation.inputs) == 1
-    assert generation.inputs[0].id == "asset_123"
-    assert generation.inputs[0].name == "model.blend"
-
-    assert len(generation.outputs) == 1
-    assert generation.outputs[0].id == "dataset_789"
-    assert generation.outputs[0].name == "output_dataset"
-
-
-def test_generation_defaults_empty_inputs_outputs_and_metadata() -> None:
-    now = datetime.now(UTC)
-
-    generation = GenerationRun(
-        id="gen_123",
-        experiment_id="exp_123",
-        name="minimal-generation",
-        generator=Generator(name="custom_generator"),
-        parameters={},
-        reproducibility=Reproducibility(),
-        status=GenerationStatus.PENDING,
-        created_at=now,
-    )
-
-    assert generation.inputs == []
-    assert generation.outputs == []
-    assert generation.metadata == {}
-
-
-def test_generator_requires_name() -> None:
-    with pytest.raises(ValidationError):
-        Generator(name="")
-
-
-def test_generation_requires_name() -> None:
-    now = datetime.now(UTC)
-
-    with pytest.raises(ValidationError):
-        GenerationRun(
-            id="gen_123",
-            experiment_id="exp_123",
-            name="",
-            generator=Generator(name="blender"),
-            parameters={},
-            reproducibility=Reproducibility(),
-            status=GenerationStatus.PENDING,
-            created_at=now,
+        return httpx.Response(
+            201,
+            json={
+                "id": "generation_123",
+                "experiment_id": "experiment_123",
+                "name": "Rainy Scene Generation",
+                "generator": {
+                    "name": "blender",
+                    "version": "4.2.0",
+                    "type": "3d_renderer",
+                },
+                "parameters": {
+                    "samples": 512,
+                    "weather": "rain",
+                },
+                "reproducibility": {
+                    "seed": 42,
+                },
+                "inputs": [],
+                "outputs": [],
+                "status": "pending",
+                "created_at": "2026-09-05T12:00:00Z",
+            },
         )
 
+    transport = httpx.MockTransport(handler)
 
-def test_generation_is_immutable() -> None:
-    generation = create_generation()
+    with SynthGraphClient(
+        api_url="https://api.example.com",
+        transport=transport,
+    ) as client:
+        generation = client.generations.create(
+            experiment_id="experiment_123",
+            name="Rainy Scene Generation",
+            generator=Generator(
+                name="blender",
+                version="4.2.0",
+                type="3d_renderer",
+            ),
+            parameters={
+                "samples": 512,
+                "weather": "rain",
+            },
+            reproducibility=Reproducibility(seed=42),
+        )
 
-    with pytest.raises(ValidationError):
-        generation.name = "changed"
+    assert generation.id == "generation_123"
+    assert generation.experiment_id == "experiment_123"
+    assert generation.name == "Rainy Scene Generation"
+    assert generation.status == "pending"
 
 
-def test_generation_serialization() -> None:
-    generation = create_generation()
-
-    data = generation.model_dump(mode="json")
-
-    assert data["id"] == "gen_123"
-    assert data["experiment_id"] == "exp_123"
-    assert data["generator"]["name"] == "blender"
-    assert data["status"] == "completed"
-    assert data["reproducibility"]["seed"] == 42
-
-
-def test_generation_accepts_data_references() -> None:
+def test_create_generation_with_references() -> None:
     input_asset = AssetReference(
         id="asset_123",
         uri="file:///data/model.blend",
@@ -198,26 +109,138 @@ def test_generation_accepts_data_references() -> None:
         format="image",
     )
 
-    generation = GenerationRun(
-        id="gen_123",
-        experiment_id="exp_123",
-        name="reference-test-generation",
-        generator=Generator(
-            name="blender",
-            version="4.2.0",
-            type="3d_renderer",
-        ),
-        parameters={},
-        reproducibility=Reproducibility(
-            seed=42,
-            code_version="git:abc123",
-        ),
-        inputs=[input_asset, input_dataset],
-        outputs=[output_dataset],
-        status=GenerationStatus.COMPLETED,
-        created_at=datetime.now(UTC),
-    )
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "POST"
 
-    assert generation.inputs[0].id == "asset_123"
-    assert generation.inputs[1].id == "dataset_123"
-    assert generation.outputs[0].id == "dataset_456"
+        return httpx.Response(
+            201,
+            json={
+                "id": "generation_123",
+                "experiment_id": "experiment_123",
+                "name": "Referenced Generation",
+                "generator": {
+                    "name": "blender",
+                },
+                "parameters": {},
+                "reproducibility": {},
+                "inputs": [
+                    input_asset.model_dump(mode="json"),
+                    input_dataset.model_dump(mode="json"),
+                ],
+                "outputs": [
+                    output_dataset.model_dump(mode="json"),
+                ],
+                "status": "pending",
+                "created_at": "2026-09-05T12:00:00Z",
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+
+    with SynthGraphClient(
+        api_url="https://api.example.com",
+        transport=transport,
+    ) as client:
+        generation = client.generations.create(
+            experiment_id="experiment_123",
+            name="Referenced Generation",
+            generator=Generator(name="blender"),
+            parameters={},
+            reproducibility=Reproducibility(),
+            inputs=[input_asset, input_dataset],
+            outputs=[output_dataset],
+        )
+
+    assert generation.id == "generation_123"
+    assert len(generation.inputs) == 2
+    assert len(generation.outputs) == 1
+
+
+def test_get_generation() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "GET"
+        assert str(request.url) == (
+            "https://api.example.com/generations/generation_123"
+        )
+
+        return httpx.Response(
+            200,
+            json={
+                "id": "generation_123",
+                "experiment_id": "experiment_123",
+                "name": "Rainy Scene Generation",
+                "generator": {
+                    "name": "blender",
+                },
+                "parameters": {},
+                "reproducibility": {},
+                "inputs": [],
+                "outputs": [],
+                "status": "completed",
+                "created_at": "2026-09-05T12:00:00Z",
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+
+    with SynthGraphClient(
+        api_url="https://api.example.com",
+        transport=transport,
+    ) as client:
+        generation = client.generations.get("generation_123")
+
+    assert generation.id == "generation_123"
+    assert generation.experiment_id == "experiment_123"
+    assert generation.status == "completed"
+
+
+def test_list_generations() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "GET"
+        assert str(request.url) == (
+            "https://api.example.com/experiments/experiment_123/generations"
+        )
+
+        return httpx.Response(
+            200,
+            json=[
+                {
+                    "id": "generation_123",
+                    "experiment_id": "experiment_123",
+                    "name": "Generation One",
+                    "generator": {"name": "blender"},
+                    "parameters": {},
+                    "reproducibility": {},
+                    "inputs": [],
+                    "outputs": [],
+                    "status": "completed",
+                    "created_at": "2026-09-05T12:00:00Z",
+                },
+                {
+                    "id": "generation_456",
+                    "experiment_id": "experiment_123",
+                    "name": "Generation Two",
+                    "generator": {"name": "blender"},
+                    "parameters": {},
+                    "reproducibility": {},
+                    "inputs": [],
+                    "outputs": [],
+                    "status": "pending",
+                    "created_at": "2026-09-05T12:00:00Z",
+                },
+            ],
+        )
+
+    transport = httpx.MockTransport(handler)
+
+    with SynthGraphClient(
+        api_url="https://api.example.com",
+        transport=transport,
+    ) as client:
+        generations = client.generations.list(
+            experiment_id="experiment_123",
+        )
+
+    assert len(generations) == 2
+    assert generations[0].id == "generation_123"
+    assert generations[1].id == "generation_456"

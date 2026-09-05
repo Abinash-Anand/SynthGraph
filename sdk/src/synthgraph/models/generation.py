@@ -31,10 +31,22 @@ class Reproducibility(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    seed: int | None = None
-    code_version: str | None = None
-    environment: dict[str, Any] = Field(default_factory=dict)
-    configuration_hash: str | None = None
+    seed: int | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
+    code_version: str | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
+    environment: dict[str, Any] = Field(
+        default_factory=dict,
+        exclude_if=lambda value: not value,
+    )
+    configuration_hash: str | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
 
 
 class GenerationRun(BaseModel):
