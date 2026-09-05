@@ -4,6 +4,8 @@ import pytest
 from pydantic import ValidationError
 
 from synthgraph import (
+    AssetReference,
+    DatasetReference,
     GenerationRun,
     GenerationStatus,
     Generator,
@@ -43,8 +45,22 @@ def create_generation() -> GenerationRun:
             },
             configuration_hash="sha256:abc123",
         ),
-        inputs=["asset_123"],
-        outputs=["dataset_789"],
+        inputs=[
+            AssetReference(
+                id="asset_123",
+                uri="file:///data/model.blend",
+                name="model.blend",
+                type="3d_model",
+            )
+        ],
+        outputs=[
+            DatasetReference(
+                id="dataset_789",
+                uri="file:///data/output",
+                name="output_dataset",
+                format="image",
+            )
+        ],
         status=GenerationStatus.COMPLETED,
         started_at=now,
         completed_at=now,
@@ -92,8 +108,13 @@ def test_generation_reproducibility_metadata() -> None:
 def test_generation_inputs_and_outputs() -> None:
     generation = create_generation()
 
-    assert generation.inputs == ["asset_123"]
-    assert generation.outputs == ["dataset_789"]
+    assert len(generation.inputs) == 1
+    assert generation.inputs[0].id == "asset_123"
+    assert generation.inputs[0].name == "model.blend"
+
+    assert len(generation.outputs) == 1
+    assert generation.outputs[0].id == "dataset_789"
+    assert generation.outputs[0].name == "output_dataset"
 
 
 def test_generation_defaults_empty_inputs_outputs_and_metadata() -> None:
@@ -153,3 +174,50 @@ def test_generation_serialization() -> None:
     assert data["generator"]["name"] == "blender"
     assert data["status"] == "completed"
     assert data["reproducibility"]["seed"] == 42
+
+
+def test_generation_accepts_data_references() -> None:
+    input_asset = AssetReference(
+        id="asset_123",
+        uri="file:///data/model.blend",
+        name="model.blend",
+        type="3d_model",
+    )
+
+    input_dataset = DatasetReference(
+        id="dataset_123",
+        uri="file:///data/input",
+        name="input_dataset",
+        format="image",
+    )
+
+    output_dataset = DatasetReference(
+        id="dataset_456",
+        uri="file:///data/output",
+        name="output_dataset",
+        format="image",
+    )
+
+    generation = GenerationRun(
+        id="gen_123",
+        experiment_id="exp_123",
+        name="reference-test-generation",
+        generator=Generator(
+            name="blender",
+            version="4.2.0",
+            type="3d_renderer",
+        ),
+        parameters={},
+        reproducibility=Reproducibility(
+            seed=42,
+            code_version="git:abc123",
+        ),
+        inputs=[input_asset, input_dataset],
+        outputs=[output_dataset],
+        status=GenerationStatus.COMPLETED,
+        created_at=datetime.now(UTC),
+    )
+
+    assert generation.inputs[0].id == "asset_123"
+    assert generation.inputs[1].id == "dataset_123"
+    assert generation.outputs[0].id == "dataset_456"
