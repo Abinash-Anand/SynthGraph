@@ -71,6 +71,20 @@ class SynthGraphHTTPClient:
 
         return self._handle_response(response)
 
+    def patch(
+        self,
+        path: str,
+        *,
+        json: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Send a PATCH request, optionally with a JSON body."""
+        if json is None:
+            response = self._client.patch(path)
+        else:
+            response = self._client.patch(path, json=json)
+
+        return self._handle_response(response)
+    
     def close(self) -> None:
         """Close the underlying HTTP client."""
         self._client.close()

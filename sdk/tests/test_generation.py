@@ -6,6 +6,7 @@ from synthgraph.client import SynthGraphClient
 from synthgraph.models import (
     AssetReference,
     DatasetReference,
+    GenerationStatus,
     Generator,
     Reproducibility,
 )
@@ -244,3 +245,122 @@ def test_list_generations() -> None:
     assert len(generations) == 2
     assert generations[0].id == "generation_123"
     assert generations[1].id == "generation_456"
+
+def test_start_generation() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "PATCH"
+        assert str(request.url) == (
+            "https://api.example.com/generations/generation_123"
+        )
+        assert json.loads(request.content) == {
+            "status": "running",
+        }
+
+        return httpx.Response(
+            200,
+            json={
+                "id": "generation_123",
+                "experiment_id": "experiment_123",
+                "name": "Rainy Scene Generation",
+                "generator": {
+                    "name": "blender",
+                },
+                "parameters": {},
+                "reproducibility": {},
+                "inputs": [],
+                "outputs": [],
+                "status": "running",
+                "created_at": "2026-09-05T12:00:00Z",
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+
+    with SynthGraphClient(
+        api_url="https://api.example.com",
+        transport=transport,
+    ) as client:
+        generation = client.generations.start("generation_123")
+
+    assert generation.id == "generation_123"
+    assert generation.status == GenerationStatus.RUNNING
+
+
+def test_complete_generation() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "PATCH"
+        assert str(request.url) == (
+            "https://api.example.com/generations/generation_123"
+        )
+        assert json.loads(request.content) == {
+            "status": "completed",
+        }
+
+        return httpx.Response(
+            200,
+            json={
+                "id": "generation_123",
+                "experiment_id": "experiment_123",
+                "name": "Rainy Scene Generation",
+                "generator": {
+                    "name": "blender",
+                },
+                "parameters": {},
+                "reproducibility": {},
+                "inputs": [],
+                "outputs": [],
+                "status": "completed",
+                "created_at": "2026-09-05T12:00:00Z",
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+
+    with SynthGraphClient(
+        api_url="https://api.example.com",
+        transport=transport,
+    ) as client:
+        generation = client.generations.complete("generation_123")
+
+    assert generation.id == "generation_123"
+    assert generation.status == GenerationStatus.COMPLETED
+
+
+def test_fail_generation() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "PATCH"
+        assert str(request.url) == (
+            "https://api.example.com/generations/generation_123"
+        )
+        assert json.loads(request.content) == {
+            "status": "failed",
+        }
+
+        return httpx.Response(
+            200,
+            json={
+                "id": "generation_123",
+                "experiment_id": "experiment_123",
+                "name": "Rainy Scene Generation",
+                "generator": {
+                    "name": "blender",
+                },
+                "parameters": {},
+                "reproducibility": {},
+                "inputs": [],
+                "outputs": [],
+                "status": "failed",
+                "created_at": "2026-09-05T12:00:00Z",
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+
+    with SynthGraphClient(
+        api_url="https://api.example.com",
+        transport=transport,
+    ) as client:
+        generation = client.generations.fail("generation_123")
+
+    assert generation.id == "generation_123"
+    assert generation.status == GenerationStatus.FAILED

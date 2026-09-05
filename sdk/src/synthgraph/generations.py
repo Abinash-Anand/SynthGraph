@@ -1,8 +1,14 @@
 from typing import Any
 
 from .http import SynthGraphHTTPClient
-from .models.generation import GenerationRun, Generator, Reproducibility
-from .models.reference import AssetReference, DatasetReference
+from .models import (
+    AssetReference,
+    DatasetReference,
+    GenerationRun,
+    GenerationStatus,
+    Generator,
+    Reproducibility,
+)
 
 
 class GenerationsAPI:
@@ -36,19 +42,21 @@ class GenerationsAPI:
                 exclude_defaults=True,
             ),
             "inputs": [
-                (
-                    reference.model_dump(mode="json")
-                    if not isinstance(reference, str)
-                    else reference
+                reference.model_dump(mode="json")
+                if isinstance(
+                    reference,
+                    (AssetReference, DatasetReference),
                 )
+                else {"id": reference}
                 for reference in (inputs or [])
             ],
             "outputs": [
-                (
-                    reference.model_dump(mode="json")
-                    if not isinstance(reference, str)
-                    else reference
+                reference.model_dump(mode="json")
+                if isinstance(
+                    reference,
+                    (AssetReference, DatasetReference),
                 )
+                else {"id": reference}
                 for reference in (outputs or [])
             ],
         }
@@ -61,15 +69,56 @@ class GenerationsAPI:
         return GenerationRun.model_validate(data)
 
     def get(self, generation_id: str) -> GenerationRun:
-        """Get a generation run by ID."""
-        data = self._http.get(f"/generations/{generation_id}")
+        """Retrieve a generation run by ID."""
+        data = self._http.get(
+            f"/generations/{generation_id}",
+        )
 
         return GenerationRun.model_validate(data)
 
     def list(self, *, experiment_id: str) -> list[GenerationRun]:
-        """List generation runs within an experiment."""
+        """List generation runs belonging to an experiment."""
         data = self._http.get_list(
             f"/experiments/{experiment_id}/generations",
         )
 
-        return [GenerationRun.model_validate(item) for item in data]
+        return [
+            GenerationRun.model_validate(item)
+            for item in data
+        ]
+
+    def start(self, generation_id: str) -> GenerationRun:
+        """Mark a generation run as running."""
+        return self._update_status(
+            generation_id,
+            GenerationStatus.RUNNING,
+        )
+
+    def complete(self, generation_id: str) -> GenerationRun:
+        """Mark a generation run as completed."""
+        return self._update_status(
+            generation_id,
+            GenerationStatus.COMPLETED,
+        )
+
+    def fail(self, generation_id: str) -> GenerationRun:
+        """Mark a generation run as failed."""
+        return self._update_status(
+            generation_id,
+            GenerationStatus.FAILED,
+        )
+
+    def _update_status(
+        self,
+        generation_id: str,
+        status: GenerationStatus,
+    ) -> GenerationRun:
+        """Update the lifecycle status of a generation run."""
+        data = self._http.patch(
+            f"/generations/{generation_id}",
+            json={
+                "status": status.value,
+            },
+        )
+
+        return GenerationRun.model_validate(data)
