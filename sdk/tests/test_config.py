@@ -7,7 +7,7 @@ from synthgraph.config import SynthGraphConfig
 def test_config_defaults() -> None:
     config = SynthGraphConfig()
 
-    assert config.api_url == "http://localhost:8000"
+    assert config.api_url == "https://synthgraph.onrender.com"
     assert config.api_key is None
     assert config.timeout == 30.0
 
