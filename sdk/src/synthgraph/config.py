@@ -7,7 +7,7 @@ class SynthGraphConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     api_url: str = Field(
-        default="http://localhost:8000",
+        default="https://synthgraph.onrender.com",
         min_length=1,
     )
     api_key: str | None = None
