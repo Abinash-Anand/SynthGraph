@@ -16,3 +16,12 @@ synthetic-data research experiments.
 Early development.
 
 The Python SDK is currently the first implementation focus.
+
+## Backend
+
+### Tech Stack 
+
+- NestJS server
+- PostgreSQL DB
+- Supabase DB Infra
+- TypeORM
