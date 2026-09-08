@@ -15,4 +15,16 @@ export class TypeOrmProjectRepository implements ProjectRepository {
   async create(project: Project): Promise<Project> {
     return this.repository.save(project);
   }
+
+  async findByIdForUser(
+    projectId: string,
+    userId: string,
+  ): Promise<Project | null> {
+    return this.repository.findOne({
+      where: {
+        id: projectId,
+        userId,
+      },
+    });
+  }
 }

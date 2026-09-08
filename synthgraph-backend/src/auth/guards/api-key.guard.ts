@@ -2,6 +2,7 @@ import {
   CanActivate,
   ExecutionContext,
   Injectable,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { AuthenticatedRequest } from '../types/authenticated-request.js';
 import { ApiKeyService } from '../services/api-key.service.js'
@@ -18,13 +19,13 @@ export class ApiKeyGuard implements CanActivate {
     const authorization = request.headers.authorization;
 
     if (!authorization) {
-      return false;
+    throw new UnauthorizedException('Authentication required');
     }
 
     const [scheme, credentials] = authorization.split(' ');
 
     if (scheme !== 'Bearer' || !credentials) {
-      return false;
+    throw new UnauthorizedException('Invalid authorization header');
     }
 
     const user = await this.apiKeyService.verify(credentials);
