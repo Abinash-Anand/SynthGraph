@@ -9,23 +9,15 @@ import { ProjectsController } from './projects.controller.js';
 import { ListProjectsService } from './services/list-projects.service.js';
 import { CreateProjectService } from './services/create-project.service.js';
 
-
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Project]),
-    AuthModule,
-  ],
-  controllers: [
-    ProjectsController,
-  ],
+  imports: [TypeOrmModule.forFeature([Project]), AuthModule],
+  controllers: [ProjectsController],
   providers: [
     TypeOrmProjectRepository,
     GetProjectService,
     CreateProjectService,
     ListProjectsService,
   ],
-  exports: [
-    TypeOrmProjectRepository,
-  ],
+  exports: [TypeOrmProjectRepository],
 })
 export class ProjectsModule {}

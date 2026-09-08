@@ -46,10 +46,7 @@ export class ExperimentsController {
     @Param('projectId') projectId: string,
     @Req() request: AuthenticatedRequest,
   ) {
-    return this.listExperimentsService.execute(
-      projectId,
-      request.user.id,
-    );
+    return this.listExperimentsService.execute(projectId, request.user.id);
   }
 
   @Get(':experimentId')

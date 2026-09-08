@@ -4,9 +4,7 @@ import { TypeOrmProjectRepository } from '../repositories/typeorm-project.reposi
 
 @Injectable()
 export class ListProjectsService {
-  constructor(
-    private readonly projectRepository: TypeOrmProjectRepository,
-  ) {}
+  constructor(private readonly projectRepository: TypeOrmProjectRepository) {}
 
   async execute(userId: string): Promise<Project[]> {
     return this.projectRepository.findAllForUser(userId);

@@ -2,7 +2,7 @@ import { ApiKey } from '../../database/entities/api-key.entity.js';
 import { ApiKeyRepository } from './api-key.repository.js';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm'
+import { IsNull, Repository } from 'typeorm';
 @Injectable()
 export class TypeOrmApiKeyRepository implements ApiKeyRepository {
   constructor(

@@ -1,9 +1,4 @@
-import {
-  Controller,
-  Get,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Req, UseGuards } from '@nestjs/common';
 
 import { ApiKeyGuard } from './guards/api-key.guard.js';
 import type { AuthenticatedRequest } from './types/authenticated-request.js';

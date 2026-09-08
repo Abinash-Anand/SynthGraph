@@ -4,9 +4,7 @@ import { TypeOrmProjectRepository } from '../repositories/typeorm-project.reposi
 
 @Injectable()
 export class CreateProjectService {
-  constructor(
-    private readonly projectRepository: TypeOrmProjectRepository,
-  ) {}
+  constructor(private readonly projectRepository: TypeOrmProjectRepository) {}
 
   async execute(
     userId: string,

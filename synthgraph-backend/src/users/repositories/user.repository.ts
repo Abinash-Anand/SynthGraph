@@ -1,4 +1,4 @@
-import { User } from "../../database/entities/user.entity.js";
+import { User } from '../../database/entities/user.entity.js';
 
 export interface UserRepository {
   findById(id: string): Promise<User | null>;

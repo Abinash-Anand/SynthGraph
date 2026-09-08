@@ -6,14 +6,10 @@ import { User } from '../../database/entities/user.entity.js';
 
 @Injectable()
 export class ApiKeyService {
-  constructor(
-    private readonly apiKeyRepository: TypeOrmApiKeyRepository,
-  ) {}
+  constructor(private readonly apiKeyRepository: TypeOrmApiKeyRepository) {}
 
   async verify(apiKey: string): Promise<User> {
-    const keyHash = createHash('sha256')
-      .update(apiKey)
-      .digest('hex');
+    const keyHash = createHash('sha256').update(apiKey).digest('hex');
 
     const storedApiKey = await this.apiKeyRepository.findByHash(keyHash);
 
