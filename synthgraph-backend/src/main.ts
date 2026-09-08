@@ -10,8 +10,6 @@ async function bootstrap() {
 
   await app.listen(port, '0.0.0.0');
 
-  console.log(
-    `SynthGraph mock backend running on port ${port}`,
-  );
+  console.log(`SynthGraph backend running on port ${port}`);
 }
 await bootstrap();
