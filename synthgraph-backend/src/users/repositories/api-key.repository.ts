@@ -1,4 +1,4 @@
-import { ApiKey } from "../../database/entities/api-key.entity.js";
+import { ApiKey } from '../../database/entities/api-key.entity.js';
 
 export interface ApiKeyRepository {
   create(apiKey: ApiKey): Promise<ApiKey>;

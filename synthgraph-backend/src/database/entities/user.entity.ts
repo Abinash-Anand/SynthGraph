@@ -14,15 +14,15 @@ export class User {
   @Column({ type: 'varchar', unique: true })
   email: string;
 
-    @CreateDateColumn({
+  @CreateDateColumn({
     name: 'created_at',
     type: 'timestamptz',
-    })
-    createdAt: Date;
+  })
+  createdAt: Date;
 
-    @UpdateDateColumn({
+  @UpdateDateColumn({
     name: 'updated_at',
     type: 'timestamptz',
-    })
-    updatedAt: Date;
+  })
+  updatedAt: Date;
 }

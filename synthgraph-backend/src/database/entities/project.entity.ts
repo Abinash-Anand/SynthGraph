@@ -15,7 +15,7 @@ import { User } from './user.entity.js';
 export class Project {
   @PrimaryGeneratedColumn('uuid')
   id: string;
-  
+
   @Index()
   @Column({ type: 'uuid', name: 'user_id' })
   userId: string;

@@ -26,9 +26,9 @@ async function main() {
     dataSource.getRepository(ApiKey),
   );
 
-    const email = process.argv[2] ?? 'dev@synthgraph.local';
+  const email = process.argv[2] ?? 'dev@synthgraph.local';
 
-    let user = await userRepository.findByEmail(email);
+  let user = await userRepository.findByEmail(email);
 
   if (!user) {
     user = await userRepository.create(
@@ -38,10 +38,7 @@ async function main() {
     );
   }
 
-  const service = new ApiKeyCreationService(
-    apiKeyRepository,
-    userRepository,
-  );
+  const service = new ApiKeyCreationService(apiKeyRepository, userRepository);
 
   const apiKey = await service.create(user.id);
 

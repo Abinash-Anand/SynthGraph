@@ -24,9 +24,7 @@ export class ApiKeyCreationService {
 
     const keyPrefix = apiKey.slice(0, 11);
 
-    const keyHash = createHash('sha256')
-      .update(apiKey)
-      .digest('hex');
+    const keyHash = createHash('sha256').update(apiKey).digest('hex');
 
     const entity = new ApiKey();
 

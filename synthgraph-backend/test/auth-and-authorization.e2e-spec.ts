@@ -5,7 +5,6 @@ import { App } from 'supertest/types.js';
 import { DataSource } from 'typeorm';
 
 import { AppModule } from '../src/app.module.js';
-import { ApiKey } from '../src/database/entities/api-key.entity.js';
 import { Project } from '../src/database/entities/project.entity.js';
 import { User } from '../src/database/entities/user.entity.js';
 
@@ -20,10 +19,9 @@ describe('Authentication and authorization (e2e)', () => {
   let projectB: Project;
 
   beforeAll(async () => {
-    const moduleFixture: TestingModule =
-      await Test.createTestingModule({
-        imports: [AppModule],
-      }).compile();
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
 
     app = moduleFixture.createNestApplication();
     await app.init();

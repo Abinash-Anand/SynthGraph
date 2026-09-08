@@ -25,7 +25,8 @@ export class ProjectsController {
 
   @Post()
   async createProject(
-    @Body() body: {
+    @Body()
+    body: {
       name: string;
       description?: string;
     },
@@ -39,9 +40,7 @@ export class ProjectsController {
   }
 
   @Get()
-  async listProjects(
-    @Req() request: AuthenticatedRequest,
-  ) {
+  async listProjects(@Req() request: AuthenticatedRequest) {
     return this.listProjectsService.execute(request.user.id);
   }
 
@@ -50,9 +49,6 @@ export class ProjectsController {
     @Param('projectId') projectId: string,
     @Req() request: AuthenticatedRequest,
   ) {
-    return this.getProjectService.execute(
-      projectId,
-      request.user.id,
-    );
+    return this.getProjectService.execute(projectId, request.user.id);
   }
 }

@@ -1,7 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 
 import { Experiment } from '../../database/entities/experiment.entity.js';
 import { TypeOrmProjectRepository } from '../../projects/repositories/typeorm-project.repository.js';
@@ -28,11 +25,10 @@ export class GetExperimentService {
       throw new NotFoundException('Project not found');
     }
 
-    const experiment =
-      await this.experimentRepository.findByIdForProject(
-        experimentId,
-        projectId,
-      );
+    const experiment = await this.experimentRepository.findByIdForProject(
+      experimentId,
+      projectId,
+    );
 
     if (!experiment) {
       throw new NotFoundException('Experiment not found');

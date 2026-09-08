@@ -12,16 +12,8 @@ import { TypeOrmExperimentRepository } from './repositories/typeorm-experiment.r
 import { ExperimentsController } from './experiments.controller.js';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([
-      Experiment,
-      Project,
-    ]),
-    AuthModule,
-  ],
-  controllers: [
-    ExperimentsController,
-  ],
+  imports: [TypeOrmModule.forFeature([Experiment, Project]), AuthModule],
+  controllers: [ExperimentsController],
   providers: [
     TypeOrmExperimentRepository,
     TypeOrmProjectRepository,

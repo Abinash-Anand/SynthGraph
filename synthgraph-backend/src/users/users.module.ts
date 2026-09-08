@@ -8,13 +8,7 @@ import { TypeOrmApiKeyRepository } from './repositories/typeorm-api-key.reposito
 
 @Module({
   imports: [TypeOrmModule.forFeature([User, ApiKey])],
-  providers: [
-    TypeOrmUserRepository,
-    TypeOrmApiKeyRepository,
-  ],
-  exports: [
-    TypeOrmUserRepository,
-    TypeOrmApiKeyRepository,
-  ],
+  providers: [TypeOrmUserRepository, TypeOrmApiKeyRepository],
+  exports: [TypeOrmUserRepository, TypeOrmApiKeyRepository],
 })
 export class UsersModule {}

@@ -1,7 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 
 import { Experiment } from '../../database/entities/experiment.entity.js';
 import { TypeOrmProjectRepository } from '../../projects/repositories/typeorm-project.repository.js';
@@ -14,10 +11,7 @@ export class ListExperimentsService {
     private readonly projectRepository: TypeOrmProjectRepository,
   ) {}
 
-  async execute(
-    projectId: string,
-    userId: string,
-  ): Promise<Experiment[]> {
+  async execute(projectId: string, userId: string): Promise<Experiment[]> {
     const project = await this.projectRepository.findByIdForUser(
       projectId,
       userId,

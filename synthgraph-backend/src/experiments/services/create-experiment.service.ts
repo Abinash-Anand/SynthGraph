@@ -1,7 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 
 import { Experiment } from '../../database/entities/experiment.entity.js';
 import { TypeOrmProjectRepository } from '../../projects/repositories/typeorm-project.repository.js';

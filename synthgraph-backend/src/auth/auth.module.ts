@@ -9,15 +9,7 @@ import { ApiKeyCreationService } from './services/api-key-creation.service.js';
 @Module({
   imports: [UsersModule],
   controllers: [AuthController],
-  providers: [
-    ApiKeyService,
-    ApiKeyCreationService,
-    ApiKeyGuard,
-  ],
-  exports: [
-    ApiKeyService,
-    ApiKeyCreationService,
-    ApiKeyGuard,
-  ],
+  providers: [ApiKeyService, ApiKeyCreationService, ApiKeyGuard],
+  exports: [ApiKeyService, ApiKeyCreationService, ApiKeyGuard],
 })
 export class AuthModule {}
