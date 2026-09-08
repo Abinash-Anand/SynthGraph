@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ProjectsModule } from './projects/projects.module.js';
+
+import { AuthModule } from './auth/auth.module.js';
 import configuration from './config/configuration.js';
+import { ProjectsModule } from './projects/projects.module.js';
 
 @Module({
   imports: [
@@ -22,6 +24,7 @@ import configuration from './config/configuration.js';
       }),
     }),
 
+    AuthModule,
     ProjectsModule,
   ],
 })
