@@ -1,0 +1,41 @@
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+
+import { Experiment } from '../../database/entities/experiment.entity.js';
+import { ExperimentRepository } from './experiment.repository.js';
+
+@Injectable()
+export class TypeOrmExperimentRepository implements ExperimentRepository {
+  constructor(
+    @InjectRepository(Experiment)
+    private readonly repository: Repository<Experiment>,
+  ) {}
+
+  async create(experiment: Experiment): Promise<Experiment> {
+    return this.repository.save(experiment);
+  }
+
+  async findByIdForProject(
+    experimentId: string,
+    projectId: string,
+  ): Promise<Experiment | null> {
+    return this.repository.findOne({
+      where: {
+        id: experimentId,
+        projectId,
+      },
+    });
+  }
+
+  async findAllForProject(projectId: string): Promise<Experiment[]> {
+    return this.repository.find({
+      where: {
+        projectId,
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+  }
+}

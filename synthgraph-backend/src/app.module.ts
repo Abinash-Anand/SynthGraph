@@ -5,6 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './auth/auth.module.js';
 import configuration from './config/configuration.js';
 import { ProjectsModule } from './projects/projects.module.js';
+import { ExperimentsModule } from './experiments/experiments.module.js';
 
 @Module({
   imports: [
@@ -14,7 +15,7 @@ import { ProjectsModule } from './projects/projects.module.js';
     }),
 
     TypeOrmModule.forRootAsync({
-      imports: [ConfigModule],
+      imports: [ConfigModule, ExperimentsModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         type: 'postgres',

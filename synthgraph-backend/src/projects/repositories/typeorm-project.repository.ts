@@ -27,4 +27,15 @@ export class TypeOrmProjectRepository implements ProjectRepository {
       },
     });
   }
+
+  async findAllForUser(userId: string): Promise<Project[]> {
+    return this.repository.find({
+      where: {
+        userId,
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+  }
 }

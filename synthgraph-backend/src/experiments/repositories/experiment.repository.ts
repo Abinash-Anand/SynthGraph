@@ -1,0 +1,12 @@
+import { Experiment } from '../../database/entities/experiment.entity.js';
+
+export interface ExperimentRepository {
+  create(experiment: Experiment): Promise<Experiment>;
+
+  findByIdForProject(
+    experimentId: string,
+    projectId: string,
+  ): Promise<Experiment | null>;
+
+  findAllForProject(projectId: string): Promise<Experiment[]>;
+}

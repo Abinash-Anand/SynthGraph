@@ -6,6 +6,8 @@ import { TypeOrmProjectRepository } from './repositories/typeorm-project.reposit
 import { AuthModule } from '../auth/auth.module.js';
 import { GetProjectService } from './services/get-project.service.js';
 import { ProjectsController } from './projects.controller.js';
+import { ListProjectsService } from './services/list-projects.service.js';
+import { CreateProjectService } from './services/create-project.service.js';
 
 
 @Module({
@@ -19,6 +21,8 @@ import { ProjectsController } from './projects.controller.js';
   providers: [
     TypeOrmProjectRepository,
     GetProjectService,
+    CreateProjectService,
+    ListProjectsService,
   ],
   exports: [
     TypeOrmProjectRepository,
