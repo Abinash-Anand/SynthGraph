@@ -112,6 +112,19 @@ def test_create_generation_with_references() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.method == "POST"
+        assert json.loads(request.content) == {
+            "name": "Referenced Generation",
+            "generator": {"name": "blender"},
+            "parameters": {},
+            "reproducibility": {},
+            "inputs": [
+                input_asset.model_dump(mode="json", exclude_none=True),
+                input_dataset.model_dump(mode="json", exclude_none=True),
+            ],
+            "outputs": [
+                output_dataset.model_dump(mode="json", exclude_none=True)
+            ],
+        }
 
         return httpx.Response(
             201,
@@ -155,6 +168,54 @@ def test_create_generation_with_references() -> None:
     assert generation.id == "generation_123"
     assert len(generation.inputs) == 2
     assert len(generation.outputs) == 1
+    assert generation.inputs[0].model_dump()["type"] == "3d_model"
+    assert generation.inputs[1].model_dump()["format"] == "image"
+
+
+def test_create_generation_with_bare_reference_id() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        assert payload["inputs"] == [
+            {"id": "asset_123"},
+            {"id": "asset_456", "metadata": {}},
+        ]
+
+        return httpx.Response(
+            201,
+            json={
+                "id": "generation_123",
+                "experiment_id": "experiment_123",
+                "name": "Bare Reference Generation",
+                "generator": {"name": "blender"},
+                "parameters": {},
+                "reproducibility": {},
+                "inputs": [
+                    {"id": "asset_123"},
+                    {"id": "asset_456", "metadata": {}},
+                ],
+                "outputs": [],
+                "status": "pending",
+                "created_at": "2026-09-05T12:00:00Z",
+            },
+        )
+
+    with SynthGraphClient(
+        api_url="https://api.example.com",
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        generation = client.generations.create(
+            experiment_id="experiment_123",
+            name="Bare Reference Generation",
+            generator=Generator(name="blender"),
+            parameters={},
+            reproducibility=Reproducibility(),
+            inputs=["asset_123", AssetReference(id="asset_456")],
+        )
+
+    assert generation.inputs[0].id == "asset_123"
+    assert generation.inputs[0].uri is None
+    assert generation.inputs[0].name is None
+    assert generation.inputs[1].id == "asset_456"
 
 
 def test_get_generation() -> None:

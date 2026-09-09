@@ -9,8 +9,8 @@ class DataReference(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     id: str = Field(min_length=1)
-    uri: str = Field(min_length=1)
-    name: str = Field(min_length=1)
+    uri: str | None = Field(default=None, min_length=1)
+    name: str | None = Field(default=None, min_length=1)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
