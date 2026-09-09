@@ -7,7 +7,7 @@ import configuration from './config/configuration.js';
 import { ProjectsModule } from './projects/projects.module.js';
 import { ExperimentsModule } from './experiments/experiments.module.js';
 import { GenerationsModule } from './generations/generations.module.js';
-
+import { DatasetsModule } from './datasets/datasets.module.js';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -16,7 +16,7 @@ import { GenerationsModule } from './generations/generations.module.js';
     }),
 
     TypeOrmModule.forRootAsync({
-      imports: [ConfigModule, ExperimentsModule],
+      imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         type: 'postgres',
@@ -28,7 +28,9 @@ import { GenerationsModule } from './generations/generations.module.js';
 
     AuthModule,
     ProjectsModule,
+    ExperimentsModule,
     GenerationsModule,
+    DatasetsModule
   ],
 })
 export class AppModule {}
