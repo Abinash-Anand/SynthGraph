@@ -32,11 +32,42 @@ export class TypeOrmGenerationRepository implements GenerationRepository {
       .getOne();
   }
 
-  async findAllForExperiment(experimentId: string): Promise<Generation[]> {
+  async findAllForExperiment(
+    experimentId: string,
+  ): Promise<Generation[]> {
     return this.repository.find({
-      where: { experimentId },
-      order: { createdAt: 'DESC' },
+      where: {
+        experimentId,
+      },
+      order: {
+        createdAt: 'DESC',
+      },
     });
+  }
+
+  async findByParameters(
+    experimentId: string,
+    parameters: Record<string, unknown>,
+  ): Promise<Generation[]> {
+    const query = this.repository
+      .createQueryBuilder('generation')
+      .where('generation.experimentId = :experimentId', {
+        experimentId,
+      });
+
+    Object.entries(parameters).forEach(([key, value], index) => {
+      query.andWhere(
+        `generation.parameters -> :parameterKey${index} @> :parameterValue${index}::jsonb`,
+        {
+          [`parameterKey${index}`]: key,
+          [`parameterValue${index}`]: JSON.stringify(value),
+        },
+      );
+    });
+
+    return query
+      .orderBy('generation.createdAt', 'DESC')
+      .getMany();
   }
 
   async transitionStatus(
@@ -47,7 +78,10 @@ export class TypeOrmGenerationRepository implements GenerationRepository {
     completedAt: Date | null,
   ): Promise<boolean> {
     const result = await this.repository.update(
-      { id: generationId, status: currentStatus },
+      {
+        id: generationId,
+        status: currentStatus,
+      },
       {
         status: nextStatus,
         startedAt,

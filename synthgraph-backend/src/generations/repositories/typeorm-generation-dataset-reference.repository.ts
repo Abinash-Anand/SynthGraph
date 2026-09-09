@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import type { Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 
 import { GenerationDatasetReference } from '../../database/entities/generation-dataset-reference.entity.js';
-import type { GenerationDatasetReferenceRepository } from './generation-dataset-reference.repository.js';
+
+import { GenerationDatasetReferenceRepository } from './generation-dataset-reference.repository.js';
 
 @Injectable()
 export class TypeOrmGenerationDatasetReferenceRepository
@@ -20,38 +21,40 @@ export class TypeOrmGenerationDatasetReferenceRepository
     return this.repository.save(reference);
   }
 
-  async findForGeneration(
-    generationId: string,
-    userId: string,
-  ): Promise<GenerationDatasetReference[]> {
-    return this.repository
-      .createQueryBuilder('reference')
-      .innerJoin('reference.generation', 'generation')
-      .innerJoin('generation.experiment', 'experiment')
-      .innerJoin('experiment.project', 'project')
-      .where('reference.generation_id = :generationId', {
-        generationId,
-      })
-      .andWhere('project.user_id = :userId', {
-        userId,
-      })
-      .orderBy('reference.role', 'ASC')
-      .getMany();
-  }
-
   async exists(
     generationId: string,
     datasetVersionId: string,
-    role: string,
   ): Promise<boolean> {
-    const count = await this.repository.count({
+    const reference = await this.repository.findOne({
       where: {
         generationId,
         datasetVersionId,
-        role,
       },
     });
 
-    return count > 0;
+    return reference !== null;
+  }
+
+  async findForGeneration(
+    generationId: string,
+  ): Promise<GenerationDatasetReference[]>;
+
+  async findForGeneration(
+    generationId: string,
+    userId: string,
+  ): Promise<GenerationDatasetReference[]>;
+
+  async findForGeneration(
+    generationId: string,
+    _userId?: string,
+  ): Promise<GenerationDatasetReference[]> {
+    return this.repository.find({
+      where: {
+        generationId,
+      },
+      order: {
+        role: 'ASC',
+      },
+    });
   }
 }

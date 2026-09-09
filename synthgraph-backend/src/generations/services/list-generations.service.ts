@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { Generation } from '../../database/entities/generation.entity.js';
 import { TypeOrmExperimentRepository } from '../../experiments/repositories/typeorm-experiment.repository.js';
@@ -11,7 +15,11 @@ export class ListGenerationsService {
     private readonly experimentRepository: TypeOrmExperimentRepository,
   ) {}
 
-  async execute(experimentId: string, userId: string): Promise<Generation[]> {
+  async execute(
+    experimentId: string,
+    userId: string,
+    parameters?: string,
+  ): Promise<Generation[]> {
     const experiment = await this.experimentRepository.findByIdForUser(
       experimentId,
       userId,
@@ -21,6 +29,35 @@ export class ListGenerationsService {
       throw new NotFoundException('Experiment not found');
     }
 
-    return this.generationRepository.findAllForExperiment(experiment.id);
+    if (parameters === undefined) {
+      return this.generationRepository.findAllForExperiment(
+        experiment.id,
+      );
+    }
+
+    let parsedParameters: unknown;
+
+    try {
+      parsedParameters = JSON.parse(parameters);
+    } catch {
+      throw new BadRequestException(
+        'parameters must contain valid JSON',
+      );
+    }
+
+    if (
+      parsedParameters === null ||
+      typeof parsedParameters !== 'object' ||
+      Array.isArray(parsedParameters)
+    ) {
+      throw new BadRequestException(
+        'parameters must be a JSON object',
+      );
+    }
+
+    return this.generationRepository.findByParameters(
+      experiment.id,
+      parsedParameters as Record<string, unknown>,
+    );
   }
 }

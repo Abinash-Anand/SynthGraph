@@ -6,6 +6,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -13,25 +14,24 @@ import {
 import { ApiKeyGuard } from '../auth/guards/api-key.guard.js';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request.js';
 
+import { CreateGenerationDatasetReferenceDto } from './dto/create-generation-dataset-reference.dto.js';
+import { ListGenerationsQueryDto } from './dto/list-generations-query.dto.js';
 import {
   validateCreateGenerationRequest,
   validateUpdateGenerationStatusRequest,
 } from './dto/generation-request.dto.js';
-
-import { CreateGenerationDatasetReferenceDto } from './dto/create-generation-dataset-reference.dto.js';
+import { GenerationDatasetReference } from '../database/entities/generation-dataset-reference.entity.js';
 
 import {
-  toGenerationResponse,
   GenerationResponse,
+  toGenerationResponse,
 } from './responses/generation.response.js';
 
+import { CreateGenerationDatasetReferenceService } from './services/create-generation-dataset-reference.service.js';
 import { CreateGenerationService } from './services/create-generation.service.js';
 import { GetGenerationService } from './services/get-generation.service.js';
 import { ListGenerationsService } from './services/list-generations.service.js';
 import { UpdateGenerationStatusService } from './services/update-generation-status.service.js';
-import { CreateGenerationDatasetReferenceService } from './services/create-generation-dataset-reference.service.js';
-
-import { GenerationDatasetReference } from '../database/entities/generation-dataset-reference.entity.js';
 
 @Controller()
 @UseGuards(ApiKeyGuard)
@@ -78,11 +78,13 @@ export class GenerationsController {
   async listGenerations(
     @Param('experimentId', new ParseUUIDPipe({ version: '4' }))
     experimentId: string,
+    @Query() query: ListGenerationsQueryDto,
     @Req() request: AuthenticatedRequest,
   ): Promise<GenerationResponse[]> {
     const generations = await this.listGenerationsService.execute(
       experimentId,
       request.user.id,
+      query.parameters,
     );
 
     return generations.map(toGenerationResponse);

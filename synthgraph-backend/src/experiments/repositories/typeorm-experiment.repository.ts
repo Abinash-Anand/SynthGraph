@@ -40,7 +40,9 @@ export class TypeOrmExperimentRepository implements ExperimentRepository {
       .getOne();
   }
 
-  async findAllForProject(projectId: string): Promise<Experiment[]> {
+  async findAllForProject(
+    projectId: string,
+  ): Promise<Experiment[]> {
     return this.repository.find({
       where: {
         projectId,
@@ -49,5 +51,20 @@ export class TypeOrmExperimentRepository implements ExperimentRepository {
         createdAt: 'DESC',
       },
     });
+  }
+
+  async searchForProject(
+    projectId: string,
+    search: string,
+  ): Promise<Experiment[]> {
+    return this.repository
+      .createQueryBuilder('experiment')
+      .where('experiment.projectId = :projectId', { projectId })
+      .andWhere(
+        '(experiment.name ILIKE :search OR experiment.description ILIKE :search)',
+        { search: `%${search}%` },
+      )
+      .orderBy('experiment.createdAt', 'DESC')
+      .getMany();
   }
 }

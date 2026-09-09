@@ -11,7 +11,14 @@ export interface GenerationRepository {
     userId: string,
   ): Promise<Generation | null>;
 
-  findAllForExperiment(experimentId: string): Promise<Generation[]>;
+  findAllForExperiment(
+    experimentId: string,
+  ): Promise<Generation[]>;
+
+  findByParameters(
+    experimentId: string,
+    parameters: Record<string, unknown>,
+  ): Promise<Generation[]>;
 
   transitionStatus(
     generationId: string,

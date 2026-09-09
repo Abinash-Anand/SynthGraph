@@ -11,7 +11,11 @@ export class ListExperimentsService {
     private readonly projectRepository: TypeOrmProjectRepository,
   ) {}
 
-  async execute(projectId: string, userId: string): Promise<Experiment[]> {
+  async execute(
+    projectId: string,
+    userId: string,
+    search?: string,
+  ): Promise<Experiment[]> {
     const project = await this.projectRepository.findByIdForUser(
       projectId,
       userId,
@@ -19,6 +23,13 @@ export class ListExperimentsService {
 
     if (!project) {
       throw new NotFoundException('Project not found');
+    }
+
+    if (search !== undefined) {
+      return this.experimentRepository.searchForProject(
+        projectId,
+        search,
+      );
     }
 
     return this.experimentRepository.findAllForProject(projectId);

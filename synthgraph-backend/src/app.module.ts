@@ -3,13 +3,16 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { AuthModule } from './auth/auth.module.js';
+import { ComparisonsModule } from './comparisons/comparisons.module.js';
 import configuration from './config/configuration.js';
-import { ProjectsModule } from './projects/projects.module.js';
+import { DatasetsModule } from './datasets/datasets.module.js';
+import { DocumentationModule } from './documentation/documentation.module.js';
+import { EvaluationResultsModule } from './evaluation-results/evaluation-results.module.js';
 import { ExperimentsModule } from './experiments/experiments.module.js';
 import { GenerationsModule } from './generations/generations.module.js';
-import { DatasetsModule } from './datasets/datasets.module.js';
+import { ProjectsModule } from './projects/projects.module.js';
+import { ReproductionModule } from './reproduction/reproduction.module.js';
 import { TrainingRunsModule } from './training-runs/training-runs.module.js';
-import { EvaluationResultsModule } from './evaluation-results/evaluation-results.module.js';
 
 @Module({
   imports: [
@@ -36,6 +39,9 @@ import { EvaluationResultsModule } from './evaluation-results/evaluation-results
     DatasetsModule,
     TrainingRunsModule,
     EvaluationResultsModule,
+    ReproductionModule,
+    DocumentationModule,
+    ComparisonsModule,
   ],
 })
 export class AppModule {}
