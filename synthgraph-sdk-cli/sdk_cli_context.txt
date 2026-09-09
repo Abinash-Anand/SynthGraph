@@ -1,0 +1,2708 @@
+# SynthGraph SDK + CLI Development Specification
+## Claude Implementation Handoff
+
+**Document purpose:** Complete implementation specification for the SynthGraph Python SDK and CLI.
+
+**Audience:** Claude Code / Claude developer agent implementing the SDK and CLI.
+
+**Project:** SynthGraph  
+**Current backend:** NestJS + TypeScript + TypeORM + PostgreSQL  
+**SDK language:** Python  
+**Primary package:** `synthgraph`  
+**Current SDK version:** `0.1.0`  
+**Target:** v1.0 capability set, with a clean path to v1.1 integrations and v1.2 instrumentation  
+**CLI:** Python CLI shipped with the same package
+
+---
+
+# 0. READ THIS FIRST
+
+You are implementing two interfaces to the same SynthGraph system:
+
+1. **Python SDK**
+   - Primary programmatic interface.
+   - Used inside researchers' existing Python scripts, notebooks, generation workflows, and training workflows.
+   - Captures provenance and sends it to the SynthGraph backend.
+   - Must be lightweight and platform-independent.
+
+2. **CLI**
+   - Terminal interface for inspecting and exporting provenance already stored in SynthGraph.
+   - Primarily a read/query/export interface.
+   - Should be a thin adapter over the SDK, not a second HTTP client or second domain implementation.
+
+The fundamental boundary is:
+
+```text
+Researcher workflow
+       |
+       +----------------------+
+       |                      |
+       v                      v
+  Python SDK              CLI
+   capture/write       query/read/export
+       |                      |
+       +----------+-----------+
+                  |
+                  v
+          SynthGraph Backend
+                  |
+                  v
+             PostgreSQL
+```
+
+The SDK and CLI are clients. The backend is the system of record.
+
+Do not turn the SDK into the research platform. Do not turn the CLI into a second backend. Do not make the CLI execute Blender, Unity, PyTorch, or other external research tooling.
+
+The product promise is that researchers keep working where they already work while SynthGraph makes their experiments traceable, understandable, reproducible, and easier to document.
+
+---
+
+# 1. SOURCE OF TRUTH AND DOCUMENT HIERARCHY
+
+Use the project source documents and current backend implementation as the source of truth.
+
+Relevant source files:
+
+- `SynthGraph_Software_Requirements_Specification_SRS.docx`
+- `SynthGraph_SRS_v2.docx`
+- `SynthGraph_SDK_SRS_v1.docx`
+- `SynthGraph_SDK_context.md`
+- `SynthGraph_Complete_Domain_Relationship_Map (2).docx`
+- `SynthGraph_Complete_Product_Strategy_Document.docx`
+
+The source documents establish several important facts:
+
+- Python SDK is the primary user-facing integration surface.
+- CLI is explicitly in scope for querying and exporting.
+- Reproduction manifests are a core capability.
+- The SDK must not require researchers to move their workflows into SynthGraph.
+- Large datasets and artifacts remain under researcher/lab/object-storage control rather than being uploaded through the SDK by default.
+- The system tracks provenance and lineage, not the actual synthetic-data generation or model-training process.
+- v1.0 is manual capture.
+- v1.1 adds tool-specific integrations.
+- v1.2 adds automatic instrumentation.
+- AI recommendations and autonomous optimization are future scope.
+- The core model is platform-independent and uses stable fields plus flexible metadata.
+
+The original SRS explicitly lists:
+
+- Python SDK for experiment tracking
+- CLI for querying and export
+- REST API backend
+- PostgreSQL
+- API-key authentication
+- reproduction manifest export
+- basic experiment comparison
+
+The product strategy also identifies the CLI as P0 with the description:
+
+> Query and export manifests
+
+and identifies a Week 5 deliverable of CLI query/export commands and working reproduction manifest JSON export.
+
+The source documents contain some older concepts and illustrative API examples. They are not automatically the current implementation contract.
+
+Examples of content that must NOT be blindly copied:
+
+- Older `/api/...` route examples when the current backend uses routes without that prefix.
+- Older MongoDB references from the original product strategy. The actual current backend uses PostgreSQL.
+- Offline SQLite/cache/sync concepts from an older state-management design. These remain an open/future design area and are not an MVP implementation requirement.
+- Conceptual SDK signatures that the SRS explicitly labels as illustrative rather than frozen.
+
+When a source says something is an open decision, keep it open until resolved. Do not silently invent a contract.
+
+---
+
+# 2. REQUIREMENT CLASSIFICATION
+
+Every implementation decision should be classified mentally as one of:
+
+### Explicit requirement
+
+Directly supported by the source documents or current backend contract.
+
+### Engineering recommendation
+
+A proposed implementation decision intended to make the system robust and maintainable.
+
+### Inference
+
+A reasonable conclusion derived from the product/domain architecture but not explicitly frozen.
+
+### Undecided
+
+An item that the source documents explicitly leave open.
+
+Do not convert inference into requirement.
+
+Do not convert an open design question into a permanent API without documenting the decision.
+
+---
+
+# 3. PRODUCT CONTEXT
+
+SynthGraph is a provenance and lineage platform for synthetic-data research, particularly computer vision research.
+
+The research workflow is approximately:
+
+```text
+Configure Blender / Unity / simulator
+            |
+            v
+      Generate data
+            |
+            v
+       Dataset
+            |
+            v
+      Train model
+            |
+            v
+       Evaluate
+            |
+            v
+      Analyze results
+```
+
+SynthGraph records the metadata surrounding this workflow:
+
+```text
+Generation configuration
+        |
+        v
+DatasetVersion
+        |
+        v
+TrainingRun
+        |
+        v
+EvaluationResult
+```
+
+The platform is not:
+
+- the synthetic-data generator
+- the training framework
+- the evaluation framework
+- a general-purpose artifact store
+- a replacement for Blender/Unity/Unreal/PyTorch
+- an autonomous research agent
+
+---
+
+# 4. CORE SCIENTIFIC LINEAGE
+
+The current domain model is:
+
+```text
+User
+ |
+ +--> Project
+       |
+       +--> Experiment
+             |
+             +--> Generation
+             |      |
+             |      +--> DatasetVersion references
+             |      +--> AssetVersion references
+             |
+             +--> TrainingRun
+                    |
+                    +--> DatasetVersion references
+                    |
+                    +--> EvaluationResult
+                           |
+                           +--> DatasetVersion evaluated
+```
+
+Important cardinalities:
+
+```text
+User 1:N Project
+Project 1:N Experiment
+Experiment 1:N Generation
+Experiment 1:N TrainingRun
+
+Dataset 1:N DatasetVersion
+Asset 1:N AssetVersion
+
+Generation N:M DatasetVersion
+Generation N:M AssetVersion
+TrainingRun N:M DatasetVersion
+
+TrainingRun 1:N EvaluationResult
+EvaluationResult N:1 DatasetVersion
+```
+
+Dataset and Asset are logical identities.
+
+Their versions are immutable historical references.
+
+A Generation should point to the exact DatasetVersion and AssetVersion used, not merely the logical Dataset or Asset.
+
+This matters for reproducibility.
+
+---
+
+# 5. GENERATION SEMANTICS
+
+Generation is the central provenance object.
+
+It records:
+
+- generator identity
+- generator version/type
+- generation parameters
+- reproducibility metadata
+- inputs
+- outputs
+- status
+- timestamps
+- metadata
+
+Lifecycle:
+
+```text
+pending
+   |
+   v
+running
+  /   \
+ v     v
+completed   failed
+```
+
+Once a generation becomes `running`, its provenance should be treated as effectively immutable.
+
+If a researcher changes the configuration, that is a new Generation rather than a mutation of the historical generation configuration.
+
+Failed generations remain stored because failed experiments are still scientifically meaningful.
+
+---
+
+# 6. DATA BOUNDARY
+
+SynthGraph primarily stores metadata and provenance.
+
+Large datasets may be hundreds of gigabytes or more.
+
+The SDK must NOT upload the actual dataset bytes merely because the dataset is referenced.
+
+Example:
+
+```python
+DatasetReference(
+    id="dataset_123",
+    uri="s3://bucket/input-scenes",
+    name="input-scenes",
+    format="image",
+)
+```
+
+The URI/reference is metadata.
+
+The dataset itself remains under researcher control.
+
+The same applies to large assets.
+
+The SDK should record:
+
+- logical identity
+- URI/path/reference
+- version
+- format/type
+- size where known
+- checksum/hash where useful
+- metadata
+
+but should not silently transfer the underlying artifact.
+
+---
+
+# 7. SHARED DESIGN PRINCIPLES
+
+## 7.1 Platform independence
+
+Core SDK code must not depend on:
+
+- Blender
+- Unity
+- Unreal
+- Omniverse
+- PyTorch
+- TensorFlow
+- W&B
+- a specific storage provider
+
+Tool integrations belong in optional integration modules.
+
+## 7.2 Canonical contract
+
+Every capture mechanism ultimately produces the same SynthGraph domain representation.
+
+```text
+Manual SDK capture
+       |
+Tool integration
+       |
+Automatic instrumentation
+       |
+       v
+Canonical SynthGraph model
+       |
+       v
+Backend
+```
+
+## 7.3 Stable core + flexible extensions
+
+Stable concepts should have typed structures.
+
+Variable domain-specific information should use flexible mappings.
+
+Example:
+
+```python
+parameters: dict[str, object]
+metadata: dict[str, object]
+metrics: dict[str, object]
+```
+
+Do not create a new SDK class or backend field for every Blender parameter or metric.
+
+## 7.4 Explicit over magical for v1.0
+
+v1.0 should prioritize predictable manual capture.
+
+Automation comes later.
+
+## 7.5 Fail safely
+
+Never report that provenance was successfully persisted unless the backend confirmed persistence.
+
+## 7.6 Backend is the trust boundary
+
+SDK validation improves developer experience.
+
+It does not replace backend validation or authorization.
+
+## 7.7 Forward compatibility
+
+v1.0 should leave clear extension points for:
+
+- v1.1 integrations
+- v1.2 instrumentation
+- future CLI features
+- future dashboard features
+
+---
+
+# PART A: PYTHON SDK
+
+# 8. SDK PURPOSE
+
+The Python SDK is the primary user-facing integration surface.
+
+It is installed into the researcher's Python environment:
+
+```text
+Researcher's Python environment
+        |
+        v
+pip install synthgraph
+        |
+        v
+SynthGraph SDK
+        |
+        | HTTPS / JSON
+        v
+SynthGraph Backend
+```
+
+The SDK must not assume that the backend runs on the same machine.
+
+The endpoint must be configurable.
+
+Cloud-hosted and local/self-controlled deployments should use the same SDK abstraction.
+
+---
+
+# 9. CURRENT SDK STATE
+
+The current SDK is version `0.1.0`.
+
+Current status:
+
+- early development
+- suitable for integration testing
+- not yet a final v1.0 release
+
+Current capabilities include:
+
+### Projects
+
+- create
+- retrieve
+- list
+
+### Experiments
+
+- create
+- retrieve
+- list
+
+### Generations
+
+- create
+- retrieve
+- list by experiment
+
+### Generation lifecycle
+
+- start
+- complete
+- fail
+
+### References
+
+- `DataReference`
+- `AssetReference`
+- `DatasetReference`
+
+### Generation provenance
+
+- generator
+- generator version/type
+- parameters
+- reproducibility metadata
+- input references
+- output references
+- status
+- timestamps
+- metadata
+
+### HTTP
+
+- GET object responses
+- GET list responses
+- POST
+- PATCH
+- Bearer API-key authentication
+- consistent HTTP errors
+- JSON object/list validation
+- context-manager support
+
+Current source structure:
+
+```text
+sdk/
+├── src/
+│   └── synthgraph/
+│       ├── __init__.py
+│       ├── client.py
+│       ├── config.py
+│       ├── experiments.py
+│       ├── generations.py
+│       ├── http.py
+│       ├── projects.py
+│       └── models/
+│           ├── __init__.py
+│           ├── experiment.py
+│           ├── generation.py
+│           ├── project.py
+│           └── reference.py
+│
+├── tests/
+│   ├── test_client.py
+│   ├── test_config.py
+│   ├── test_experiments.py
+│   ├── test_generation.py
+│   ├── test_http.py
+│   ├── test_models.py
+│   ├── test_package.py
+│   ├── test_projects.py
+│   ├── test_references.py
+│   └── test_serialization.py
+│
+├── pyproject.toml
+└── README.md
+```
+
+There is intentionally no `references.py` module. Reference models live under:
+
+```text
+src/synthgraph/models/reference.py
+```
+
+Do not destroy the current structure without a concrete reason.
+
+---
+
+# 10. SDK RELEASE ROADMAP
+
+## v1.0: Manual capture
+
+Required:
+
+- installation
+- initialization
+- authentication
+- configurable endpoint
+- project context
+- experiment context
+- manual generation capture
+- generator identity
+- generator version
+- flexible parameters
+- seed
+- asset references
+- code/version metadata
+- selected environment metadata
+- dataset references
+- training-run capture
+- training configuration
+- evaluation-result capture
+- evaluation metrics
+- lineage
+- validation
+- error taxonomy
+- safe retries
+- idempotency where required
+
+## v1.1: Tool integrations
+
+Add:
+
+- pluggable integration mechanism
+- tool-specific integrations based on demand
+- automatic extraction of reliably discoverable metadata
+- mapping into canonical v1.0 models
+- researcher supplementation of metadata the tool cannot infer
+
+Potential integrations may include Blender, Unity, W&B, etc., but the first integration is an open product decision unless already selected elsewhere.
+
+## v1.2: Automatic instrumentation
+
+Add:
+
+- hooks
+- decorators
+- wrappers
+- framework instrumentation
+- lifecycle/event capture
+- correlation
+- explicit researcher overrides
+
+Do not implement v1.2 automation as a prerequisite for v1.0.
+
+---
+
+# 11. SDK PUBLIC API DESIGN
+
+The SRS examples are conceptual, not frozen.
+
+A target style is:
+
+```python
+from synthgraph import SynthGraph
+
+sg = SynthGraph(api_key="...")
+
+experiment = sg.experiment(name="vehicle_detection_rain")
+
+generation = experiment.generation(
+    generator="blender",
+    generator_version="4.2",
+    parameters={
+        "weather": "rain",
+        "occlusion": 0.3,
+        "camera_distance": 12,
+    },
+    seed=42,
+)
+```
+
+Dataset:
+
+```python
+dataset = generation.dataset(
+    name="rain_dataset_v1",
+    uri="/data/rain_dataset",
+)
+```
+
+Training:
+
+```python
+training = experiment.training(
+    model="yolo",
+    framework="pytorch",
+    dataset=dataset,
+    config={
+        "epochs": 50,
+        "batch_size": 32,
+        "learning_rate": 0.001,
+    },
+)
+```
+
+Evaluation:
+
+```python
+evaluation = training.evaluation(
+    metrics={
+        "mAP": 0.724,
+        "precision": 0.78,
+        "recall": 0.69,
+    },
+)
+```
+
+These examples establish intended ergonomics, not an immutable signature.
+
+Before freezing public signatures:
+
+1. inspect current SDK implementation
+2. inspect current backend routes and payloads
+3. preserve backwards compatibility where practical
+4. choose consistent naming
+5. document the final contract
+
+---
+
+# 12. SDK CLIENT
+
+The top-level client should be responsible for:
+
+- endpoint configuration
+- API-key configuration
+- HTTP transport
+- timeout configuration
+- error translation
+- resource access
+- optional retry policy
+- context-manager lifecycle
+
+Example conceptual API:
+
+```python
+sg = SynthGraph(
+    api_key="...",
+    base_url="http://localhost:3000",
+)
+```
+
+Do not hard-code a cloud provider.
+
+Do not make the client create a backend process.
+
+Do not make the client require local backend hosting.
+
+---
+
+# 13. SDK CONFIGURATION
+
+Configuration should support secure mechanisms.
+
+Priority should be approximately:
+
+1. explicit constructor arguments
+2. environment variables / secure configuration
+3. documented defaults
+
+Never:
+
+- commit API keys
+- print API keys
+- include API keys in exception strings
+- include API keys in ordinary logs
+- place credentials in arbitrary metadata
+
+Potential configuration fields:
+
+```text
+api_key
+base_url
+timeout
+retry policy
+```
+
+The exact environment-variable names should be made consistent and documented.
+
+---
+
+# 14. SDK AUTHENTICATION
+
+Current backend authentication uses API keys with Bearer authentication.
+
+Conceptually:
+
+```http
+Authorization: Bearer <api-key>
+```
+
+The SDK must send the key through the HTTP Authorization header.
+
+The raw key should not be:
+
+- logged
+- serialized into model objects
+- stored in generated manifests
+- included in error messages
+
+Authentication errors should map to a stable SDK exception category.
+
+The backend remains responsible for authorization and user isolation.
+
+---
+
+# 15. SDK HTTP TRANSPORT
+
+The transport layer should remain separate from domain resource classes.
+
+Conceptual layering:
+
+```text
+Public API
+   |
+Resource API
+   |
+HTTP client
+   |
+Transport
+   |
+requests/httpx/etc.
+```
+
+The existing SDK already has `http.py`.
+
+Prefer evolving it rather than introducing a second transport system.
+
+Transport responsibilities:
+
+- HTTP methods
+- headers
+- authentication
+- timeout
+- JSON serialization/deserialization
+- HTTP error handling
+- response shape validation
+- retry handling where safe
+
+Resource modules should not implement raw HTTP details independently.
+
+---
+
+# 16. SDK ERROR TAXONOMY
+
+At minimum distinguish:
+
+```text
+AuthenticationError
+AuthorizationError
+ValidationError
+NotFoundError
+ConflictError
+TransportError
+ServerError
+```
+
+Exact names should match the existing SDK style if already established.
+
+Mapping should be deterministic.
+
+Example:
+
+```text
+401 -> AuthenticationError
+403 -> AuthorizationError
+404 -> NotFoundError
+409 -> ConflictError
+4xx validation -> ValidationError
+network timeout -> TransportError
+5xx -> ServerError
+```
+
+Do not expose backend stack traces.
+
+Do not expose credentials.
+
+Preserve useful safe context such as:
+
+- HTTP status
+- backend error message
+- request operation
+- endpoint path without secrets
+
+---
+
+# 17. SDK VALIDATION
+
+SDK-side validation should reject obvious malformed input before a request is sent.
+
+Examples:
+
+- required string missing
+- invalid type
+- invalid status
+- invalid UUID if the SDK contract requires UUID validation
+- malformed parameters mapping
+- malformed reference object
+
+However:
+
+```text
+SDK validation != security
+```
+
+The backend must independently validate everything.
+
+Do not duplicate the entire backend validation system in Python.
+
+---
+
+# 18. SDK MODELS
+
+Use typed Python models for stable domain concepts.
+
+Expected stable model areas:
+
+```text
+Project
+Experiment
+GenerationRun
+Dataset
+DatasetVersion
+Asset
+AssetVersion
+TrainingRun
+EvaluationResult
+references
+reproduction manifest
+comparison result
+```
+
+Use flexible dictionaries for domain-specific variable data:
+
+```python
+parameters: dict[str, object]
+metadata: dict[str, object]
+metrics: dict[str, object]
+config: dict[str, object]
+```
+
+Avoid excessive inheritance hierarchies.
+
+Prefer small immutable or predictable value objects where useful.
+
+---
+
+# 19. GENERATION MODEL
+
+Generation model should represent the backend Generation.
+
+Important fields:
+
+```text
+id
+experiment_id
+name
+description
+generator
+parameters
+reproducibility
+inputs
+outputs
+status
+started_at
+completed_at
+metadata
+created_at
+updated_at
+```
+
+The exact Python representation should follow the actual backend response.
+
+Generation status:
+
+```text
+pending
+running
+completed
+failed
+```
+
+Lifecycle operations should map to backend PATCH semantics.
+
+---
+
+# 20. GENERATION LIFECYCLE API
+
+Target conceptual usage:
+
+```python
+generation.start()
+```
+
+```python
+generation.complete()
+```
+
+```python
+generation.fail()
+```
+
+Under the current backend contract these correspond to status updates.
+
+The current backend supports:
+
+```http
+PATCH /generations/{generation_id}
+```
+
+Payloads:
+
+```json
+{"status": "running"}
+```
+
+```json
+{"status": "completed"}
+```
+
+```json
+{"status": "failed"}
+```
+
+Do not add client-side lifecycle transitions that contradict backend semantics.
+
+The backend is authoritative.
+
+---
+
+# 21. DATASET REFERENCES
+
+A dataset reference is metadata, not binary data.
+
+The SDK should allow a researcher to express:
+
+```text
+dataset identity
+dataset version
+URI/path
+format
+size
+checksum
+metadata
+```
+
+Current domain model distinguishes logical Dataset from immutable DatasetVersion.
+
+The SDK should not collapse these concepts if the backend exposes them separately.
+
+Important principle:
+
+```text
+Dataset
+  |
+  +-- v1
+  +-- v2
+  +-- v3
+```
+
+Historical generations reference exact versions.
+
+---
+
+# 22. ASSET REFERENCES
+
+Assets may include:
+
+- models
+- textures
+- scenes
+- meshes
+- generator resources
+- other reusable files
+
+Use references rather than uploading files.
+
+Asset versions are immutable historical references.
+
+Keep asset metadata flexible.
+
+---
+
+# 23. TRAINING RUNS
+
+The SDK must support recording:
+
+- model identity
+- framework
+- training configuration
+- experiment relationship
+- dataset relationship
+- timestamps
+- metadata
+
+Conceptual usage:
+
+```python
+training = experiment.training(
+    model="yolo",
+    framework="pytorch",
+    dataset=dataset,
+    config={
+        "epochs": 50,
+        "batch_size": 32,
+    },
+)
+```
+
+Do not assume that the SDK starts or controls the actual training process.
+
+The researcher continues to call their normal training code.
+
+SynthGraph records the provenance.
+
+---
+
+# 24. EVALUATION RESULTS
+
+The SDK must support:
+
+- metrics
+- metadata
+- relationship to TrainingRun
+- exact DatasetVersion evaluated where supported by backend
+
+Example:
+
+```python
+evaluation = training.evaluation(
+    metrics={
+        "mAP": 0.724,
+        "precision": 0.78,
+        "recall": 0.69,
+    }
+)
+```
+
+Metrics should remain flexible.
+
+Do not create hard-coded SDK fields for every possible metric.
+
+---
+
+# 25. LINEAGE
+
+The SDK should expose lineage relationships sufficiently for researchers to understand:
+
+```text
+Generation
+    |
+DatasetVersion
+    |
+TrainingRun
+    |
+EvaluationResult
+```
+
+Do not build a graph database client.
+
+The backend already represents lineage relationally.
+
+The SDK can expose convenience methods or typed relationships over the REST API.
+
+---
+
+# 26. REPRODUCTION MANIFEST
+
+Reproduction is a first-class product capability.
+
+The manifest should capture the recorded information required to reconstruct an experiment.
+
+It should include information such as:
+
+- generation identity
+- experiment identity
+- generator
+- generator version
+- parameters
+- reproducibility metadata
+- seed
+- code/version
+- environment metadata
+- assets
+- dataset references
+- inputs
+- outputs
+- missing/external information where supported
+
+The system must not claim guaranteed reproducibility if external dependencies are missing.
+
+A manifest is a record of provenance and reconstruction requirements, not a command that magically runs the researcher's external tools.
+
+---
+
+# 27. SDK MANIFEST API
+
+The SDK should provide a convenient retrieval method around:
+
+```http
+GET /generations/{generationId}/reproduction-manifest
+```
+
+Expected result is a structured JSON object.
+
+The SDK should deserialize this into a stable model or typed mapping.
+
+Do not assume the manifest itself contains large dataset bytes.
+
+---
+
+# 28. DOCUMENTATION API
+
+Current backend documentation route:
+
+```http
+GET /generations/{generationId}/documentation
+```
+
+The current backend returns structured Markdown documentation.
+
+The SDK should expose this in a way useful for:
+
+- terminal display
+- writing to a file
+- programmatic use
+
+For example:
+
+```python
+markdown = sg.documentation.get(generation_id)
+```
+
+The final public naming should match the overall SDK resource style.
+
+Do not convert documentation into a giant custom rendering framework.
+
+---
+
+# 29. SEARCH AND FILTER
+
+Current backend supports:
+
+### Experiment search
+
+```http
+GET /projects/{projectId}/experiments?search=<string>
+```
+
+### Generation parameter filtering
+
+```http
+GET /experiments/{experimentId}/generations?parameters=<JSON object>
+```
+
+The SDK should expose these as typed or ergonomic methods.
+
+Example conceptual API:
+
+```python
+experiments = sg.experiments.list(
+    project_id=project_id,
+    search="rain",
+)
+```
+
+Generation filtering:
+
+```python
+generations = sg.generations.list(
+    experiment_id=experiment_id,
+    parameters={
+        "weather": "rain",
+        "occlusion": 0.3,
+    },
+)
+```
+
+Do not invent an advanced query language unless the backend supports it.
+
+---
+
+# 30. COMPARISON
+
+Comparison is a query/view over existing Generations.
+
+There is no need for a persistent Comparison entity for MVP.
+
+The current backend route is:
+
+```http
+POST /generations/compare
+```
+
+The SDK should expose comparison as an operation, not as a long-lived CRUD resource.
+
+Conceptual usage:
+
+```python
+result = sg.generations.compare(
+    generation_ids=[generation_a, generation_b]
+)
+```
+
+The result should help identify meaningful differences in:
+
+- configuration
+- parameters
+- generator
+- versions
+- reproducibility metadata
+- recorded results where available
+
+The exact request and response schema must be derived from the current backend comparison implementation before freezing the Python model.
+
+Do not invent fields not returned by the backend.
+
+---
+
+# 31. CODE / GIT METADATA
+
+Provenance should capture code/version information where available.
+
+Potential metadata:
+
+```text
+git commit hash
+branch
+repository
+working tree state
+code version
+```
+
+Do not silently capture sensitive repository content.
+
+For v1.0, automatic Git detection is useful but should not become a magical dependency.
+
+A safe approach:
+
+- explicit researcher-provided metadata
+- optional helper for Git metadata
+- automatic instrumentation deferred to v1.2
+
+---
+
+# 32. ENVIRONMENT METADATA
+
+Environment metadata may include reproducibility-relevant fields such as:
+
+```text
+Python version
+OS
+package/runtime information
+selected environment identifiers
+```
+
+Do not dump the entire environment blindly.
+
+Do not collect secrets.
+
+Do not collect unrelated personal information.
+
+The goal is reproducibility, not surveillance.
+
+---
+
+# 33. RETRIES AND IDEMPOTENCY
+
+This is a critical reliability area.
+
+Problem:
+
+```text
+SDK -> POST
+      |
+      v
+Backend saves record
+      |
+network failure
+      |
+SDK never receives response
+```
+
+If the SDK blindly retries:
+
+```text
+POST
+POST again
+```
+
+it may create duplicate provenance.
+
+Therefore:
+
+- retry only safe transient failures
+- use idempotency where duplicate submission is possible
+- never claim success without confirmation
+- never silently discard provenance
+
+The exact backend idempotency-key model is an open contract item unless already implemented.
+
+Do not invent a client-only fake idempotency system that the backend cannot honor.
+
+If the backend currently lacks idempotency support for an operation, document the limitation and avoid unsafe automatic retries.
+
+---
+
+# 34. LONG-RUNNING JOBS
+
+Researchers may run generation/training for hours.
+
+The SDK should not require the Python process to remain interactively attached merely to represent a conceptual long-running operation.
+
+For v1.0, keep this simple.
+
+The SDK can provide explicit lifecycle methods:
+
+```python
+generation.start()
+# researcher performs work
+generation.complete()
+```
+
+Future event/background instrumentation can be added in v1.2.
+
+Do not build a distributed job queue into the SDK.
+
+---
+
+# 35. CONTEXT MANAGERS
+
+The current SDK supports context-manager behavior.
+
+A useful target style is:
+
+```python
+with sg.experiment("vehicle_detection_rain") as experiment:
+    ...
+```
+
+and potentially:
+
+```python
+with experiment.generation(...) as generation:
+    run_generation()
+```
+
+However, context-manager semantics must be defined carefully.
+
+Do not automatically mark a generation as completed merely because Python exited a context if the research process failed in a way the SDK cannot correctly classify.
+
+Explicit lifecycle semantics are safer for v1.0.
+
+If automatic failure/completion is implemented, document exactly what happens.
+
+---
+
+# 36. SDK SERIALIZATION
+
+The SDK must have a clear distinction between:
+
+```text
+Python model
+      |
+      v
+canonical JSON payload
+      |
+      v
+HTTP API
+```
+
+Do not serialize arbitrary Python objects.
+
+Flexible fields must contain JSON-compatible values.
+
+Reject or normalize unsupported objects.
+
+The canonical JSON schema must be frozen before v1.0 release.
+
+The source SDK SRS explicitly leaves the exact wire format, field names, identifiers, envelopes, timestamps, and API versioning rules as items that must be finalized.
+
+Treat that as a contract-freeze task, not as permission to improvise silently.
+
+---
+
+# 37. SDK TESTING
+
+Required categories:
+
+## Unit tests
+
+- configuration
+- model construction
+- validation
+- serialization
+- deserialization
+- HTTP request construction
+- authentication headers
+- error mapping
+- retry decisions
+- idempotency behavior where implemented
+- resource methods
+
+## Contract tests
+
+Validate SDK payloads against backend expectations.
+
+## Integration tests
+
+Against the real local backend:
+
+- authentication
+- project creation/retrieval/list
+- experiment creation/retrieval/list/search
+- generation creation/retrieval/list
+- generation lifecycle
+- dataset references
+- training
+- evaluation
+- reproduction manifest
+- documentation
+- comparison
+- authorization/isolation
+
+## Security tests
+
+- API key not present in logs
+- API key not present in exceptions
+- credentials not serialized
+- external artifact bytes not uploaded unexpectedly
+
+## Packaging tests
+
+```bash
+python -m build
+```
+
+Then install the wheel into a clean virtual environment and run a smoke test.
+
+---
+
+# 38. SDK PERFORMANCE
+
+The SDK should add minimal overhead.
+
+Important rules:
+
+- do not upload datasets
+- do not scan huge directories automatically
+- do not inspect entire repositories
+- do not perform expensive environment collection by default
+- avoid unnecessary HTTP calls
+- do not introduce background workers unless justified
+
+The primary performance cost should be small metadata HTTP requests.
+
+---
+
+# 39. SDK SECURITY
+
+Required:
+
+- TLS for remote deployment
+- secure credential configuration
+- no API keys in logs
+- no credentials in exceptions
+- backend authorization
+- input validation
+- minimal personal data
+- minimal transmitted data
+
+The SDK must not assume client-side validation protects the backend.
+
+---
+
+# 40. SDK PACKAGING
+
+Target standard Python packaging.
+
+The current package should remain installable with:
+
+```powershell
+pip install -e ".[dev]"
+```
+
+The future public distribution target is PyPI.
+
+Potential future extras:
+
+```text
+synthgraph[blender]
+synthgraph[wandb]
+```
+
+Do not implement every integration now.
+
+Keep optional dependencies optional.
+
+The core package should remain lightweight.
+
+---
+
+# PART B: CLI
+
+# 41. CLI PURPOSE
+
+The CLI is a first-class deliverable but it is NOT a second SDK.
+
+Its primary purpose is:
+
+```text
+QUERY + INSPECT + COMPARE + EXPORT
+```
+
+The source requirements explicitly describe the CLI as:
+
+> Query experiments, export manifests
+
+The product strategy marks it P0.
+
+The CLI exists because not every interaction with provenance should require writing Python code.
+
+Typical researcher behavior:
+
+```text
+SDK:
+    capture provenance while running research
+
+CLI:
+    inspect what was captured later
+```
+
+---
+
+# 42. CLI ROLE IN THE PRODUCT
+
+The product interfaces should be:
+
+```text
+Python SDK
+    |
+    | capture/write
+    v
+Backend
+    ^
+    | query/read/export
+    |
+CLI
+
+Dashboard
+    ^
+    | visual exploration
+    |
+Backend
+```
+
+Therefore:
+
+### SDK
+
+Capture and programmatic integration.
+
+### CLI
+
+Investigation and export.
+
+### Dashboard
+
+Visual exploration.
+
+### Backend
+
+System of record.
+
+This division keeps the product understandable.
+
+---
+
+# 43. CLI DESIGN PRINCIPLE
+
+The CLI must be a thin layer over the SDK.
+
+Correct:
+
+```text
+CLI command
+    |
+    v
+SDK method
+    |
+    v
+HTTP client
+    |
+    v
+Backend
+```
+
+Incorrect:
+
+```text
+CLI
+  |
+  +--> custom HTTP client
+  +--> custom auth
+  +--> custom models
+  +--> custom error handling
+  +--> custom backend URLs
+```
+
+Do not duplicate backend logic.
+
+Do not duplicate authentication.
+
+Do not create a second serialization model unless the CLI presentation layer requires one.
+
+The CLI should reuse the SDK client, models, exceptions, and transport.
+
+---
+
+# 44. CLI MVP COMMAND SURFACE
+
+Recommended MVP structure:
+
+```text
+synthgraph
+├── auth
+│   └── whoami
+├── projects
+│   ├── list
+│   └── get
+├── experiments
+│   ├── list
+│   ├── get
+│   └── search
+├── generations
+│   ├── list
+│   └── get
+├── compare
+├── manifest
+└── docs
+```
+
+A simpler flat alias can also be provided for common commands if it improves usability.
+
+The original SRS requires discoverability through:
+
+```bash
+synthgraph --help
+```
+
+Help should expose all major command groups.
+
+---
+
+# 45. CLI AUTH
+
+The CLI should be able to answer:
+
+```bash
+synthgraph auth whoami
+```
+
+This should call the backend `/auth/me` through the SDK.
+
+It should display safe information such as:
+
+```text
+ID: ...
+Email: ...
+```
+
+Never display the raw API key.
+
+Credential storage is an open design area in the SDK SRS.
+
+For the first implementation, support secure environment-based credentials and/or the existing SDK configuration mechanism.
+
+Do not build an elaborate credential manager unless required.
+
+A future CLI login flow can be added later.
+
+---
+
+# 46. CLI PROJECT COMMANDS
+
+## List
+
+```bash
+synthgraph projects list
+```
+
+Expected behavior:
+
+- retrieve projects through SDK
+- print readable table/list
+- optionally support JSON output
+
+## Get
+
+```bash
+synthgraph projects get <project-id>
+```
+
+Show:
+
+- ID
+- name
+- description
+- timestamps where useful
+
+Do not display internal database implementation details.
+
+---
+
+# 47. CLI EXPERIMENT COMMANDS
+
+## List
+
+```bash
+synthgraph experiments list --project <project-id>
+```
+
+## Search
+
+```bash
+synthgraph experiments search --project <project-id> "rain"
+```
+
+The current backend supports:
+
+```http
+GET /projects/{projectId}/experiments?search=<string>
+```
+
+## Get
+
+```bash
+synthgraph experiments get <experiment-id>
+```
+
+The CLI should show useful metadata and identifiers.
+
+---
+
+# 48. CLI GENERATION COMMANDS
+
+## List
+
+```bash
+synthgraph generations list --experiment <experiment-id>
+```
+
+Support parameter filtering where useful:
+
+```bash
+synthgraph generations list \
+  --experiment <experiment-id> \
+  --parameters '{"weather":"rain","occlusion":0.3}'
+```
+
+The CLI should use the SDK rather than constructing the query URL itself.
+
+## Get
+
+```bash
+synthgraph generations get <generation-id>
+```
+
+Display:
+
+- ID
+- experiment
+- name
+- generator
+- generator version
+- parameters
+- reproducibility
+- status
+- inputs
+- outputs
+- timestamps
+
+For large nested objects, readable JSON formatting is acceptable.
+
+---
+
+# 49. CLI COMPARISON
+
+Comparison is explicitly part of the product direction.
+
+Command:
+
+```bash
+synthgraph compare <generation-id-a> <generation-id-b>
+```
+
+Potential output:
+
+```text
+Generation A: ...
+Generation B: ...
+
+Generator
+  A: blender
+  B: blender
+
+Generator version
+  A: 4.2
+  B: 4.3
+
+Parameter differences
+  weather: rain -> snow
+  occlusion: 0.3 -> 0.5
+```
+
+The exact output should be driven by the backend comparison response.
+
+Do not fake comparison logic if the backend already provides a comparison result.
+
+The CLI may improve presentation but must not change scientific meaning.
+
+---
+
+# 50. CLI MANIFEST EXPORT
+
+This is one of the most important CLI functions.
+
+Command:
+
+```bash
+synthgraph manifest <generation-id>
+```
+
+Output to stdout by default is acceptable.
+
+File export:
+
+```bash
+synthgraph manifest <generation-id> --output reproduction.json
+```
+
+The CLI should:
+
+1. call SDK reproduction-manifest method
+2. receive canonical manifest
+3. serialize JSON
+4. write to file
+5. report success
+
+It must not:
+
+- upload datasets
+- regenerate datasets
+- execute Blender
+- execute Unity
+- retrain models
+
+The manifest is an export artifact.
+
+---
+
+# 51. CLI DOCUMENTATION EXPORT
+
+Command:
+
+```bash
+synthgraph docs <generation-id>
+```
+
+File output:
+
+```bash
+synthgraph docs <generation-id> --output experiment.md
+```
+
+The CLI calls the SDK documentation endpoint and writes Markdown.
+
+This supports:
+
+- paper supplements
+- internal lab documentation
+- experiment handover
+- reproducibility records
+
+---
+
+# 52. CLI OUTPUT FORMATS
+
+MVP should support at least:
+
+### Human-readable default
+
+Useful tables and structured output.
+
+### JSON
+
+For scripting.
+
+A common global option is:
+
+```bash
+--json
+```
+
+or equivalent.
+
+Example:
+
+```bash
+synthgraph generations get <id> --json
+```
+
+Output should be machine-readable JSON without decorative text.
+
+Do not make JSON mode inconsistent across commands.
+
+---
+
+# 53. CLI EXIT CODES
+
+Use meaningful exit codes.
+
+Conceptually:
+
+```text
+0 success
+1 general command failure
+2 invalid CLI usage
+3 authentication failure
+4 authorization failure
+5 resource not found
+6 validation/conflict
+7 transport/server failure
+```
+
+The exact mapping can be simplified if the chosen CLI framework already provides conventions, but scripts must be able to distinguish success from failure.
+
+Never return exit code 0 when an export failed.
+
+---
+
+# 54. CLI ERROR UX
+
+Human-readable errors should be concise.
+
+Bad:
+
+```text
+AxiosError stack trace blah blah database implementation details...
+```
+
+Good:
+
+```text
+Error: Generation not found.
+```
+
+or:
+
+```text
+Error: Authentication failed. Check your SynthGraph API key.
+```
+
+The CLI should use SDK exceptions and translate them into user-friendly messages.
+
+Do not duplicate backend error parsing.
+
+---
+
+# 55. CLI HELP
+
+Required:
+
+```bash
+synthgraph --help
+```
+
+Also:
+
+```bash
+synthgraph projects --help
+synthgraph experiments --help
+synthgraph generations --help
+synthgraph manifest --help
+synthgraph docs --help
+```
+
+Help should explain:
+
+- command purpose
+- required arguments
+- optional arguments
+- examples
+- output behavior
+
+Discoverability is an explicit usability requirement.
+
+---
+
+# 56. CLI CONFIGURATION
+
+CLI configuration should reuse SDK configuration.
+
+Possible:
+
+```bash
+export SYNTHGRAPH_API_KEY="..."
+export SYNTHGRAPH_BASE_URL="http://localhost:3000"
+```
+
+or platform-appropriate equivalent.
+
+Do not create a separate configuration system unless necessary.
+
+If a CLI configuration file is eventually introduced, it should feed the same SDK client configuration.
+
+Do not implement legacy offline SQLite/cache behavior merely because an older source diagram mentioned it.
+
+---
+
+# 57. CLI SECURITY
+
+Never print:
+
+- API key
+- Authorization header
+- secret environment values
+- backend internal credentials
+
+Be careful with shell errors.
+
+Do not echo a command containing the API key.
+
+Do not put credentials into exported manifests.
+
+---
+
+# 58. CLI SHOULD NOT BE A FULL WRITE CLIENT
+
+For MVP, the CLI should not become a duplicate interface for:
+
+- creating projects
+- creating experiments
+- creating generations
+- recording training
+- recording evaluations
+
+Those operations belong primarily to the SDK.
+
+Reason:
+
+```text
+SDK = integration/capture surface
+CLI = query/export surface
+```
+
+Adding every write operation to the CLI would create two user-facing write APIs and increase maintenance.
+
+If later research workflows show a clear need, add commands through the same SDK methods rather than implementing a separate API.
+
+---
+
+# 59. CLI SHOULD NOT REPRODUCE
+
+Do not implement:
+
+```bash
+synthgraph reproduce <generation-id>
+```
+
+as a command that automatically launches research software.
+
+That would make SynthGraph responsible for external environments it does not control.
+
+The correct MVP behavior is:
+
+```bash
+synthgraph manifest <generation-id> --output reproduction.json
+```
+
+The researcher then uses the manifest with their own environment and tools.
+
+---
+
+# 60. CLI PACKAGE STRUCTURE
+
+Recommended structure:
+
+```text
+sdk/
+├── src/
+│   └── synthgraph/
+│       ├── __init__.py
+│       ├── client.py
+│       ├── config.py
+│       ├── http.py
+│       ├── errors.py
+│       ├── projects.py
+│       ├── experiments.py
+│       ├── generations.py
+│       ├── training.py
+│       ├── evaluation.py
+│       ├── reproduction.py
+│       ├── documentation.py
+│       ├── comparison.py
+│       ├── models/
+│       │   ├── __init__.py
+│       │   ├── project.py
+│       │   ├── experiment.py
+│       │   ├── generation.py
+│       │   ├── dataset.py
+│       │   ├── asset.py
+│       │   ├── training.py
+│       │   ├── evaluation.py
+│       │   ├── reproduction.py
+│       │   └── comparison.py
+│       │
+│       └── cli/
+│           ├── __init__.py
+│           ├── main.py
+│           ├── output.py
+│           ├── errors.py
+│           └── commands/
+│               ├── auth.py
+│               ├── projects.py
+│               ├── experiments.py
+│               ├── generations.py
+│               ├── compare.py
+│               ├── manifest.py
+│               └── docs.py
+│
+├── tests/
+│   ├── unit SDK tests...
+│   ├── integration...
+│   └── cli/
+│       ├── test_main.py
+│       ├── test_projects.py
+│       ├── test_experiments.py
+│       ├── test_generations.py
+│       ├── test_compare.py
+│       ├── test_manifest.py
+│       └── test_docs.py
+│
+├── pyproject.toml
+└── README.md
+```
+
+This is a recommendation.
+
+Do not create files that do not improve separation.
+
+A very small CLI can remain compact.
+
+---
+
+# 61. CLI FRAMEWORK
+
+Choose one standard Python CLI framework and use it consistently.
+
+Reasonable options:
+
+- Typer
+- Click
+- argparse
+
+For this project, Typer is a reasonable recommendation because it provides:
+
+- typed arguments
+- nested commands
+- automatic help
+- clean Python implementation
+
+But do not add a heavy framework if the current package already has an established CLI approach.
+
+The implementation should prioritize maintainability over framework preference.
+
+---
+
+# PART C: SHARED SDK + CLI CONTRACT
+
+# 62. CURRENT BACKEND API INVENTORY
+
+The current backend routes known from the implemented backend are:
+
+```text
+GET  /auth/me
+
+POST /projects
+GET  /projects
+GET  /projects/:projectId
+
+POST /projects/:projectId/experiments
+GET  /projects/:projectId/experiments
+GET  /experiments/:experimentId
+
+POST /experiments/:experimentId/generations
+GET  /experiments/:experimentId/generations
+GET  /generations/:generationId
+PATCH /generations/:generationId
+
+POST /generations/:generationId/datasets
+
+GET  /generations/:generationId/reproduction-manifest
+GET  /generations/:generationId/documentation
+
+POST /generations/compare
+```
+
+Experiment search:
+
+```text
+GET /projects/:projectId/experiments?search=<string>
+```
+
+Generation parameter filtering:
+
+```text
+GET /experiments/:experimentId/generations?parameters=<JSON object>
+```
+
+Generation lifecycle:
+
+```text
+PATCH /generations/:generationId
+```
+
+Status payload:
+
+```json
+{"status":"running"}
+```
+
+```json
+{"status":"completed"}
+```
+
+```json
+{"status":"failed"}
+```
+
+Dataset reference creation:
+
+```text
+POST /generations/:generationId/datasets
+```
+
+The backend is protected by API-key authentication.
+
+---
+
+# 63. IMPORTANT BACKEND CONTRACT CHECK
+
+Before implementing or freezing training/evaluation SDK methods, inspect the current backend controllers and routes.
+
+The domain requires:
+
+- TrainingRun
+- TrainingRunDatasetReference
+- EvaluationResult
+
+but the exact current REST route names and payloads must be derived from the current backend implementation rather than guessed from older SRS examples.
+
+Specifically inspect:
+
+```text
+src/training-runs/
+src/evaluation-results/
+```
+
+or the corresponding current backend modules/controllers.
+
+Do the same for comparison if its final module wiring or payload shape differs from the known route:
+
+```text
+POST /generations/compare
+```
+
+This is deliberate.
+
+A development handoff should not pretend an API is frozen when the actual implementation has not been verified.
+
+---
+
+# 64. CURRENT BACKEND DATABASE MODEL
+
+Current relational model contains:
+
+```text
+users
+projects
+experiments
+generations
+datasets
+dataset_versions
+generation_dataset_refs
+assets
+asset_versions
+generation_asset_refs
+training_runs
+training_run_dataset_refs
+evaluation_results
+```
+
+The backend uses PostgreSQL and JSONB for flexible provenance/configuration/metrics.
+
+Large data is external.
+
+No object storage is required for the current MVP.
+
+---
+
+# 65. AUTHORIZATION MODEL
+
+Ownership follows:
+
+```text
+User
+  |
+Project
+  |
+Experiment
+  |
+Generation / TrainingRun
+```
+
+IDs do not imply authorization.
+
+A user must not be able to access another user's data merely by knowing an ID.
+
+The SDK should expose backend authorization errors cleanly.
+
+The CLI should not try to implement ownership rules itself.
+
+---
+
+# 66. SDK/CLI/BACKEND CONTRACT RULE
+
+Do not redesign the SDK and backend independently.
+
+Use this process:
+
+```text
+Current backend route
+       +
+Current SDK implementation
+       +
+Source SRS
+       |
+       v
+Freeze contract
+       |
+       v
+Implement SDK
+       |
+       v
+Implement CLI
+       |
+       v
+Integration test
+```
+
+If a backend response does not match the SDK's intended model:
+
+1. identify whether the backend or SDK is wrong
+2. check source requirements
+3. document the discrepancy
+4. make one deliberate contract decision
+5. update tests and docs together
+
+Do not silently add compatibility hacks everywhere.
+
+---
+
+# 67. CANONICAL DATA CONTRACT
+
+The SDK converts Python models into a SynthGraph-defined canonical transport representation.
+
+Conceptual example:
+
+```json
+{
+  "experiment": {
+    "id": "exp_123"
+  },
+  "generation": {
+    "generator": "blender",
+    "generator_version": "4.2",
+    "parameters": {
+      "weather": "rain",
+      "occlusion": 0.3,
+      "render_engine": "cycles"
+    },
+    "seed": 42
+  }
+}
+```
+
+This is illustrative.
+
+Before v1.0 release, freeze:
+
+- exact field names
+- required fields
+- optional fields
+- identifier format
+- timestamps
+- envelopes
+- error shape
+- API versioning
+- serialization rules
+
+---
+
+# 68. VERSIONING
+
+The package currently has version `0.1.0`.
+
+Do not claim v1.0 merely because features work.
+
+Before v1.0:
+
+- freeze public API
+- freeze core wire contract
+- define compatibility policy
+- run integration workflow
+- build wheel
+- test clean installation
+- publish TestPyPI
+- verify distribution
+- then publish
+
+The source SDK handoff recommends this sequence.
+
+---
+
+# 69. RECOMMENDED IMPLEMENTATION ORDER
+
+Do not implement everything randomly.
+
+Use vertical slices.
+
+## Phase 1: Contract audit
+
+Inspect:
+
+```text
+current SDK source
+current backend controllers
+current backend DTOs
+current backend response shapes
+current domain entities
+```
+
+Create a contract table:
+
+```text
+Operation
+SDK method
+HTTP method
+Route
+Request model
+Response model
+Errors
+Status
+```
+
+This table becomes the implementation reference.
+
+## Phase 2: Freeze core SDK contract
+
+Finalize:
+
+- client
+- configuration
+- errors
+- models
+- serialization
+- auth
+
+## Phase 3: Complete resource APIs
+
+Implement/verify:
+
+1. projects
+2. experiments
+3. generations
+4. lifecycle
+5. datasets
+6. training
+7. evaluation
+8. reproduction
+9. documentation
+10. comparison
+11. search/filter
+
+## Phase 4: Integration testing
+
+Run SDK against the real local backend.
+
+## Phase 5: CLI
+
+Build CLI over the SDK:
+
+1. `auth whoami`
+2. projects
+3. experiments
+4. generations
+5. compare
+6. manifest
+7. docs
+8. JSON output
+9. help
+10. exit codes
+
+## Phase 6: Packaging
+
+Test:
+
+```bash
+python -m build
+```
+
+Install the wheel into a clean environment.
+
+Run CLI from the installed package.
+
+---
+
+# 70. TESTING STRATEGY FOR THE WHOLE CLIENT LAYER
+
+Use three levels.
+
+## Level 1: Unit
+
+Fast tests with mocked transport.
+
+Test:
+
+- models
+- serialization
+- resource methods
+- CLI command parsing
+- CLI formatting
+- error mapping
+
+## Level 2: Integration
+
+Real backend.
+
+Test:
+
+```text
+SDK -> HTTP -> NestJS -> PostgreSQL
+```
+
+Then:
+
+```text
+CLI -> SDK -> HTTP -> NestJS -> PostgreSQL
+```
+
+## Level 3: End-to-end researcher workflow
+
+Simulate:
+
+```text
+authenticate
+    |
+create project
+    |
+create experiment
+    |
+create generation
+    |
+start generation
+    |
+record dataset reference
+    |
+complete generation
+    |
+create training run
+    |
+record evaluation
+    |
+query experiment
+    |
+filter generations
+    |
+compare generations
+    |
+export manifest
+    |
+export documentation
+```
+
+This is the most important acceptance test.
+
+---
+
+# 71. CLI TESTING
+
+Unit tests should cover:
+
+- command registration
+- help output
+- required argument validation
+- JSON output
+- table output
+- error rendering
+- exit codes
+
+Integration tests should cover:
+
+```bash
+synthgraph auth whoami
+synthgraph projects list
+synthgraph projects get ...
+synthgraph experiments list ...
+synthgraph experiments search ...
+synthgraph generations list ...
+synthgraph generations get ...
+synthgraph compare ...
+synthgraph manifest ...
+synthgraph docs ...
+```
+
+Do not only test CLI command functions in isolation.
+
+At least one test must prove the CLI actually reaches the real SDK/backend path.
+
+---
+
+# 72. ACCEPTANCE CRITERIA
+
+The combined SDK + CLI is acceptable when all of the following are true.
+
+## SDK
+
+- Can authenticate.
+- Can use configurable backend endpoint.
+- Can create/list/get projects.
+- Can create/list/get/search experiments.
+- Can create/get/list generations.
+- Can update generation lifecycle.
+- Can reference datasets without uploading dataset bytes.
+- Can reference assets without uploading asset bytes.
+- Can record training.
+- Can record evaluation.
+- Can retrieve reproduction manifest.
+- Can retrieve documentation.
+- Can compare generations.
+- Can filter generations by parameters.
+- Uses typed stable models.
+- Uses flexible dictionaries for flexible data.
+- Has consistent exceptio... (17 KB left)

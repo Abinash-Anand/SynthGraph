@@ -5,7 +5,7 @@ export const SITE = {
   /** Update when a public repository / docs site actually exists. */
   github: null as string | null,
   docs: null as string | null,
-  contactEmail: "hello@synthgraph.dev",
+  contactEmail: "contact@synthgraph.dev",
 } as const;
 
 export type NavLink = { href: string; label: string };
