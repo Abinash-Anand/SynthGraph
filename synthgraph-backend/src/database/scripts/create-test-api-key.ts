@@ -31,12 +31,12 @@ async function main() {
   let user = await userRepository.findByEmail(email);
 
   if (!user) {
-    user = await userRepository.create(
-      Object.assign(new User(), {
-        email: 'dev@synthgraph.local',
-      }),
-    );
-  }
+  user = await userRepository.create(
+    Object.assign(new User(), {
+      email,
+    }),
+  );
+}
 
   const service = new ApiKeyCreationService(apiKeyRepository, userRepository);
 
