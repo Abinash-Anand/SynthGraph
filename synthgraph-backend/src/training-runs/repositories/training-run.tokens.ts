@@ -1,0 +1,3 @@
+export const TRAINING_RUN_REPOSITORY = Symbol(
+  'TRAINING_RUN_REPOSITORY',
+);

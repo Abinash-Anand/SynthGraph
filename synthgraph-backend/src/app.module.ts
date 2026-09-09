@@ -8,6 +8,7 @@ import { ProjectsModule } from './projects/projects.module.js';
 import { ExperimentsModule } from './experiments/experiments.module.js';
 import { GenerationsModule } from './generations/generations.module.js';
 import { DatasetsModule } from './datasets/datasets.module.js';
+import { TrainingRunsModule } from './training-runs/training-runs.module.js';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -30,7 +31,8 @@ import { DatasetsModule } from './datasets/datasets.module.js';
     ProjectsModule,
     ExperimentsModule,
     GenerationsModule,
-    DatasetsModule
+    DatasetsModule,
+    TrainingRunsModule,
   ],
 })
 export class AppModule {}
