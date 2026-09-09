@@ -1,0 +1,614 @@
+{
+  "repository": {
+    "owner": "Abinash-Anand",
+    "name": "SynthGraph"
+  },
+  "github_api": {
+    "base_url": "https://api.github.com",
+    "api_version": "2026-03-10"
+  },
+  "labels": [
+    {
+      "name": "feature",
+      "color": "1D76DB",
+      "description": "New product capability"
+    },
+    {
+      "name": "bug",
+      "color": "D73A4A",
+      "description": "Something is broken"
+    },
+    {
+      "name": "refactor",
+      "color": "A2EEEF",
+      "description": "Code or architecture improvement without changing intended behavior"
+    },
+    {
+      "name": "test",
+      "color": "5319E7",
+      "description": "Testing and verification"
+    },
+    {
+      "name": "documentation",
+      "color": "0075CA",
+      "description": "Documentation work"
+    },
+    {
+      "name": "security",
+      "color": "B60205",
+      "description": "Security and authorization"
+    },
+    {
+      "name": "infrastructure",
+      "color": "006B75",
+      "description": "Infrastructure, deployment, or CI"
+    },
+    {
+      "name": "backend",
+      "color": "0E8A16",
+      "description": "Backend implementation"
+    },
+    {
+      "name": "database",
+      "color": "FBCA04",
+      "description": "Database and persistence"
+    },
+    {
+      "name": "sdk",
+      "color": "C5DEF5",
+      "description": "Python SDK integration or implementation"
+    },
+    {
+      "name": "api",
+      "color": "BFDADC",
+      "description": "HTTP API contract or endpoint"
+    },
+    {
+      "name": "auth",
+      "color": "D4C5F9",
+      "description": "Authentication and authorization"
+    },
+    {
+      "name": "domain",
+      "color": "F9D0C4",
+      "description": "Domain model and invariants"
+    },
+    {
+      "name": "deployment",
+      "color": "0052CC",
+      "description": "Deployment and runtime"
+    },
+    {
+      "name": "integration",
+      "color": "E99695",
+      "description": "Cross-component integration"
+    },
+    {
+      "name": "reliability",
+      "color": "C2E0C6",
+      "description": "Retries, idempotency, and reliability"
+    },
+    {
+      "name": "pilot",
+      "color": "7057FF",
+      "description": "Real-world research pilot validation"
+    }
+  ],
+  "milestones": [
+    {
+      "key": "M1",
+      "title": "M1 — Backend Foundation",
+      "description": "Establish the NestJS modular-monolith foundation, configuration, PostgreSQL/TypeORM, migrations, and testing infrastructure.",
+      "issues": [
+        {
+          "title": "Establish backend module structure",
+          "body": "Define the initial NestJS modular-monolith structure for backend modules, common code, configuration, and database infrastructure.",
+          "labels": [
+            "backend",
+            "architecture"
+          ]
+        },
+        {
+          "title": "Configure application configuration",
+          "body": "Set up ConfigModule and environment-driven configuration. No hard-coded credentials or environment-specific secrets.",
+          "labels": [
+            "backend",
+            "infrastructure"
+          ]
+        },
+        {
+          "title": "Configure TypeORM and PostgreSQL",
+          "body": "Configure TypeORM for PostgreSQL with entity discovery and separate development/test configuration. Do not use synchronize=true.",
+          "labels": [
+            "backend",
+            "database"
+          ]
+        },
+        {
+          "title": "Establish database migration workflow",
+          "body": "Add reliable migration generate, run, and revert workflows.",
+          "labels": [
+            "database",
+            "infrastructure"
+          ]
+        },
+        {
+          "title": "Add backend testing foundation",
+          "body": "Set up unit and integration testing, including an integration-test database strategy.",
+          "labels": [
+            "test",
+            "backend"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "M2",
+      "title": "M2 — Authentication & Authorization",
+      "description": "Establish the security boundary, API-key authentication, ownership checks, and isolation tests.",
+      "issues": [
+        {
+          "title": "Design User persistence model",
+          "body": "Define the users table/entity and ownership relationship to projects.",
+          "labels": [
+            "backend",
+            "database",
+            "auth"
+          ]
+        },
+        {
+          "title": "Design API key persistence",
+          "body": "Persist API keys securely using hashes. Never store recoverable raw API keys.",
+          "labels": [
+            "security",
+            "auth",
+            "database"
+          ]
+        },
+        {
+          "title": "Implement API key authentication",
+          "body": "Implement Bearer API-key authentication and resolve the authenticated user.",
+          "labels": [
+            "security",
+            "auth",
+            "backend"
+          ]
+        },
+        {
+          "title": "Implement authorization boundary",
+          "body": "Enforce authenticated-user ownership/access across Project → Experiment → Generation resources.",
+          "labels": [
+            "security",
+            "auth",
+            "backend"
+          ]
+        },
+        {
+          "title": "Add authentication and isolation tests",
+          "body": "Test valid/invalid/missing keys and cross-user resource isolation.",
+          "labels": [
+            "security",
+            "test",
+            "auth"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "M3",
+      "title": "M3 — Project & Experiment Vertical Slice",
+      "description": "Build the first end-to-end slice from SDK/HTTP request through NestJS, persistence, authorization, and PostgreSQL.",
+      "issues": [
+        {
+          "title": "Define Project database model",
+          "body": "Implement the Project persistence model with User ownership.",
+          "labels": [
+            "backend",
+            "database"
+          ]
+        },
+        {
+          "title": "Implement Project repository",
+          "body": "Create the repository abstraction and TypeORM persistence implementation for projects.",
+          "labels": [
+            "backend",
+            "database"
+          ]
+        },
+        {
+          "title": "Implement Project creation use case",
+          "body": "Implement authenticated project creation with validation and persistence.",
+          "labels": [
+            "backend",
+            "api"
+          ]
+        },
+        {
+          "title": "Implement Project retrieval and listing",
+          "body": "Implement project retrieval/listing with ownership enforcement.",
+          "labels": [
+            "backend",
+            "api"
+          ]
+        },
+        {
+          "title": "Define Experiment database model",
+          "body": "Implement Experiment persistence and its Project relationship.",
+          "labels": [
+            "backend",
+            "database"
+          ]
+        },
+        {
+          "title": "Implement Experiment CRUD",
+          "body": "Implement experiment creation, retrieval, and listing with project ownership enforcement.",
+          "labels": [
+            "backend",
+            "api"
+          ]
+        },
+        {
+          "title": "SDK → API → PostgreSQL integration test",
+          "body": "Prove the existing Python SDK can create and retrieve real Project/Experiment data through the backend.",
+          "labels": [
+            "sdk",
+            "api",
+            "test",
+            "integration"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "M4",
+      "title": "M4 — Generation Provenance",
+      "description": "Implement the central Generation provenance object, lifecycle, immutability boundary, and existing SDK contract.",
+      "issues": [
+        {
+          "title": "Define Generation persistence model",
+          "body": "Implement generations with generator, parameters JSONB, reproducibility metadata, lifecycle, timestamps, and metadata.",
+          "labels": [
+            "backend",
+            "database",
+            "domain"
+          ]
+        },
+        {
+          "title": "Implement Generation creation",
+          "body": "Implement POST /experiments/:experimentId/generations with authorization and validation.",
+          "labels": [
+            "backend",
+            "api",
+            "domain"
+          ]
+        },
+        {
+          "title": "Implement Generation retrieval and listing",
+          "body": "Implement GET /generations/:id and GET /experiments/:experimentId/generations.",
+          "labels": [
+            "backend",
+            "api"
+          ]
+        },
+        {
+          "title": "Implement Generation lifecycle",
+          "body": "Enforce pending → running → completed/failed and reject invalid transitions.",
+          "labels": [
+            "backend",
+            "domain"
+          ]
+        },
+        {
+          "title": "Enforce Generation provenance immutability",
+          "body": "Freeze provenance fields once a generation enters RUNNING while allowing operational lifecycle fields to change.",
+          "labels": [
+            "backend",
+            "domain",
+            "security"
+          ]
+        },
+        {
+          "title": "Integrate Generation API with existing SDK",
+          "body": "Validate the real SDK 0.1.0 contract against the backend, including creation, retrieval, listing, and lifecycle updates.",
+          "labels": [
+            "sdk",
+            "api",
+            "integration"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "M5",
+      "title": "M5 — Dataset & Asset Provenance",
+      "description": "Implement reusable logical datasets/assets, immutable versions, and role-aware provenance references.",
+      "issues": [
+        {
+          "title": "Implement Dataset and DatasetVersion",
+          "body": "Implement logical Dataset plus immutable DatasetVersion with URI, version, checksum, format, size, and metadata.",
+          "labels": [
+            "backend",
+            "database",
+            "domain"
+          ]
+        },
+        {
+          "title": "Implement GenerationDatasetReference",
+          "body": "Implement the role-aware many-to-many relationship between Generation and exact DatasetVersion records.",
+          "labels": [
+            "backend",
+            "database",
+            "domain"
+          ]
+        },
+        {
+          "title": "Implement Asset and AssetVersion",
+          "body": "Implement logical Asset plus immutable AssetVersion for reusable generator inputs.",
+          "labels": [
+            "backend",
+            "database",
+            "domain"
+          ]
+        },
+        {
+          "title": "Implement GenerationAssetReference",
+          "body": "Implement the role-aware many-to-many relationship between Generation and exact AssetVersion records.",
+          "labels": [
+            "backend",
+            "database",
+            "domain"
+          ]
+        },
+        {
+          "title": "Add provenance integrity tests",
+          "body": "Test immutable versions, reusable resources, exact-version references, roles, and failed-generation preservation.",
+          "labels": [
+            "test",
+            "domain"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "M6",
+      "title": "M6 — Training & Evaluation Lineage",
+      "description": "Connect generated dataset versions to training runs and exact evaluation dataset versions.",
+      "issues": [
+        {
+          "title": "Implement TrainingRun",
+          "body": "Implement training-run persistence and lifecycle within an Experiment.",
+          "labels": [
+            "backend",
+            "database",
+            "domain"
+          ]
+        },
+        {
+          "title": "Implement TrainingRunDatasetReference",
+          "body": "Allow TrainingRuns to consume multiple exact DatasetVersions through a role-aware reference table.",
+          "labels": [
+            "backend",
+            "database",
+            "domain"
+          ]
+        },
+        {
+          "title": "Implement EvaluationResult",
+          "body": "Implement evaluation results with metrics, configuration, metadata, timestamps, and TrainingRun relationship.",
+          "labels": [
+            "backend",
+            "database",
+            "domain"
+          ]
+        },
+        {
+          "title": "Link EvaluationResult to exact DatasetVersion",
+          "body": "Record the exact DatasetVersion used for evaluation.",
+          "labels": [
+            "backend",
+            "database",
+            "domain"
+          ]
+        },
+        {
+          "title": "Implement lineage queries",
+          "body": "Support traversal from EvaluationResult to TrainingRun, DatasetVersion, Generation, parameters, and assets.",
+          "labels": [
+            "backend",
+            "api",
+            "domain"
+          ]
+        },
+        {
+          "title": "Add end-to-end lineage tests",
+          "body": "Verify Generation → DatasetVersion → TrainingRun → EvaluationResult lineage can be persisted and retrieved.",
+          "labels": [
+            "test",
+            "integration",
+            "domain"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "M7",
+      "title": "M7 — Search, Comparison & Reproduction",
+      "description": "Expose useful queries over stored provenance and generate reproduction/documentation manifests.",
+      "issues": [
+        {
+          "title": "Implement experiment and run search",
+          "body": "Add practical filtering by project, experiment, generator, time, name, and supported metadata.",
+          "labels": [
+            "backend",
+            "api",
+            "feature"
+          ]
+        },
+        {
+          "title": "Implement parameter filtering",
+          "body": "Support useful structured parameter filtering without introducing a generalized query language.",
+          "labels": [
+            "backend",
+            "api",
+            "feature"
+          ]
+        },
+        {
+          "title": "Implement experiment comparison",
+          "body": "Provide comparison views/queries over existing generations and downstream results. Do not create a separate Comparison entity.",
+          "labels": [
+            "backend",
+            "api",
+            "feature"
+          ]
+        },
+        {
+          "title": "Implement reproduction manifest generation",
+          "body": "Generate a structured manifest containing generator, parameters, seed, code/environment metadata, assets, dataset versions, hashes, and missing/external dependencies.",
+          "labels": [
+            "backend",
+            "api",
+            "feature"
+          ]
+        },
+        {
+          "title": "Implement documentation export",
+          "body": "Generate structured research/reproducibility documentation from stored provenance.",
+          "labels": [
+            "backend",
+            "api",
+            "feature"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "M8",
+      "title": "M8 — Production Hardening & Deployment",
+      "description": "Harden the API for reliable use, CI, deployment, observability, and recovery.",
+      "issues": [
+        {
+          "title": "Define API error taxonomy",
+          "body": "Standardize validation, authentication, authorization, not-found, conflict, semantic validation, and internal errors.",
+          "labels": [
+            "backend",
+            "api"
+          ]
+        },
+        {
+          "title": "Implement idempotency and safe retries",
+          "body": "Make retryable registration/capture operations safe against duplicate submissions.",
+          "labels": [
+            "backend",
+            "reliability"
+          ]
+        },
+        {
+          "title": "Add pagination and API filtering",
+          "body": "Prevent unbounded list responses and support practical API filtering.",
+          "labels": [
+            "backend",
+            "api"
+          ]
+        },
+        {
+          "title": "Add structured logging and secret redaction",
+          "body": "Implement structured logs and ensure API keys/secrets never appear in logs or errors.",
+          "labels": [
+            "backend",
+            "security"
+          ]
+        },
+        {
+          "title": "Add health and readiness endpoints",
+          "body": "Add cheap health and dependency-aware readiness endpoints.",
+          "labels": [
+            "backend",
+            "infrastructure"
+          ]
+        },
+        {
+          "title": "Document and test database backup/restore",
+          "body": "Establish and validate metadata backup and recovery procedures.",
+          "labels": [
+            "database",
+            "infrastructure"
+          ]
+        },
+        {
+          "title": "Build CI pipeline",
+          "body": "Run lint, typecheck, unit/integration tests, and build on GitHub Actions.",
+          "labels": [
+            "infrastructure",
+            "test"
+          ]
+        },
+        {
+          "title": "Deploy backend to Render",
+          "body": "Deploy the MVP backend with environment-based secrets and PostgreSQL connectivity.",
+          "labels": [
+            "deployment",
+            "infrastructure"
+          ]
+        },
+        {
+          "title": "Run deployed SDK integration test",
+          "body": "Run the actual Python SDK against the deployed backend.",
+          "labels": [
+            "sdk",
+            "integration",
+            "deployment"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "M9",
+      "title": "M9 — Real Research Pilot",
+      "description": "Validate SynthGraph against the co-founder's actual synthetic-data workflow and turn findings into an evidence-based backlog.",
+      "issues": [
+        {
+          "title": "Instrument real synthetic-data workflow",
+          "body": "Run the actual research generation workflow through the SDK and backend.",
+          "labels": [
+            "sdk",
+            "integration",
+            "pilot"
+          ]
+        },
+        {
+          "title": "Validate provenance completeness",
+          "body": "Check whether captured provenance answers what exactly produced a dataset.",
+          "labels": [
+            "pilot",
+            "domain"
+          ]
+        },
+        {
+          "title": "Validate reproduction workflow",
+          "body": "Use a recorded experiment to test whether the manifest provides enough information for reconstruction.",
+          "labels": [
+            "pilot",
+            "feature"
+          ]
+        },
+        {
+          "title": "Validate lineage",
+          "body": "Verify Generation → DatasetVersion → TrainingRun → EvaluationResult is understandable and retrievable.",
+          "labels": [
+            "pilot",
+            "domain"
+          ]
+        },
+        {
+          "title": "Record integration problems and contract mismatches",
+          "body": "Capture real workflow failures and contract mismatches as explicit follow-up issues.",
+          "labels": [
+            "pilot",
+            "integration"
+          ]
+        }
+      ]
+    }
+  ]
+}
