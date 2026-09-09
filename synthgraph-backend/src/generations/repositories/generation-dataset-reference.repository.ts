@@ -5,14 +5,17 @@ export interface GenerationDatasetReferenceRepository {
     reference: GenerationDatasetReference,
   ): Promise<GenerationDatasetReference>;
 
+  exists(
+    generationId: string,
+    datasetVersionId: string,
+  ): Promise<boolean>;
+
+  findForGeneration(
+    generationId: string,
+  ): Promise<GenerationDatasetReference[]>;
+
   findForGeneration(
     generationId: string,
     userId: string,
   ): Promise<GenerationDatasetReference[]>;
-
-  exists(
-    generationId: string,
-    datasetVersionId: string,
-    role: string,
-  ): Promise<boolean>;
 }

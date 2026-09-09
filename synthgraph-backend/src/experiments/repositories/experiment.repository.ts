@@ -13,5 +13,12 @@ export interface ExperimentRepository {
     userId: string,
   ): Promise<Experiment | null>;
 
-  findAllForProject(projectId: string): Promise<Experiment[]>;
+  findAllForProject(
+    projectId: string,
+  ): Promise<Experiment[]>;
+
+  searchForProject(
+    projectId: string,
+    search: string,
+  ): Promise<Experiment[]>;
 }

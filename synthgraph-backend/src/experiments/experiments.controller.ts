@@ -4,12 +4,15 @@ import {
   Get,
   Param,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
 
 import { ApiKeyGuard } from '../auth/guards/api-key.guard.js';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request.js';
+
+import { ListExperimentsQueryDto } from './dto/list-experiments-query.dto.js';
 import { CreateExperimentService } from './services/create-experiment.service.js';
 import { GetExperimentService } from './services/get-experiment.service.js';
 import { ListExperimentsService } from './services/list-experiments.service.js';
@@ -44,9 +47,14 @@ export class ExperimentsController {
   @Get()
   async listExperiments(
     @Param('projectId') projectId: string,
+    @Query() query: ListExperimentsQueryDto,
     @Req() request: AuthenticatedRequest,
   ) {
-    return this.listExperimentsService.execute(projectId, request.user.id);
+    return this.listExperimentsService.execute(
+      projectId,
+      request.user.id,
+      query.search,
+    );
   }
 
   @Get(':experimentId')

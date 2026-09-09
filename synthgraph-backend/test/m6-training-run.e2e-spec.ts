@@ -1,30 +1,26 @@
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import request from 'supertest';
-import { App } from 'supertest/types.js';
-import { DataSource } from 'typeorm';
 import { createHash, randomBytes } from 'node:crypto';
+import request from 'supertest';
+import { DataSource, Repository } from 'typeorm';
 
 import { AppModule } from '../src/app.module.js';
-
 import { ApiKey } from '../src/database/entities/api-key.entity.js';
-import { Dataset } from '../src/database/entities/dataset.entity.js';
-import { DatasetVersion } from '../src/database/entities/dataset-version.entity.js';
 import { Experiment } from '../src/database/entities/experiment.entity.js';
 import { Project } from '../src/database/entities/project.entity.js';
-import { TrainingRun } from '../src/database/entities/training-run.entity.js';
-import { TrainingRunDatasetReference } from '../src/database/entities/training-run-dataset-reference.entity.js';
 import { User } from '../src/database/entities/user.entity.js';
 
-describe('TrainingRun (e2e)', () => {
-  let app: INestApplication<App>;
+describe('M7 Experiment search (e2e)', () => {
+  let app: INestApplication;
   let dataSource: DataSource;
+
+  let userRepository: Repository<User>;
+  let apiKeyRepository: Repository<ApiKey>;
+  let projectRepository: Repository<Project>;
+  let experimentRepository: Repository<Experiment>;
 
   let userA: User;
   let userB: User;
-
-  let apiKeyA: string;
-  let apiKeyB: string;
 
   let projectA: Project;
   let projectB: Project;
@@ -32,14 +28,16 @@ describe('TrainingRun (e2e)', () => {
   let experimentA: Experiment;
   let experimentB: Experiment;
 
-  let datasetA: Dataset;
-  let datasetB: Dataset;
+  let apiKeyA: string;
+  let apiKeyB: string;
 
-  let datasetVersionA: DatasetVersion;
-  let datasetVersionB: DatasetVersion;
+  function createRawApiKey(): string {
+    return `sg_${randomBytes(32).toString('hex')}`;
+  }
 
-  let trainingRunA: TrainingRun;
-  let trainingRunB: TrainingRun;
+  function hashApiKey(rawKey: string): string {
+    return createHash('sha256').update(rawKey).digest('hex');
+  }
 
   beforeAll(async () => {
     const moduleFixture: TestingModule =
@@ -48,422 +46,155 @@ describe('TrainingRun (e2e)', () => {
       }).compile();
 
     app = moduleFixture.createNestApplication();
+
     await app.init();
 
-    dataSource = moduleFixture.get<DataSource>(DataSource);
+    dataSource = moduleFixture.get(DataSource);
 
-    const userRepository = dataSource.getRepository(User);
-    const apiKeyRepository = dataSource.getRepository(ApiKey);
-    const projectRepository = dataSource.getRepository(Project);
-    const experimentRepository =
-      dataSource.getRepository(Experiment);
-    const datasetRepository =
-      dataSource.getRepository(Dataset);
-    const datasetVersionRepository =
-      dataSource.getRepository(DatasetVersion);
+    userRepository = dataSource.getRepository(User);
+    apiKeyRepository = dataSource.getRepository(ApiKey);
+    projectRepository = dataSource.getRepository(Project);
+    experimentRepository = dataSource.getRepository(Experiment);
 
     userA = await userRepository.save(
       userRepository.create({
-        email: `m6-training-a-${Date.now()}@synthgraph.local`,
+        email: `m7-search-a-${randomBytes(8).toString('hex')}@example.com`,
       }),
     );
 
     userB = await userRepository.save(
       userRepository.create({
-        email: `m6-training-b-${Date.now()}@synthgraph.local`,
+        email: `m7-search-b-${randomBytes(8).toString('hex')}@example.com`,
       }),
     );
 
-    apiKeyA = `sg_${randomBytes(32).toString('hex')}`;
-    apiKeyB = `sg_${randomBytes(32).toString('hex')}`;
+    apiKeyA = createRawApiKey();
+    apiKeyB = createRawApiKey();
 
-    await apiKeyRepository.save(
+    await apiKeyRepository.save([
       apiKeyRepository.create({
         userId: userA.id,
-        keyPrefix: 'sg_',
-        keyHash: createHash('sha256')
-          .update(apiKeyA)
-          .digest('hex'),
+        keyPrefix: apiKeyA.slice(0, 16),
+        keyHash: hashApiKey(apiKeyA),
         revokedAt: null,
       }),
-    );
-
-    await apiKeyRepository.save(
       apiKeyRepository.create({
         userId: userB.id,
-        keyPrefix: 'sg_',
-        keyHash: createHash('sha256')
-          .update(apiKeyB)
-          .digest('hex'),
+        keyPrefix: apiKeyB.slice(0, 16),
+        keyHash: hashApiKey(apiKeyB),
         revokedAt: null,
       }),
-    );
+    ]);
 
     projectA = await projectRepository.save(
       projectRepository.create({
         userId: userA.id,
-        name: 'M6 Training Project A',
-        description: 'TrainingRun test project A',
+        name: 'M7 Search Project A',
+        description: 'Search test project',
       }),
     );
 
     projectB = await projectRepository.save(
       projectRepository.create({
         userId: userB.id,
-        name: 'M6 Training Project B',
-        description: 'TrainingRun test project B',
+        name: 'M7 Search Project B',
+        description: 'Search isolation project',
       }),
     );
 
     experimentA = await experimentRepository.save(
       experimentRepository.create({
         projectId: projectA.id,
-        name: 'M6 Experiment A',
-        description: 'TrainingRun test experiment A',
+        name: 'Rainy Driving Experiment',
+        description: 'Synthetic rainy driving scenes',
       }),
     );
 
     experimentB = await experimentRepository.save(
       experimentRepository.create({
-        projectId: projectB.id,
-        name: 'M6 Experiment B',
-        description: 'TrainingRun test experiment B',
-      }),
-    );
-
-    datasetA = await datasetRepository.save(
-      datasetRepository.create({
-        userId: userA.id,
-        name: 'M6 Dataset A',
-        description: 'TrainingRun dataset test A',
-        metadata: {},
-      }),
-    );
-
-    datasetB = await datasetRepository.save(
-      datasetRepository.create({
-        userId: userB.id,
-        name: 'M6 Dataset B',
-        description: 'TrainingRun dataset test B',
-        metadata: {},
-      }),
-    );
-
-    datasetVersionA = await datasetVersionRepository.save(
-      datasetVersionRepository.create({
-        datasetId: datasetA.id,
-        version: '1.0.0',
-        uri: 's3://test/m6-dataset-a',
-        format: 'image',
-        size: 1024,
-        hash: 'm6-dataset-a-hash',
-        metadata: {},
-      }),
-    );
-
-    datasetVersionB = await datasetVersionRepository.save(
-      datasetVersionRepository.create({
-        datasetId: datasetB.id,
-        version: '1.0.0',
-        uri: 's3://test/m6-dataset-b',
-        format: 'image',
-        size: 2048,
-        hash: 'm6-dataset-b-hash',
-        metadata: {},
+        projectId: projectA.id,
+        name: 'Sunny Driving Experiment',
+        description: 'Synthetic sunny driving scenes',
       }),
     );
   });
 
   afterAll(async () => {
-    if (dataSource?.isInitialized) {
-      const trainingRunDatasetReferenceRepository =
-        dataSource.getRepository(TrainingRunDatasetReference);
+    await experimentRepository.delete([
+      experimentA.id,
+      experimentB.id,
+    ]);
 
-      const trainingRunRepository =
-        dataSource.getRepository(TrainingRun);
+    await projectRepository.delete([
+      projectA.id,
+      projectB.id,
+    ]);
 
-      const datasetVersionRepository =
-        dataSource.getRepository(DatasetVersion);
+    await apiKeyRepository.delete({
+      userId: userA.id,
+    });
 
-      const datasetRepository =
-        dataSource.getRepository(Dataset);
+    await apiKeyRepository.delete({
+      userId: userB.id,
+    });
 
-      const experimentRepository =
-        dataSource.getRepository(Experiment);
-
-      const projectRepository =
-        dataSource.getRepository(Project);
-
-      const apiKeyRepository =
-        dataSource.getRepository(ApiKey);
-
-      const userRepository =
-        dataSource.getRepository(User);
-
-      if (trainingRunA) {
-        await trainingRunDatasetReferenceRepository.delete({
-          trainingRunId: trainingRunA.id,
-        });
-
-        await trainingRunRepository.delete({
-          id: trainingRunA.id,
-        });
-      }
-
-      if (trainingRunB) {
-        await trainingRunDatasetReferenceRepository.delete({
-          trainingRunId: trainingRunB.id,
-        });
-
-        await trainingRunRepository.delete({
-          id: trainingRunB.id,
-        });
-      }
-
-      if (datasetVersionA) {
-        await datasetVersionRepository.delete({
-          id: datasetVersionA.id,
-        });
-      }
-
-      if (datasetVersionB) {
-        await datasetVersionRepository.delete({
-          id: datasetVersionB.id,
-        });
-      }
-
-      if (datasetA) {
-        await datasetRepository.delete({
-          id: datasetA.id,
-        });
-      }
-
-      if (datasetB) {
-        await datasetRepository.delete({
-          id: datasetB.id,
-        });
-      }
-
-      if (experimentA) {
-        await experimentRepository.delete({
-          id: experimentA.id,
-        });
-      }
-
-      if (experimentB) {
-        await experimentRepository.delete({
-          id: experimentB.id,
-        });
-      }
-
-      if (projectA) {
-        await projectRepository.delete({
-          id: projectA.id,
-        });
-      }
-
-      if (projectB) {
-        await projectRepository.delete({
-          id: projectB.id,
-        });
-      }
-
-      await apiKeyRepository.delete({
-        userId: userA.id,
-      });
-
-      await apiKeyRepository.delete({
-        userId: userB.id,
-      });
-
-      if (userA) {
-        await userRepository.delete({
-          id: userA.id,
-        });
-      }
-
-      if (userB) {
-        await userRepository.delete({
-          id: userB.id,
-        });
-      }
-    }
+    await userRepository.delete([
+      userA.id,
+      userB.id,
+    ]);
 
     await app.close();
   });
 
-  it('creates a TrainingRun for the authenticated user', async () => {
-    const response = await request(app.getHttpServer())
-      .post(`/experiments/${experimentA.id}/training-runs`)
-      .set('Authorization', `Bearer ${apiKeyA}`)
-      .send({
-        name: 'User A Training Run',
-        description: 'Baseline training run',
-        trainer: {
-          name: 'pytorch',
-          version: '2.8.0',
-          type: 'image-classification',
-        },
-        parameters: {
-          epochs: 50,
-          batch_size: 32,
-          learning_rate: 0.001,
-        },
-        metadata: {
-          gpu: 'RTX 4090',
-        },
-      })
-      .expect(201);
-
-    expect(response.body).toMatchObject({
-      experimentId: experimentA.id,
-      name: 'User A Training Run',
-      description: 'Baseline training run',
-      trainer: {
-        name: 'pytorch',
-        version: '2.8.0',
-        type: 'image-classification',
-      },
-      parameters: {
-        epochs: 50,
-        batch_size: 32,
-        learning_rate: 0.001,
-      },
-      metrics: {},
-      status: 'pending',
-      metadata: {
-        gpu: 'RTX 4090',
-      },
-      startedAt: null,
-      completedAt: null,
-    });
-
-    expect(response.body.id).toBeDefined();
-
-    trainingRunA = response.body;
+  it('requires authentication', async () => {
+    await request(app.getHttpServer())
+      .get(`/projects/${projectA.id}/experiments`)
+      .expect(401);
   });
 
-  it('retrieves a TrainingRun owned by the authenticated user', async () => {
+  it('searches experiments by name', async () => {
     const response = await request(app.getHttpServer())
-      .get(`/training-runs/${trainingRunA.id}`)
+      .get(`/projects/${projectA.id}/experiments`)
+      .query({ search: 'Rainy' })
       .set('Authorization', `Bearer ${apiKeyA}`)
       .expect(200);
 
-    expect(response.body).toMatchObject({
-      id: trainingRunA.id,
-      experimentId: experimentA.id,
-      name: 'User A Training Run',
-      status: 'pending',
+    expect(response.body).toHaveLength(1);
+    expect(response.body[0]).toMatchObject({
+      id: experimentA.id,
+      name: 'Rainy Driving Experiment',
     });
   });
 
-  it('rejects retrieval of another user TrainingRun', async () => {
+  it('searches experiments by description', async () => {
     const response = await request(app.getHttpServer())
-      .post(`/experiments/${experimentB.id}/training-runs`)
+      .get(`/projects/${projectA.id}/experiments`)
+      .query({ search: 'sunny driving' })
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .expect(200);
+
+    expect(response.body).toHaveLength(1);
+    expect(response.body[0]).toMatchObject({
+      id: experimentB.id,
+      name: 'Sunny Driving Experiment',
+    });
+  });
+
+  it('returns an empty result when nothing matches', async () => {
+    const response = await request(app.getHttpServer())
+      .get(`/projects/${projectA.id}/experiments`)
+      .query({ search: 'does-not-exist' })
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .expect(200);
+
+    expect(response.body).toEqual([]);
+  });
+
+  it('does not allow another user to search the project', async () => {
+    await request(app.getHttpServer())
+      .get(`/projects/${projectA.id}/experiments`)
+      .query({ search: 'Rainy' })
       .set('Authorization', `Bearer ${apiKeyB}`)
-      .send({
-        name: 'User B Training Run',
-        trainer: {
-          name: 'pytorch',
-          version: '2.8.0',
-        },
-        parameters: {
-          epochs: 10,
-        },
-      })
-      .expect(201);
-
-    trainingRunB = response.body;
-
-    await request(app.getHttpServer())
-      .get(`/training-runs/${trainingRunB.id}`)
-      .set('Authorization', `Bearer ${apiKeyA}`)
       .expect(404);
-  });
-
-  it('creates a DatasetVersion reference for a TrainingRun', async () => {
-    const response = await request(app.getHttpServer())
-      .post(`/training-runs/${trainingRunA.id}/datasets`)
-      .set('Authorization', `Bearer ${apiKeyA}`)
-      .send({
-        datasetVersionId: datasetVersionA.id,
-        role: 'training',
-      })
-      .expect(201);
-
-    expect(response.body).toEqual({
-      trainingRunId: trainingRunA.id,
-      datasetVersionId: datasetVersionA.id,
-      role: 'training',
-    });
-  });
-
-  it('rejects a duplicate TrainingRun DatasetVersion reference', async () => {
-    const response = await request(app.getHttpServer())
-      .post(`/training-runs/${trainingRunA.id}/datasets`)
-      .set('Authorization', `Bearer ${apiKeyA}`)
-      .send({
-        datasetVersionId: datasetVersionA.id,
-        role: 'training',
-      })
-      .expect(409);
-
-    expect(response.body).toMatchObject({
-      message: 'Training run dataset reference already exists',
-      error: 'Conflict',
-      statusCode: 409,
-    });
-  });
-
-  it('allows the same DatasetVersion with a different role', async () => {
-    const response = await request(app.getHttpServer())
-      .post(`/training-runs/${trainingRunA.id}/datasets`)
-      .set('Authorization', `Bearer ${apiKeyA}`)
-      .send({
-        datasetVersionId: datasetVersionA.id,
-        role: 'validation',
-      })
-      .expect(201);
-
-    expect(response.body).toEqual({
-      trainingRunId: trainingRunA.id,
-      datasetVersionId: datasetVersionA.id,
-      role: 'validation',
-    });
-  });
-
-  it('rejects attaching another user DatasetVersion', async () => {
-    await request(app.getHttpServer())
-      .post(`/training-runs/${trainingRunA.id}/datasets`)
-      .set('Authorization', `Bearer ${apiKeyA}`)
-      .send({
-        datasetVersionId: datasetVersionB.id,
-        role: 'training',
-      })
-      .expect(404);
-  });
-
-  it('rejects attaching a DatasetVersion to another user TrainingRun', async () => {
-    await request(app.getHttpServer())
-      .post(`/training-runs/${trainingRunB.id}/datasets`)
-      .set('Authorization', `Bearer ${apiKeyA}`)
-      .send({
-        datasetVersionId: datasetVersionA.id,
-        role: 'training',
-      })
-      .expect(404);
-  });
-
-  it('rejects requests without an API key', async () => {
-    await request(app.getHttpServer())
-      .get(`/training-runs/${trainingRunA.id}`)
-      .expect(401);
-  });
-
-  it('rejects an invalid API key', async () => {
-    await request(app.getHttpServer())
-      .get(`/training-runs/${trainingRunA.id}`)
-      .set('Authorization', 'Bearer sg_invalid')
-      .expect(401);
   });
 });
