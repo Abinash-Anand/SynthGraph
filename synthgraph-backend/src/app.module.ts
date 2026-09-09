@@ -9,6 +9,8 @@ import { ExperimentsModule } from './experiments/experiments.module.js';
 import { GenerationsModule } from './generations/generations.module.js';
 import { DatasetsModule } from './datasets/datasets.module.js';
 import { TrainingRunsModule } from './training-runs/training-runs.module.js';
+import { EvaluationResultsModule } from './evaluation-results/evaluation-results.module.js';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -33,6 +35,7 @@ import { TrainingRunsModule } from './training-runs/training-runs.module.js';
     GenerationsModule,
     DatasetsModule,
     TrainingRunsModule,
+    EvaluationResultsModule,
   ],
 })
 export class AppModule {}
