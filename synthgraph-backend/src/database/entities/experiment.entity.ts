@@ -5,10 +5,13 @@ import {
   Index,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 
+import { Generation } from './generation.entity.js';
 import { Project } from './project.entity.js';
 
 @Entity({ name: 'experiments' })
@@ -32,6 +35,9 @@ export class Experiment {
 
   @Column({ type: 'text', nullable: true })
   description: string | null;
+
+  @OneToMany(() => Generation, (generation) => generation.experiment)
+  generations: Relation<Generation[]>;
 
   @CreateDateColumn({
     name: 'created_at',

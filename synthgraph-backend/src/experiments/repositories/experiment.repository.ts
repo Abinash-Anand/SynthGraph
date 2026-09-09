@@ -8,5 +8,10 @@ export interface ExperimentRepository {
     projectId: string,
   ): Promise<Experiment | null>;
 
+  findByIdForUser(
+    experimentId: string,
+    userId: string,
+  ): Promise<Experiment | null>;
+
   findAllForProject(projectId: string): Promise<Experiment[]>;
 }

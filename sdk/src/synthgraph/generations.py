@@ -42,7 +42,7 @@ class GenerationsAPI:
                 exclude_defaults=True,
             ),
             "inputs": [
-                reference.model_dump(mode="json")
+                reference.model_dump(mode="json", exclude_none=True)
                 if isinstance(
                     reference,
                     (AssetReference, DatasetReference),
@@ -51,7 +51,7 @@ class GenerationsAPI:
                 for reference in (inputs or [])
             ],
             "outputs": [
-                reference.model_dump(mode="json")
+                reference.model_dump(mode="json", exclude_none=True)
                 if isinstance(
                     reference,
                     (AssetReference, DatasetReference),

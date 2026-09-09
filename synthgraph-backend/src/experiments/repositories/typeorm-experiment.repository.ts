@@ -28,6 +28,18 @@ export class TypeOrmExperimentRepository implements ExperimentRepository {
     });
   }
 
+  async findByIdForUser(
+    experimentId: string,
+    userId: string,
+  ): Promise<Experiment | null> {
+    return this.repository
+      .createQueryBuilder('experiment')
+      .innerJoin('experiment.project', 'project')
+      .where('experiment.id = :experimentId', { experimentId })
+      .andWhere('project.userId = :userId', { userId })
+      .getOne();
+  }
+
   async findAllForProject(projectId: string): Promise<Experiment[]> {
     return this.repository.find({
       where: {

@@ -4,7 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .reference import DataReference
+from .reference import AssetReference, DataReference, DatasetReference
 
 
 class GenerationStatus(str, Enum):
@@ -64,8 +64,12 @@ class GenerationRun(BaseModel):
 
     reproducibility: Reproducibility
 
-    inputs: list[DataReference] = Field(default_factory=list)
-    outputs: list[DataReference] = Field(default_factory=list)
+    inputs: list[AssetReference | DatasetReference | DataReference] = Field(
+        default_factory=list
+    )
+    outputs: list[AssetReference | DatasetReference | DataReference] = Field(
+        default_factory=list
+    )
 
     status: GenerationStatus
 
