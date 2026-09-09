@@ -1,0 +1,181 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------ *
+ * SynthGraph design tokens
+ * Dark-first. Depth comes from spacing, hierarchy and restraint —
+ * not from glow. Accents are used to mark state, not to decorate.
+ * ------------------------------------------------------------------ */
+@theme {
+  /* Surfaces */
+  --color-void: #06070a;
+  --color-base: #0a0c10;
+  --color-surface: #0e1116;
+  --color-surface-2: #131720;
+  --color-surface-3: #191e29;
+
+  /* Lines */
+  --color-line: #1c2230;
+  --color-line-strong: #2a3345;
+  --color-line-soft: #14192300;
+
+  /* Type */
+  --color-ink: #e9edf4;
+  --color-ink-muted: #9aa4b6;
+  --color-ink-dim: #626d81;
+  --color-ink-faint: #414b5c;
+
+  /* Accents — restrained */
+  --color-cyan: #37c9de;
+  --color-cyan-dim: #1d7a89;
+  --color-blue: #5b8dfb;
+  --color-blue-dim: #2f4d8f;
+
+  /* Semantic state */
+  --color-ok: #46b97e;
+  --color-warn: #d9a441;
+  --color-bad: #d9584c;
+
+  /* Node identity — used in both CSS and WebGL */
+  --color-node-generation: #37c9de;
+  --color-node-dataset: #5b8dfb;
+  --color-node-asset: #a78bfa;
+  --color-node-training: #d9a441;
+  --color-node-evaluation: #46b97e;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-mono-face), ui-monospace, "SF Mono", "JetBrains Mono",
+    Menlo, Consolas, monospace;
+
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+    --nav-h: 64px;
+  }
+
+  * {
+    border-color: var(--color-line);
+  }
+
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: calc(var(--nav-h) + 24px);
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-void);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--color-cyan) 28%, transparent);
+    color: var(--color-ink);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-cyan);
+    outline-offset: 3px;
+    border-radius: 3px;
+  }
+
+  /* Only remove the ring for pointer users who never asked for it. */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* Longhands only: the `text-wrap` shorthand also sets text-wrap-mode,
+     which would silently override an inherited `white-space: nowrap`
+     (as used by the in-scene 3D labels). */
+  h1, h2, h3, h4 {
+    text-wrap-style: balance;
+  }
+
+  p {
+    text-wrap-style: pretty;
+  }
+}
+
+@layer components {
+  /* Page-wide technical grid. Deliberately near-invisible. */
+  .grid-field {
+    background-image:
+      linear-gradient(to right, var(--color-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--color-line) 1px, transparent 1px);
+    background-size: 64px 64px;
+    opacity: 0.35;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 20%, transparent 75%);
+  }
+
+  .hairline-t {
+    box-shadow: inset 0 1px 0 0 var(--color-line);
+  }
+
+  .text-gradient-ink {
+    background: linear-gradient(
+      180deg,
+      var(--color-ink) 0%,
+      color-mix(in oklab, var(--color-ink) 68%, var(--color-void)) 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}
+
+@layer utilities {
+  .mono-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-ink-dim);
+  }
+
+  .shell {
+    width: 100%;
+    max-width: 1240px;
+    margin-inline: auto;
+    padding-inline: 20px;
+  }
+
+  @media (min-width: 768px) {
+    .shell { padding-inline: 40px; }
+  }
+}
+
+/* Motion preferences are honoured globally as a safety net; individual
+   components additionally branch on the hook so 3D loops actually stop. */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Scrollbar — quiet, matches the surface language. */
+@supports selector(::-webkit-scrollbar) {
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: var(--color-void); }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-line-strong);
+    border-radius: 999px;
+    border: 3px solid var(--color-void);
+  }
+  ::-webkit-scrollbar-thumb:hover { background: #38455c; }
+}
