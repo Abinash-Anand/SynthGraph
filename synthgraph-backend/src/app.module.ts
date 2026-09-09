@@ -1,20 +1,34 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller.js';
-import { AppService } from './app.service.js';
-import { ExperimentsController } from './experiments.controller.js';
-import { GenerationsController } from './generations.controller.js';
-import { ProjectsController } from './projects.controller.js';
-import { HealthController } from './health.controller.js';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { TypeOrmModule } from '@nestjs/typeorm';
+
+import { AuthModule } from './auth/auth.module.js';
+import configuration from './config/configuration.js';
+import { ProjectsModule } from './projects/projects.module.js';
+import { ExperimentsModule } from './experiments/experiments.module.js';
+import { GenerationsModule } from './generations/generations.module.js';
 
 @Module({
-  imports: [],
-  controllers: [AppController,
-     ProjectsController,
-    ExperimentsController,
-    GenerationsController,
-    HealthController
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      load: [configuration],
+    }),
+
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule, ExperimentsModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        type: 'postgres',
+        url: configService.getOrThrow<string>('database.url'),
+        autoLoadEntities: true,
+        synchronize: false,
+      }),
+    }),
+
+    AuthModule,
+    ProjectsModule,
+    GenerationsModule,
   ],
-  providers: [AppService],
-  
 })
 export class AppModule {}
