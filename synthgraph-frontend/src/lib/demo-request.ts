@@ -29,35 +29,51 @@ export const DATASET_SCALE_OPTIONS = [
   "Over 1 TB",
 ] as const;
 
-const required = (field: string, min = 2) =>
-  z.string().trim().min(min, `${field} is required.`);
+/**
+ * A trimmed, required string with an upper bound.
+ *
+ * The cap is not cosmetic: every one of these values is anonymous input that
+ * gets embedded in an outgoing email, so an uncapped field is a way to make us
+ * send a megabyte on someone else's behalf.
+ */
+const required = (field: string, { min = 2, max = 200 } = {}) =>
+  z
+    .string()
+    .trim()
+    .min(min, `${field} is required.`)
+    .max(max, `${field} must be ${max} characters or fewer.`);
+
+/** Same bound, for a field nobody has to fill in. */
+const optional = (max = 200) => z.string().trim().max(max).optional().or(z.literal(""));
 
 export const demoRequestSchema = z.object({
   // Required
-  name: required("Name"),
+  name: required("Name", { max: 120 }),
   email: z
     .string()
     .trim()
     .min(1, "Work email is required.")
+    .max(254, "That email address is too long.")
     .email("Enter a valid email address."),
-  institution: required("Institution or company"),
+  institution: required("Institution or company", { max: 160 }),
   role: z.enum(ROLE_OPTIONS, { message: "Select the closest role." }),
-  researchArea: required("Research area"),
+  researchArea: required("Research area", { max: 200 }),
   teamSize: z.enum(TEAM_SIZE_OPTIONS, { message: "Select a team size." }),
   workflow: z
     .array(z.enum(WORKFLOW_OPTIONS))
-    .min(1, "Select at least one part of your current workflow."),
-  currentTools: required("Current tools"),
-  goal: required("Tell us what you would like to reproduce or track", 10),
-  message: required("Message", 10),
+    .min(1, "Select at least one part of your current workflow.")
+    .max(WORKFLOW_OPTIONS.length),
+  currentTools: required("Current tools", { max: 500 }),
+  goal: required("Tell us what you would like to reproduce or track", { min: 10, max: 2000 }),
+  message: required("Message", { min: 10, max: 4000 }),
 
   // Optional
-  github: z.string().trim().max(200).optional().or(z.literal("")),
-  linkedin: z.string().trim().max(200).optional().or(z.literal("")),
+  github: optional(),
+  linkedin: optional(),
   datasetScale: z.enum(DATASET_SCALE_OPTIONS).optional().or(z.literal("")),
-  generator: z.string().trim().max(200).optional().or(z.literal("")),
-  trainingFramework: z.string().trim().max(200).optional().or(z.literal("")),
-  experimentTracking: z.string().trim().max(200).optional().or(z.literal("")),
+  generator: optional(),
+  trainingFramework: optional(),
+  experimentTracking: optional(),
 
   /** Populated by bots, ignored by people. Never shown to a screen reader. */
   website: z.string().max(0).optional().or(z.literal("")),

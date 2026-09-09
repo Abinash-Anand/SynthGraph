@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { DemoGraphScene } from "@/components/3d/dynamic";
 import { Button } from "@/components/ui/Button";
 import { CheckboxGroup, SelectField, TextArea, TextField } from "@/components/ui/Field";
+import { SITE } from "@/data/site";
 import {
   DATASET_SCALE_OPTIONS,
   EMPTY_DEMO_REQUEST,
@@ -50,6 +51,25 @@ export function DemoForm() {
     if (values.trainingFramework) active.push("training");
     if (values.experimentTracking || values.goal) active.push("evaluation");
     return active;
+  }, [values]);
+
+  // Escape hatch for when the API is unreachable: carry what they have already
+  // typed into their own mail client rather than making them retype it.
+  const mailtoFallback = useMemo(() => {
+    const lines = [
+      `Name: ${values.name}`,
+      `Institution: ${values.institution}`,
+      `Role: ${values.role}`,
+      `Research area: ${values.researchArea}`,
+      `Workflow: ${values.workflow.join(", ")}`,
+      `Current tools: ${values.currentTools}`,
+      "",
+      `Goal: ${values.goal}`,
+      "",
+      values.message,
+    ];
+    const subject = `Demo request${values.institution ? ` — ${values.institution}` : ""}`;
+    return `mailto:${SITE.contactEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join("\n"))}`;
   }, [values]);
 
   const toggleWorkflow = (option: string) => {
@@ -129,6 +149,17 @@ export function DemoForm() {
             className="rounded-lg border border-bad/40 bg-bad/[0.05] p-4 text-[14px] text-ink outline-none"
           >
             {formError}
+            {/* A way through that does not depend on the thing that just failed. */}
+            <p className="mt-2 text-ink-muted">
+              Or email{" "}
+              <a
+                href={mailtoFallback}
+                className="text-ink underline underline-offset-2 hover:opacity-80"
+              >
+                {SITE.contactEmail}
+              </a>{" "}
+              directly — this opens a draft with what you have entered so far.
+            </p>
           </div>
         ) : null}
 
