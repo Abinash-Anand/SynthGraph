@@ -29,7 +29,7 @@ import { ApiKeysModule } from './api-keys/api-keys.module.js';
         type: 'postgres',
         url: configService.getOrThrow<string>('database.url'),
         autoLoadEntities: true,
-        synchronize: true,
+        synchronize: false,
       }),
     }),
 
