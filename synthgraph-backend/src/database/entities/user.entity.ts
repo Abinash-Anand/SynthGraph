@@ -14,6 +14,13 @@ export class User {
   @Column({ type: 'varchar', unique: true })
   email: string;
 
+  @Column({
+    type: 'varchar',
+    name: 'password_hash',
+    nullable: true,
+  })
+  passwordHash: string | null;
+
   @CreateDateColumn({
     name: 'created_at',
     type: 'timestamptz',
