@@ -1,13 +1,13 @@
 import { Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { JwtModule } from '@nestjs/jwt';
 
 import { UsersModule } from '../users/users.module.js';
 import { AuthController } from './auth.controller.js';
 import { ApiKeyGuard } from './guards/api-key.guard.js';
 import { JwtGuard } from './guards/jwt.guard.js';
-import { ApiKeyService } from './services/api-key.service.js';
 import { ApiKeyCreationService } from './services/api-key-creation.service.js';
+import { ApiKeyService } from './services/api-key.service.js';
 import { AuthService } from './services/auth.service.js';
 
 @Module({
@@ -38,6 +38,7 @@ import { AuthService } from './services/auth.service.js';
     ApiKeyCreationService,
     ApiKeyGuard,
     JwtGuard,
+    JwtModule,
   ],
 })
 export class AuthModule {}
