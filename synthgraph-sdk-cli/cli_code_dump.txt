@@ -1,0 +1,1095 @@
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\cli\context.py ==========
+
+"""Shared CLI state: global options and the one SDK client (spec 43, 56)."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+from ..client import SynthGraphClient
+from ..config import SynthGraphConfig
+from .output import Output
+
+__all__ = ["CLIContext"]
+
+
+@dataclass
+class CLIContext:
+    """Global options plus a lazily created SDK client.
+
+    The client is created on first use so ``--help`` and ``--version`` work
+    without credentials.
+    """
+
+    json_mode: bool = False
+    api_url: str | None = None
+    timeout: float | None = None
+    _client: SynthGraphClient | None = field(default=None, repr=False, init=False)
+
+    def output(self, json_override: bool = False) -> Output:
+        """The renderer for this invocation."""
+        return Output(json_mode=self.json_mode or json_override)
+
+    def client(self) -> SynthGraphClient:
+        """The SDK client, configured from CLI options and the environment.
+
+        Credentials come from the environment only. There is deliberately no
+        ``--api-key`` option: it would land the key in shell history, in ``ps``
+        output and in CI logs (spec 57).
+        """
+        if self._client is None:
+            config = SynthGraphConfig.from_env(
+                api_url=self.api_url,
+                timeout=self.timeout,
+            )
+            config.require_api_key()
+            self._client = SynthGraphClient(config=config)
+        return self._client
+
+    def close(self) -> None:
+        """Release the HTTP client, if one was ever created."""
+        if self._client is not None:
+            self._client.close()
+            self._client = None
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\cli\errors.py ==========
+
+"""Turning SDK exceptions into CLI messages and exit codes (spec 53, 54).
+
+Messages are short and actionable. Stack traces, backend internals and
+credentials never reach the terminal.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from enum import IntEnum
+
+from ..errors import (
+    SynthGraphAuthenticationError,
+    SynthGraphAuthorizationError,
+    SynthGraphConfigurationError,
+    SynthGraphConflictError,
+    SynthGraphError,
+    SynthGraphHTTPError,
+    SynthGraphNotFoundError,
+    SynthGraphRateLimitError,
+    SynthGraphServerError,
+    SynthGraphTransportError,
+    SynthGraphValidationError,
+)
+
+__all__ = ["ExitCode", "describe_error"]
+
+
+class ExitCode(IntEnum):
+    """Exit codes scripts can branch on."""
+
+    SUCCESS = 0
+    FAILURE = 1
+    USAGE = 2
+    AUTHENTICATION = 3
+    AUTHORIZATION = 4
+    NOT_FOUND = 5
+    VALIDATION = 6
+    TRANSPORT = 7
+
+
+def _transport_message(error: BaseException) -> str:
+    assert isinstance(error, SynthGraphTransportError)
+    if error.outcome_unknown:
+        return f"{error.message} The request may or may not have been applied."
+    return error.message
+
+
+def _server_message(error: BaseException) -> str:
+    assert isinstance(error, SynthGraphHTTPError)
+    return f"The SynthGraph backend failed (HTTP {error.status_code})."
+
+
+def _backend_message(error: BaseException) -> str:
+    assert isinstance(error, SynthGraphHTTPError | SynthGraphValidationError)
+    return error.message
+
+
+#: Checked in order, most specific first. Each entry is
+#: (exception type, message or message builder, exit code).
+_Message = str | Callable[[BaseException], str]
+
+_HANDLERS: tuple[tuple[type[BaseException], _Message, ExitCode], ...] = (
+    (
+        SynthGraphAuthenticationError,
+        "Authentication failed. Check your SynthGraph API key (SYNTHGRAPH_API_KEY).",
+        ExitCode.AUTHENTICATION,
+    ),
+    (
+        SynthGraphAuthorizationError,
+        "You do not have access to that resource.",
+        ExitCode.AUTHORIZATION,
+    ),
+    (
+        SynthGraphNotFoundError,
+        "Not found. Check the ID, or confirm it belongs to your account.",
+        ExitCode.NOT_FOUND,
+    ),
+    (SynthGraphConflictError, _backend_message, ExitCode.VALIDATION),
+    (SynthGraphValidationError, _backend_message, ExitCode.VALIDATION),
+    (
+        SynthGraphRateLimitError,
+        "The SynthGraph backend is rate limiting this API key. Try again shortly.",
+        ExitCode.TRANSPORT,
+    ),
+    (SynthGraphServerError, _server_message, ExitCode.TRANSPORT),
+    (SynthGraphTransportError, _transport_message, ExitCode.TRANSPORT),
+    (SynthGraphConfigurationError, str, ExitCode.USAGE),
+    (SynthGraphHTTPError, _backend_message, ExitCode.FAILURE),
+    (SynthGraphError, str, ExitCode.FAILURE),
+    # A failed export lands here: a bad --output path, a read-only volume.
+    (OSError, str, ExitCode.FAILURE),
+)
+
+
+def describe_error(error: BaseException) -> tuple[str, ExitCode]:
+    """Map an exception to the message to print and the code to exit with."""
+    for error_type, message, code in _HANDLERS:
+        if isinstance(error, error_type):
+            return (message(error) if callable(message) else message, code)
+
+    return (str(error) or error.__class__.__name__, ExitCode.FAILURE)
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\cli\main.py ==========
+
+"""``synthgraph`` entry point (spec 44, 53, 55).
+
+Error handling lives here rather than in each command: commands let SDK
+exceptions propagate, and this module turns them into one short message and one
+meaningful exit code.
+"""
+
+from __future__ import annotations
+
+import sys
+
+import typer
+
+from .. import __version__
+from .commands import auth, compare, docs, experiments, generations, manifest, projects
+from .context import CLIContext
+from .errors import ExitCode, describe_error
+
+app = typer.Typer(
+    name="synthgraph",
+    no_args_is_help=True,
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    help=(
+        "Query, inspect and export SynthGraph provenance.\n\n"
+        "Provenance is captured with the Python SDK while your research runs. "
+        "This CLI is how you inspect and export it afterwards.\n\n"
+        "Credentials come from the environment:\n\n"
+        "\b\n"
+        "  export SYNTHGRAPH_API_KEY=...\n"
+        "  export SYNTHGRAPH_API_URL=https://your-synthgraph-backend\n\n"
+        "There is deliberately no --api-key option: it would put your key into "
+        "shell history and process listings."
+    ),
+)
+
+app.add_typer(auth.app, name="auth")
+app.add_typer(projects.app, name="projects")
+app.add_typer(experiments.app, name="experiments")
+app.add_typer(generations.app, name="generations")
+
+app.command("compare")(compare.compare)
+app.command("manifest")(manifest.manifest)
+app.command("docs")(docs.docs)
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"synthgraph {__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def main_callback(
+    ctx: typer.Context,
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON from every command.",
+    ),
+    api_url: str | None = typer.Option(
+        None,
+        "--api-url",
+        help="SynthGraph backend URL. Defaults to $SYNTHGRAPH_API_URL.",
+        envvar=None,
+    ),
+    timeout: float | None = typer.Option(
+        None,
+        "--timeout",
+        help="Request timeout in seconds.",
+    ),
+    version: bool = typer.Option(
+        False,
+        "--version",
+        callback=_version_callback,
+        is_eager=True,
+        help="Show the installed version and exit.",
+    ),
+) -> None:
+    """Set up shared state for whichever command runs next."""
+    ctx.obj = CLIContext(json_mode=json_output, api_url=api_url, timeout=timeout)
+    ctx.call_on_close(ctx.obj.close)
+
+
+def run(argv: list[str] | None = None) -> int:
+    """Run the CLI and return an exit code instead of exiting.
+
+    Kept separate from :func:`main` so tests can assert on exit codes.
+    """
+    try:
+        app(args=argv, standalone_mode=False)
+    except SystemExit as exc:  # pragma: no cover - defensive
+        return int(exc.code) if isinstance(exc.code, int) else int(ExitCode.FAILURE)
+    except KeyboardInterrupt:
+        print("Interrupted.", file=sys.stderr)
+        return int(ExitCode.FAILURE)
+    except BaseException as exc:  # noqa: BLE001 - the CLI is the last line of defence
+        return _handle(exc)
+    return int(ExitCode.SUCCESS)
+
+
+def _handle(error: BaseException) -> int:
+    """Render an exception and choose an exit code.
+
+    Framework control-flow exceptions are recognized by shape rather than by
+    class: Typer vendors its own copies of Click's exception hierarchy in newer
+    releases, so ``isinstance`` against ``click`` is not portable across the
+    versions this package supports.
+    """
+    if isinstance(error, typer.Abort):
+        print("Aborted.", file=sys.stderr)
+        return int(ExitCode.FAILURE)
+
+    exit_code = getattr(error, "exit_code", None)
+    if isinstance(exit_code, int):
+        show = getattr(error, "show", None)
+        if callable(show):
+            show()
+        return exit_code
+
+    message, code = describe_error(error)
+    print(f"Error: {message}", file=sys.stderr)
+    return int(code)
+
+
+def main() -> None:
+    """Console-script entry point."""
+    raise SystemExit(run())
+
+
+if __name__ == "__main__":  # pragma: no cover
+    main()
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\cli\output.py ==========
+
+"""CLI rendering (spec 52).
+
+Two modes, applied identically by every command:
+
+* human - aligned tables and key/value blocks
+* ``--json`` - the payload only, no decorative text, safe to pipe
+
+Nested structures are printed as indented JSON rather than flattened, because a
+generation's parameters are the point of the record.
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+from collections.abc import Callable, Mapping, Sequence
+from datetime import date, datetime
+from typing import Any, TextIO
+
+__all__ = ["Output", "format_value"]
+
+_MAX_CELL = 48
+
+
+def _default(value: Any) -> Any:
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    return str(value)
+
+
+def format_value(value: Any, *, indent: int = 2) -> str:
+    """Render a value for human output."""
+    if value is None:
+        return "-"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (Mapping, list, tuple)):
+        if not value:
+            return "-"
+        return json.dumps(value, indent=indent, default=_default, ensure_ascii=False)
+    return str(value)
+
+
+def _truncate(text: str) -> str:
+    single_line = text.replace("\n", " ")
+    if len(single_line) <= _MAX_CELL:
+        return single_line
+    return single_line[: _MAX_CELL - 1] + "…"
+
+
+class Output:
+    """Writes command results in the mode the user asked for."""
+
+    def __init__(
+        self,
+        *,
+        json_mode: bool = False,
+        stream: TextIO | None = None,
+        error_stream: TextIO | None = None,
+    ) -> None:
+        self.json_mode = json_mode
+        self._stream = stream if stream is not None else sys.stdout
+        self._error_stream = error_stream if error_stream is not None else sys.stderr
+
+    # -- primitives --------------------------------------------------------
+
+    def line(self, text: str = "") -> None:
+        """Write one line of human output. Suppressed in JSON mode."""
+        if not self.json_mode:
+            print(text, file=self._stream)
+
+    def note(self, text: str) -> None:
+        """Write an informational message to stderr, so stdout stays pipeable."""
+        print(text, file=self._error_stream)
+
+    def error(self, text: str) -> None:
+        """Write an error message to stderr."""
+        print(f"Error: {text}", file=self._error_stream)
+
+    def json(self, data: Any) -> None:
+        """Write JSON to stdout regardless of mode."""
+        print(json.dumps(data, indent=2, default=_default, ensure_ascii=False), file=self._stream)
+
+    def raw(self, text: str) -> None:
+        """Write text verbatim, with no trailing newline added twice."""
+        self._stream.write(text)
+        if not text.endswith("\n"):
+            self._stream.write("\n")
+
+    # -- structured results ------------------------------------------------
+
+    def emit(self, data: Any, render: Callable[[], None]) -> None:
+        """Emit ``data`` as JSON, or call ``render`` for human output."""
+        if self.json_mode:
+            self.json(data)
+        else:
+            render()
+
+    def table(
+        self,
+        rows: Sequence[Mapping[str, Any]],
+        columns: Sequence[tuple[str, str]],
+        *,
+        empty: str = "No results.",
+    ) -> None:
+        """Print an aligned table. ``columns`` is a sequence of (header, key)."""
+        if not rows:
+            self.line(empty)
+            return
+
+        headers = [header for header, _ in columns]
+        cells = [
+            [_truncate(format_value(row.get(key))) for _, key in columns] for row in rows
+        ]
+
+        widths = [len(header) for header in headers]
+        for line in cells:
+            for index, cell in enumerate(line):
+                widths[index] = max(widths[index], len(cell))
+
+        self.line("  ".join(header.ljust(widths[i]) for i, header in enumerate(headers)).rstrip())
+        self.line("  ".join("-" * width for width in widths))
+        for line in cells:
+            self.line("  ".join(cell.ljust(widths[i]) for i, cell in enumerate(line)).rstrip())
+
+    def fields(self, pairs: Sequence[tuple[str, Any]]) -> None:
+        """Print a key/value block, indenting multi-line values under their key."""
+        if not pairs:
+            return
+        width = max(len(label) for label, _ in pairs)
+        for label, value in pairs:
+            rendered = format_value(value)
+            if "\n" in rendered:
+                self.line(f"{label}:")
+                for line in rendered.splitlines():
+                    self.line(f"  {line}")
+            else:
+                self.line(f"{label.ljust(width)}  {rendered}")
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\cli\__init__.py ==========
+
+"""The SynthGraph command-line interface.
+
+The CLI is a query, inspection and export surface. It is a thin adapter over
+the SDK: it opens no HTTP connections of its own, builds no URLs, defines no
+models, and duplicates no backend logic (spec 43).
+
+Writing provenance is the SDK's job (spec 58), and reproducing an experiment is
+the researcher's (spec 59).
+"""
+
+from __future__ import annotations
+
+# ``main`` is deliberately not re-exported here: it would shadow the
+# ``synthgraph.cli.main`` submodule of the same name.
+from .main import app, run
+
+__all__ = ["app", "run"]
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\cli\commands\auth.py ==========
+
+"""``synthgraph auth`` (spec 45)."""
+
+from __future__ import annotations
+
+import typer
+
+from ..context import CLIContext
+
+app = typer.Typer(
+    no_args_is_help=True,
+    help="Inspect the identity behind the configured API key.",
+)
+
+
+@app.command("whoami")
+def whoami(
+    ctx: typer.Context,
+    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a table."),
+) -> None:
+    """Show which SynthGraph account the current API key belongs to.
+
+    The key itself is never printed.
+
+    Example:
+
+        synthgraph auth whoami
+    """
+    cli: CLIContext = ctx.obj
+    out = cli.output(json_output)
+
+    user = cli.client().auth.me()
+
+    out.emit(
+        user.to_dict(),
+        lambda: out.fields(
+            [
+                ("ID", user.id),
+                ("Email", user.email),
+                ("Name", user.name),
+            ]
+        ),
+    )
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\cli\commands\compare.py ==========
+
+"""``synthgraph compare`` (spec 49).
+
+The backend computes the comparison. This command presents it. Presentation may
+change how a difference *looks*; it never changes what the difference *is*.
+"""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Mapping
+from typing import Any
+
+import typer
+
+from ..context import CLIContext
+from ..output import Output
+
+app = typer.Typer()
+
+
+def compare(
+    ctx: typer.Context,
+    generation_ids: list[str] = typer.Argument(
+        ...,
+        help="Two or more generation IDs to compare.",
+        metavar="GENERATION_ID GENERATION_ID...",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Print the raw comparison JSON."),
+) -> None:
+    """Compare two or more generation runs.
+
+    Example:
+
+        synthgraph compare <generation-id-a> <generation-id-b>
+    """
+    cli: CLIContext = ctx.obj
+    out = cli.output(json_output)
+
+    result = cli.client().comparisons.compare(list(generation_ids))
+    payload = result.to_dict()
+
+    out.emit(payload, lambda: _render(out, payload))
+
+
+def _render(out: Output, payload: Mapping[str, Any]) -> None:
+    """Render whatever the backend returned, without inventing structure."""
+    ids = payload.get("generation_ids") or payload.get("generationIds")
+    if isinstance(ids, list):
+        for index, generation_id in enumerate(ids):
+            out.line(f"Generation {_label(index)}: {generation_id}")
+        out.line()
+
+    differences = payload.get("differences")
+    rendered_any = False
+
+    if isinstance(differences, Mapping):
+        for section, content in differences.items():
+            out.line(_titlecase(section))
+            _render_section(out, content, ids if isinstance(ids, list) else [])
+            out.line()
+            rendered_any = True
+    elif isinstance(differences, list) and differences:
+        out.line("Differences")
+        for item in differences:
+            out.line(f"  {_format_inline(item)}")
+        out.line()
+        rendered_any = True
+
+    summary = payload.get("summary")
+    if summary:
+        out.line("Summary")
+        out.fields([("", summary)] if not isinstance(summary, Mapping) else list(summary.items()))
+        rendered_any = True
+
+    if not rendered_any:
+        # No recognized difference structure: show the payload rather than
+        # claiming the generations are identical.
+        remaining = {
+            key: value
+            for key, value in payload.items()
+            if key not in {"generation_ids", "generationIds"}
+        }
+        if remaining:
+            out.fields(list(remaining.items()))
+        else:
+            out.line("The backend reported no differences.")
+
+
+def _render_section(out: Output, content: Any, ids: list[str]) -> None:
+    """Render one section of the difference map."""
+    if isinstance(content, Mapping):
+        for key, value in content.items():
+            if isinstance(value, Mapping):
+                parts = [f"{label}: {_format_inline(item)}" for label, item in value.items()]
+                out.line(f"  {key}: " + "  ".join(parts))
+            elif isinstance(value, list) and ids and len(value) == len(ids):
+                parts = [
+                    f"{_label(index)}: {_format_inline(item)}"
+                    for index, item in enumerate(value)
+                ]
+                out.line(f"  {key}: " + "  ".join(parts))
+            else:
+                out.line(f"  {key}: {_format_inline(value)}")
+    elif isinstance(content, list):
+        for item in content:
+            out.line(f"  {_format_inline(item)}")
+    else:
+        out.line(f"  {_format_inline(content)}")
+
+
+def _format_inline(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if value is None:
+        return "-"
+    if isinstance(value, (Mapping, list, tuple)):
+        return json.dumps(value, default=str, ensure_ascii=False)
+    return str(value)
+
+
+def _label(index: int) -> str:
+    """A, B, C ... then plain numbers past Z."""
+    return chr(ord("A") + index) if index < 26 else str(index + 1)
+
+
+def _titlecase(text: str) -> str:
+    return text.replace("_", " ").capitalize()
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\cli\commands\docs.py ==========
+
+"""``synthgraph docs`` (spec 51)."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import typer
+
+from ..context import CLIContext
+
+app = typer.Typer()
+
+
+def docs(
+    ctx: typer.Context,
+    generation_id: str = typer.Argument(..., help="Generation ID."),
+    output: Path | None = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Write the Markdown to this file instead of stdout.",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Wrap the Markdown in a JSON object for scripting.",
+    ),
+) -> None:
+    """Export backend-generated Markdown documentation for a generation.
+
+    Useful for paper supplements, lab records and experiment handover.
+
+    Examples:
+
+        synthgraph docs <generation-id>
+
+        synthgraph docs <generation-id> --output experiment.md
+    """
+    cli: CLIContext = ctx.obj
+    out = cli.output(json_output)
+
+    markdown = cli.client().documentation.get(generation_id)
+
+    if output is not None:
+        # Any failure here propagates: a failed export must not exit 0.
+        output.parent.mkdir(parents=True, exist_ok=True)
+        text = markdown if markdown.endswith("\n") else markdown + "\n"
+        output.write_text(text, encoding="utf-8")
+        out.note(f"Wrote documentation for {generation_id} to {output}")
+        return
+
+    if out.json_mode:
+        out.json({"generation_id": generation_id, "documentation": markdown})
+    else:
+        out.raw(markdown)
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\cli\commands\experiments.py ==========
+
+"""``synthgraph experiments`` (spec 47)."""
+
+from __future__ import annotations
+
+import typer
+
+from ..context import CLIContext
+
+app = typer.Typer(
+    no_args_is_help=True,
+    help="List, search and inspect experiments.",
+)
+
+_COLUMNS = [("ID", "id"), ("NAME", "name"), ("CREATED", "created_at")]
+
+
+@app.command("list")
+def list_experiments(
+    ctx: typer.Context,
+    project: str = typer.Option(..., "--project", "-p", help="Project ID."),
+    search: str | None = typer.Option(None, "--search", "-s", help="Filter by search term."),
+    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a table."),
+) -> None:
+    """List the experiments in a project.
+
+    Example:
+
+        synthgraph experiments list --project <project-id>
+    """
+    cli: CLIContext = ctx.obj
+    out = cli.output(json_output)
+
+    experiments = cli.client().experiments.list(project_id=project, search=search)
+    rows = [experiment.to_dict() for experiment in experiments]
+
+    out.emit(rows, lambda: out.table(rows, _COLUMNS, empty="No experiments found."))
+
+
+@app.command("search")
+def search_experiments(
+    ctx: typer.Context,
+    query: str = typer.Argument(..., help="Search term."),
+    project: str = typer.Option(..., "--project", "-p", help="Project ID."),
+    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a table."),
+) -> None:
+    """Search experiments in a project by name or description.
+
+    The backend performs the search; this does not filter locally.
+
+    Example:
+
+        synthgraph experiments search --project <project-id> "rain"
+    """
+    cli: CLIContext = ctx.obj
+    out = cli.output(json_output)
+
+    experiments = cli.client().experiments.search(project_id=project, query=query)
+    rows = [experiment.to_dict() for experiment in experiments]
+
+    out.emit(
+        rows,
+        lambda: out.table(rows, _COLUMNS, empty=f"No experiments match {query!r}."),
+    )
+
+
+@app.command("get")
+def get_experiment(
+    ctx: typer.Context,
+    experiment_id: str = typer.Argument(..., help="Experiment ID."),
+    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a field list."),
+) -> None:
+    """Show one experiment.
+
+    Example:
+
+        synthgraph experiments get <experiment-id>
+    """
+    cli: CLIContext = ctx.obj
+    out = cli.output(json_output)
+
+    experiment = cli.client().experiments.get(experiment_id)
+
+    out.emit(
+        experiment.to_dict(),
+        lambda: out.fields(
+            [
+                ("ID", experiment.id),
+                ("Project", experiment.project_id),
+                ("Name", experiment.name),
+                ("Description", experiment.description),
+                ("Created", experiment.created_at),
+                ("Updated", experiment.updated_at),
+                ("Metadata", experiment.metadata),
+            ]
+        ),
+    )
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\cli\commands\generations.py ==========
+
+"""``synthgraph generations`` (spec 48)."""
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
+import typer
+
+from ...errors import SynthGraphValidationError
+from ..context import CLIContext
+
+app = typer.Typer(
+    no_args_is_help=True,
+    help="List and inspect generation runs.",
+)
+
+
+@app.command("list")
+def list_generations(
+    ctx: typer.Context,
+    experiment: str = typer.Option(..., "--experiment", "-e", help="Experiment ID."),
+    parameters: str | None = typer.Option(
+        None,
+        "--parameters",
+        help='Filter by generation parameters, as a JSON object: \'{"weather":"rain"}\'',
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a table."),
+) -> None:
+    """List the generation runs in an experiment.
+
+    Filtering is performed by the backend.
+
+    Examples:
+
+        synthgraph generations list --experiment <experiment-id>
+
+        synthgraph generations list --experiment <experiment-id> \\
+            --parameters '{"weather":"rain","occlusion":0.3}'
+    """
+    cli: CLIContext = ctx.obj
+    out = cli.output(json_output)
+
+    generations = cli.client().generations.list(
+        experiment_id=experiment,
+        parameters=_parse_parameters(parameters),
+    )
+
+    rows = [
+        {
+            "id": generation.id,
+            "name": generation.name,
+            "generator": generation.generator.name,
+            "version": generation.generator.version,
+            "status": generation.status.value,
+            "created_at": generation.created_at,
+        }
+        for generation in generations
+    ]
+    payload = [generation.to_dict() for generation in generations]
+
+    out.emit(
+        payload,
+        lambda: out.table(
+            rows,
+            [
+                ("ID", "id"),
+                ("NAME", "name"),
+                ("GENERATOR", "generator"),
+                ("VERSION", "version"),
+                ("STATUS", "status"),
+                ("CREATED", "created_at"),
+            ],
+            empty="No generations found.",
+        ),
+    )
+
+
+@app.command("get")
+def get_generation(
+    ctx: typer.Context,
+    generation_id: str = typer.Argument(..., help="Generation ID."),
+    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a field list."),
+) -> None:
+    """Show one generation run, including its parameters and provenance.
+
+    Example:
+
+        synthgraph generations get <generation-id> --json
+    """
+    cli: CLIContext = ctx.obj
+    out = cli.output(json_output)
+
+    generation = cli.client().generations.get(generation_id)
+
+    out.emit(
+        generation.to_dict(),
+        lambda: out.fields(
+            [
+                ("ID", generation.id),
+                ("Experiment", generation.experiment_id),
+                ("Name", generation.name),
+                ("Description", generation.description),
+                ("Generator", generation.generator.name),
+                ("Generator version", generation.generator.version),
+                ("Generator type", generation.generator.type),
+                ("Status", generation.status.value),
+                ("Parameters", generation.parameters),
+                ("Reproducibility", generation.reproducibility.model_dump(mode="json")),
+                ("Inputs", [item.model_dump(mode="json") for item in generation.inputs]),
+                ("Outputs", [item.model_dump(mode="json") for item in generation.outputs]),
+                ("Started", generation.started_at),
+                ("Completed", generation.completed_at),
+                ("Created", generation.created_at),
+                ("Metadata", generation.metadata),
+            ]
+        ),
+    )
+
+
+def _parse_parameters(raw: str | None) -> dict[str, Any] | None:
+    """Parse the --parameters JSON object, failing with a usable message."""
+    if raw is None:
+        return None
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise SynthGraphValidationError(
+            f"--parameters must be a JSON object ({exc.msg} at position {exc.pos})",
+            field="parameters",
+        ) from None
+    if not isinstance(parsed, dict):
+        raise SynthGraphValidationError(
+            "--parameters must be a JSON object, for example "
+            '\'{"weather":"rain"}\'',
+            field="parameters",
+        )
+    return parsed
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\cli\commands\manifest.py ==========
+
+"""``synthgraph manifest`` (spec 50).
+
+Exports a reproduction manifest. It does not regenerate datasets, launch
+Blender or Unity, retrain models, or upload anything (spec 59).
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import typer
+
+from ..context import CLIContext
+
+app = typer.Typer()
+
+
+def manifest(
+    ctx: typer.Context,
+    generation_id: str = typer.Argument(..., help="Generation ID."),
+    output: Path | None = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Write the manifest to this file instead of stdout.",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Accepted for consistency; the manifest is always JSON.",
+    ),
+) -> None:
+    """Export the reproduction manifest for a generation.
+
+    The manifest records what would be needed to reconstruct the experiment.
+    It is a record, not a runnable script, and it carries no dataset bytes and
+    no credentials.
+
+    Examples:
+
+        synthgraph manifest <generation-id>
+
+        synthgraph manifest <generation-id> --output reproduction.json
+    """
+    cli: CLIContext = ctx.obj
+    out = cli.output(json_output)
+
+    document = cli.client().reproduction.get(generation_id)
+    payload = document.to_dict()
+    text = json.dumps(payload, indent=2, default=str, ensure_ascii=False)
+
+    if output is None:
+        out.json(payload)
+        return
+
+    # Any failure here propagates: a failed export must not exit 0 (spec 53).
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(text + "\n", encoding="utf-8")
+
+    out.note(f"Wrote reproduction manifest for {generation_id} to {output}")
+
+    if document.missing:
+        out.note(
+            f"Note: the backend reported {len(document.missing)} missing "
+            "dependency/dependencies. This manifest records provenance; it does not "
+            "guarantee reproducibility."
+        )
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\cli\commands\projects.py ==========
+
+"""``synthgraph projects`` (spec 46)."""
+
+from __future__ import annotations
+
+import typer
+
+from ..context import CLIContext
+
+app = typer.Typer(
+    no_args_is_help=True,
+    help="List and inspect projects.",
+)
+
+
+@app.command("list")
+def list_projects(
+    ctx: typer.Context,
+    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a table."),
+) -> None:
+    """List the projects visible to your account.
+
+    Example:
+
+        synthgraph projects list
+    """
+    cli: CLIContext = ctx.obj
+    out = cli.output(json_output)
+
+    projects = cli.client().projects.list()
+
+    out.emit(
+        [project.to_dict() for project in projects],
+        lambda: out.table(
+            [project.to_dict() for project in projects],
+            [("ID", "id"), ("NAME", "name"), ("CREATED", "created_at")],
+            empty="No projects yet.",
+        ),
+    )
+
+
+@app.command("get")
+def get_project(
+    ctx: typer.Context,
+    project_id: str = typer.Argument(..., help="Project ID."),
+    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a field list."),
+) -> None:
+    """Show one project.
+
+    Example:
+
+        synthgraph projects get 1d0c...  --json
+    """
+    cli: CLIContext = ctx.obj
+    out = cli.output(json_output)
+
+    project = cli.client().projects.get(project_id)
+
+    out.emit(
+        project.to_dict(),
+        lambda: out.fields(
+            [
+                ("ID", project.id),
+                ("Name", project.name),
+                ("Description", project.description),
+                ("Created", project.created_at),
+                ("Updated", project.updated_at),
+                ("Metadata", project.metadata),
+            ]
+        ),
+    )
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\cli\commands\__init__.py ==========
+
+"""CLI command groups."""
+
+from __future__ import annotations

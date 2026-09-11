@@ -7,6 +7,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 
 import { TypeOrmUserRepository } from '../../users/repositories/typeorm-user.repository.js';
+import { ApiKeyService } from '../services/api-key.service.js';
 import type { AuthenticatedRequest } from '../types/authenticated-request.js';
 
 type JwtPayload = {
@@ -19,6 +20,7 @@ export class JwtGuard implements CanActivate {
   constructor(
     private readonly jwtService: JwtService,
     private readonly userRepository: TypeOrmUserRepository,
+    private readonly apiKeyService: ApiKeyService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -37,6 +39,16 @@ export class JwtGuard implements CanActivate {
       throw new UnauthorizedException('Invalid authorization header');
     }
 
+    // SynthGraph API keys use the "sg_" prefix.
+    if (credentials.startsWith('sg_')) {
+      const user = await this.apiKeyService.verify(credentials);
+
+      request.user = user;
+
+      return true;
+    }
+
+    // Otherwise, treat the credential as a JWT.
     let payload: JwtPayload;
 
     try {

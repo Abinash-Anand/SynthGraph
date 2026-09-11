@@ -1,0 +1,4673 @@
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\auth.py ==========
+
+"""Authentication identity (spec 45).
+
+``whoami`` answers "which account is this API key attached to?". The key itself
+is never returned, logged or displayed.
+"""
+
+from __future__ import annotations
+
+from .http import SynthGraphHTTPClient
+from .models import User
+from .routes import Routes
+
+
+class AuthAPI:
+    """API operations for the authenticated identity."""
+
+    def __init__(self, http: SynthGraphHTTPClient) -> None:
+        self._http = http
+
+    def me(self) -> User:
+        """Retrieve the account behind the configured API key."""
+        data = self._http.get(Routes.auth_me(), operation="auth.me")
+        return User.model_validate(data)
+
+    #: Readable alias used by the CLI.
+    whoami = me
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\client.py ==========
+
+"""The public SynthGraph client (spec 12)."""
+
+from __future__ import annotations
+
+from types import TracebackType
+from typing import Any, Self
+
+from .auth import AuthAPI
+from .comparison import ComparisonAPI
+from .config import SynthGraphConfig
+from .datasets import DatasetsAPI
+from .documentation import DocumentationAPI
+from .errors import SynthGraphConfigurationError
+from .evaluation import EvaluationsAPI
+from .experiments import ExperimentsAPI
+from .fluent import ExperimentHandle, ProjectHandle
+from .generations import GenerationsAPI
+from .http import SynthGraphHTTPClient
+from .models import ComparisonResult, User
+from .projects import ProjectsAPI
+from .reproduction import ReproductionAPI
+from .training import TrainingRunsAPI
+
+
+class SynthGraphClient:
+    """Public client for interacting with the SynthGraph API.
+
+    The client owns configuration, the HTTP transport and the resource APIs.
+    It never starts a backend, never assumes one is local, and never requires
+    a particular hosting provider (spec 12).
+    """
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        *,
+        api_url: str | None = None,
+        timeout: float | None = None,
+        project_id: str | None = None,
+        config: SynthGraphConfig | None = None,
+        transport: Any | None = None,
+    ) -> None:
+        if config is not None:
+            if any(value is not None for value in (api_key, api_url, timeout, project_id)):
+                raise ValueError(
+                    "config cannot be combined with api_key, api_url, timeout or project_id"
+                )
+            self.config = config
+        else:
+            self.config = SynthGraphConfig.from_env(
+                api_key=api_key,
+                api_url=api_url,
+                timeout=timeout,
+                project_id=project_id,
+            )
+
+        self._http = SynthGraphHTTPClient(
+            self.config,
+            transport=transport,
+        )
+
+        self.auth = AuthAPI(self._http)
+        self.projects = ProjectsAPI(self._http)
+        self.experiments = ExperimentsAPI(self._http)
+        self.generations = GenerationsAPI(self._http)
+        self.datasets = DatasetsAPI(self._http)
+        self.training_runs = TrainingRunsAPI(self._http)
+        self.evaluations = EvaluationsAPI(self._http)
+        self.reproduction = ReproductionAPI(self._http)
+        self.documentation = DocumentationAPI(self._http)
+        self.comparisons = ComparisonAPI(self._http)
+
+    # -- fluent capture API ------------------------------------------------
+
+    def project(
+        self,
+        name: str | None = None,
+        *,
+        id: str | None = None,
+        description: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> ProjectHandle:
+        """Create a project by ``name``, or open an existing one by ``id``.
+
+        Exactly one of ``name`` or ``id`` is expected: creating and fetching
+        are different intentions and the SDK does not guess between them
+        (spec 7.4).
+        """
+        if (name is None) == (id is None):
+            raise SynthGraphConfigurationError(
+                "project() takes either a name (to create) or id= (to open), not both"
+            )
+
+        if id is not None:
+            return ProjectHandle(self, self.projects.get(id))
+
+        assert name is not None
+        return ProjectHandle(
+            self,
+            self.projects.create(name=name, description=description, metadata=metadata),
+        )
+
+    def experiment(
+        self,
+        name: str | None = None,
+        *,
+        id: str | None = None,
+        project_id: str | None = None,
+        description: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> ExperimentHandle:
+        """Create an experiment by ``name``, or open an existing one by ``id``.
+
+        When creating, the project comes from ``project_id``, then from the
+        client's configured default project (``project_id=`` on the constructor
+        or ``SYNTHGRAPH_PROJECT_ID``).
+        """
+        if (name is None) == (id is None):
+            raise SynthGraphConfigurationError(
+                "experiment() takes either a name (to create) or id= (to open), not both"
+            )
+
+        if id is not None:
+            return ExperimentHandle(self, self.experiments.get(id))
+
+        resolved_project = project_id or self.config.project_id
+        if not resolved_project:
+            raise SynthGraphConfigurationError(
+                "No project selected. Pass project_id=..., construct the client with "
+                "project_id=..., or set SYNTHGRAPH_PROJECT_ID."
+            )
+
+        assert name is not None
+        return ExperimentHandle(
+            self,
+            self.experiments.create(
+                project_id=resolved_project,
+                name=name,
+                description=description,
+                metadata=metadata,
+            ),
+        )
+
+    def compare(self, *generation_ids: str) -> ComparisonResult:
+        """Compare two or more generations. The backend performs the comparison."""
+        ids = list(generation_ids)
+        if len(ids) == 1 and isinstance(ids[0], (list, tuple)):
+            ids = list(ids[0])
+        return self.comparisons.compare(ids)
+
+    def whoami(self) -> User:
+        """The account behind the configured API key."""
+        return self.auth.me()
+
+    # -- lifecycle ---------------------------------------------------------
+
+    def close(self) -> None:
+        """Close the underlying HTTP client."""
+        self._http.close()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        self.close()
+
+    def __repr__(self) -> str:
+        return f"SynthGraphClient(api_url={self.config.api_url!r})"
+
+
+#: Short alias matching the style used across the SDK documentation.
+SynthGraph = SynthGraphClient
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\comparison.py ==========
+
+"""Generation comparison (spec 30).
+
+Comparison is an operation, not a stored resource, and the comparison itself is
+the backend's answer. The SDK carries it; it does not recompute or "improve" it.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+from .errors import SynthGraphValidationError
+from .http import SynthGraphHTTPClient
+from .models import ComparisonResult
+from .routes import Routes
+from .serialization import require_identifier, require_sequence
+
+
+class ComparisonAPI:
+    """API operations for comparing generations."""
+
+    def __init__(self, http: SynthGraphHTTPClient) -> None:
+        self._http = http
+
+    def compare(self, generation_ids: Sequence[str]) -> ComparisonResult:
+        """Compare two or more generation runs."""
+        ids = require_sequence(generation_ids, field="generation_ids")
+        if len(ids) < 2:
+            raise SynthGraphValidationError(
+                "comparison needs at least two generation IDs",
+                field="generation_ids",
+            )
+
+        normalized = [
+            require_identifier(value, field=f"generation_ids[{index}]")
+            for index, value in enumerate(ids)
+        ]
+
+        data = self._http.post(
+            Routes.generations_compare(),
+            json={"generation_ids": normalized},
+            operation="generations.compare",
+        )
+
+        return ComparisonResult.from_payload(data)
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\config.py ==========
+
+"""SDK configuration (spec 13).
+
+Resolution order:
+
+1. explicit constructor arguments
+2. environment variables
+3. documented defaults
+
+The API key is never rendered by ``repr()``, never serialized into a model or a
+manifest, and never placed in an exception message (spec 14, 39).
+"""
+
+from __future__ import annotations
+
+import os
+from collections.abc import Mapping
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from .errors import SynthGraphConfigurationError
+
+__all__ = [
+    "DEFAULT_API_URL",
+    "ENV_API_KEY",
+    "ENV_API_URL",
+    "ENV_MAX_ATTEMPTS",
+    "ENV_PROJECT_ID",
+    "ENV_TIMEOUT",
+    "RetryPolicy",
+    "SynthGraphConfig",
+]
+
+ENV_API_KEY = "SYNTHGRAPH_API_KEY"
+ENV_API_URL = "SYNTHGRAPH_API_URL"
+ENV_BASE_URL = "SYNTHGRAPH_BASE_URL"
+ENV_TIMEOUT = "SYNTHGRAPH_TIMEOUT"
+ENV_PROJECT_ID = "SYNTHGRAPH_PROJECT_ID"
+ENV_MAX_ATTEMPTS = "SYNTHGRAPH_MAX_ATTEMPTS"
+
+DEFAULT_API_URL = "https://synthgraph.onrender.com"
+DEFAULT_TIMEOUT = 30.0
+
+
+class RetryPolicy(BaseModel):
+    """When the SDK is allowed to retry a request.
+
+    Only requests the SDK knows to be safe are retried. Writes are never
+    retried automatically: the backend has no idempotency-key contract yet, and
+    a blind retry of a POST could duplicate provenance (spec 33).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    max_attempts: int = Field(default=3, ge=1, le=10)
+    backoff_factor: float = Field(default=0.5, ge=0.0)
+    max_backoff: float = Field(default=8.0, gt=0.0)
+    retry_statuses: tuple[int, ...] = (408, 429, 500, 502, 503, 504)
+
+    def backoff_seconds(self, attempt: int) -> float:
+        """Exponential backoff before retrying, for a 1-based attempt number."""
+        return min(self.backoff_factor * (2 ** max(attempt - 1, 0)), self.max_backoff)
+
+
+class SynthGraphConfig(BaseModel):
+    """Configuration for communicating with the SynthGraph backend."""
+
+    model_config = ConfigDict(frozen=True)
+
+    api_url: str = Field(
+        default=DEFAULT_API_URL,
+        min_length=1,
+    )
+    api_key: str | None = Field(default=None, repr=False)
+    timeout: float = Field(
+        default=DEFAULT_TIMEOUT,
+        gt=0,
+    )
+    #: Optional default project for the fluent API. Not sent to the backend.
+    project_id: str | None = None
+    retry: RetryPolicy = Field(default_factory=RetryPolicy)
+
+    @field_validator("api_url")
+    @classmethod
+    def normalize_api_url(cls, value: str) -> str:
+        """Remove trailing slashes from the API URL."""
+        normalized = value.strip().rstrip("/")
+        if not normalized.startswith(("http://", "https://")):
+            raise ValueError("api_url must start with http:// or https://")
+        return normalized
+
+    @field_validator("api_key")
+    @classmethod
+    def reject_blank_api_key(cls, value: str | None) -> str | None:
+        """An all-whitespace key is a configuration mistake, not a credential."""
+        if value is None:
+            return None
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("api_key must not be blank")
+        return stripped
+
+    @classmethod
+    def from_env(
+        cls,
+        *,
+        api_key: str | None = None,
+        api_url: str | None = None,
+        timeout: float | None = None,
+        project_id: str | None = None,
+        retry: RetryPolicy | None = None,
+        env: Mapping[str, str] | None = None,
+    ) -> SynthGraphConfig:
+        """Build a config from explicit arguments, then environment, then defaults."""
+        environ: Mapping[str, str] = os.environ if env is None else env
+
+        resolved_url = api_url or environ.get(ENV_API_URL) or environ.get(ENV_BASE_URL)
+        resolved_timeout = timeout
+        if resolved_timeout is None and environ.get(ENV_TIMEOUT):
+            try:
+                resolved_timeout = float(environ[ENV_TIMEOUT])
+            except ValueError:
+                raise SynthGraphConfigurationError(
+                    f"{ENV_TIMEOUT} must be a number"
+                ) from None
+
+        resolved_retry = retry
+        if resolved_retry is None and environ.get(ENV_MAX_ATTEMPTS):
+            try:
+                resolved_retry = RetryPolicy(max_attempts=int(environ[ENV_MAX_ATTEMPTS]))
+            except ValueError:
+                raise SynthGraphConfigurationError(
+                    f"{ENV_MAX_ATTEMPTS} must be an integer"
+                ) from None
+
+        values: dict[str, object] = {
+            "api_key": api_key if api_key is not None else environ.get(ENV_API_KEY),
+            "project_id": project_id or environ.get(ENV_PROJECT_ID),
+        }
+        if resolved_url:
+            values["api_url"] = resolved_url
+        if resolved_timeout is not None:
+            values["timeout"] = resolved_timeout
+        if resolved_retry is not None:
+            values["retry"] = resolved_retry
+
+        return cls(**values)  # type: ignore[arg-type]
+
+    def require_api_key(self) -> str:
+        """Return the API key, or explain how to supply one."""
+        if not self.api_key:
+            raise SynthGraphConfigurationError(
+                "No SynthGraph API key configured. Pass api_key=... or set the "
+                f"{ENV_API_KEY} environment variable."
+            )
+        return self.api_key
+
+    @property
+    def masked_api_key(self) -> str:
+        """A display-safe fingerprint of the key. Never the key itself."""
+        if not self.api_key:
+            return "<not set>"
+        if len(self.api_key) <= 4:
+            return "****"
+        return "****" + self.api_key[-4:]
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\datasets.py ==========
+
+"""Dataset references attached to a generation (spec 6, 21).
+
+Recording a dataset records *where it is and what it is*. The SDK never opens,
+hashes-by-default, walks or uploads the data behind the URI. A hundred-gigabyte
+render stays exactly where the researcher put it.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from .errors import SynthGraphValidationError
+from .http import SynthGraphHTTPClient
+from .models import DatasetVersion
+from .routes import Routes
+from .serialization import compact, require_identifier, require_mapping, require_text
+
+
+class DatasetsAPI:
+    """API operations for dataset references."""
+
+    def __init__(self, http: SynthGraphHTTPClient) -> None:
+        self._http = http
+
+    def create(
+        self,
+        *,
+        generation_id: str,
+        name: str,
+        uri: str,
+        version: str | None = None,
+        format: str | None = None,
+        size: int | None = None,
+        checksum: str | None = None,
+        role: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> DatasetVersion:
+        """Record a dataset produced by (or used in) a generation.
+
+        ``size`` and ``checksum`` are accepted when the researcher already
+        knows them. The SDK does not compute them, because that would mean
+        reading the dataset (spec 38).
+        """
+        generation_id = require_identifier(generation_id, field="generation_id")
+
+        payload = compact(
+            {
+                "name": require_text(name, field="name"),
+                "uri": require_text(uri, field="uri"),
+                "version": version,
+                "format": format,
+                "size": _validate_size(size),
+                "checksum": checksum,
+                "role": role,
+                "metadata": (
+                    require_mapping(metadata, field="metadata") if metadata is not None else None
+                ),
+            }
+        )
+
+        data = self._http.post(
+            Routes.generation_datasets(generation_id),
+            json=payload,
+            operation="datasets.create",
+        )
+
+        return DatasetVersion.model_validate(data)
+
+
+def _validate_size(size: int | None) -> int | None:
+    if size is None:
+        return None
+    if not isinstance(size, int) or isinstance(size, bool) or size < 0:
+        raise SynthGraphValidationError(
+            "size must be a non-negative integer number of bytes",
+            field="size",
+        )
+    return size
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\documentation.py ==========
+
+"""Generated experiment documentation (spec 28)."""
+
+from __future__ import annotations
+
+from .http import SynthGraphHTTPClient
+from .routes import Routes
+from .serialization import require_identifier
+
+
+class DocumentationAPI:
+    """API operations for generated Markdown documentation."""
+
+    def __init__(self, http: SynthGraphHTTPClient) -> None:
+        self._http = http
+
+    def get(self, generation_id: str) -> str:
+        """Retrieve backend-generated Markdown documentation for a generation.
+
+        Returned as a plain string: print it, write it to a file, or feed it to
+        whatever the researcher's lab already uses. The SDK does not render it.
+        """
+        generation_id = require_identifier(generation_id, field="generation_id")
+
+        return self._http.get_text(
+            Routes.generation_documentation(generation_id),
+            operation="documentation.get",
+        )
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\environment.py ==========
+
+"""Optional provenance helpers for code and environment metadata (spec 31, 32).
+
+Nothing here runs automatically. The SDK collects this only when a researcher
+asks for it, because provenance capture must not turn into surveillance and
+must not become a magical dependency on a Git checkout existing.
+
+What is deliberately *not* collected: repository contents, diffs, file lists,
+the full environment, installed-package inventories, environment variables,
+user names, host names, or anything else that could carry a secret.
+"""
+
+from __future__ import annotations
+
+import platform
+import subprocess
+import sys
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as package_version
+from pathlib import Path
+from typing import Any
+from urllib.parse import urlsplit, urlunsplit
+
+__all__ = ["environment_metadata", "git_metadata", "scrub_remote_url"]
+
+_GIT_TIMEOUT_SECONDS = 5
+
+
+def scrub_remote_url(url: str) -> str:
+    """Strip any embedded credentials from a Git remote URL.
+
+    ``https://user:token@github.com/lab/repo.git`` must never reach the
+    backend with the token attached.
+    """
+    if "@" not in url:
+        return url
+    if "://" not in url:
+        # scp-style remote such as git@github.com:lab/repo.git - no secret.
+        return url
+    parts = urlsplit(url)
+    if not parts.netloc or "@" not in parts.netloc:
+        return url
+    host = parts.netloc.rsplit("@", 1)[1]
+    return urlunsplit((parts.scheme, host, parts.path, parts.query, parts.fragment))
+
+
+def _git(args: list[str], cwd: Path) -> str | None:
+    """Run a git command, returning None if git or the repository is absent."""
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            timeout=_GIT_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    # An empty string is a real answer (a clean working tree); only a failure
+    # is reported as None.
+    return result.stdout.strip()
+
+
+def git_metadata(path: str | Path | None = None) -> dict[str, Any]:
+    """Collect Git provenance for the working directory, if there is any.
+
+    Returns an empty mapping when the directory is not a Git repository or Git
+    is not installed - never raises, so adding this to a capture call cannot
+    break a researcher's script.
+
+    Keys, when available: ``commit``, ``branch``, ``repository``, ``dirty``.
+    """
+    cwd = Path(path) if path is not None else Path.cwd()
+    if not cwd.exists():
+        return {}
+
+    if _git(["rev-parse", "--is-inside-work-tree"], cwd) != "true":
+        return {}
+
+    metadata: dict[str, Any] = {}
+
+    commit = _git(["rev-parse", "HEAD"], cwd)
+    if commit:
+        metadata["commit"] = commit
+
+    branch = _git(["rev-parse", "--abbrev-ref", "HEAD"], cwd)
+    if branch and branch != "HEAD":
+        metadata["branch"] = branch
+
+    remote = _git(["config", "--get", "remote.origin.url"], cwd)
+    if remote:
+        metadata["repository"] = scrub_remote_url(remote)
+
+    status = _git(["status", "--porcelain"], cwd)
+    if status is not None:
+        metadata["dirty"] = bool(status)
+
+    return metadata
+
+
+def environment_metadata(include_packages: list[str] | None = None) -> dict[str, Any]:
+    """Collect a small, fixed set of reproducibility-relevant runtime facts.
+
+    Always: Python version and implementation, OS name and release, machine
+    architecture.
+
+    ``include_packages`` optionally adds the installed version of packages the
+    researcher names explicitly, e.g. ``["torch", "numpy"]``. The SDK never
+    enumerates the whole environment on its own (spec 32, 38).
+    """
+    metadata: dict[str, Any] = {
+        "python_version": platform.python_version(),
+        "python_implementation": platform.python_implementation(),
+        "os": platform.system(),
+        "os_release": platform.release(),
+        "machine": platform.machine(),
+    }
+
+    if include_packages:
+        packages: dict[str, str] = {}
+        for name in include_packages:
+            version = _package_version(name)
+            if version is not None:
+                packages[name] = version
+        if packages:
+            metadata["packages"] = packages
+
+    return metadata
+
+
+def _package_version(name: str) -> str | None:
+    try:
+        return package_version(name)
+    except PackageNotFoundError:
+        return None
+
+
+def python_executable() -> str:
+    """The interpreter running this code."""
+    return sys.executable
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\errors.py ==========
+
+"""SynthGraph SDK error taxonomy (spec 16).
+
+``SynthGraphHTTPError`` predates this module and stays the base class for every
+HTTP-derived error, so existing code that catches it keeps working while new
+code can catch the specific category it cares about.
+
+Credentials never enter an exception. Errors are built from the status code,
+the backend's own safe message, the logical operation and the request path.
+Request headers are never attached to an error.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+__all__ = [
+    "SynthGraphAuthenticationError",
+    "SynthGraphAuthorizationError",
+    "SynthGraphConfigurationError",
+    "SynthGraphConflictError",
+    "SynthGraphError",
+    "SynthGraphHTTPError",
+    "SynthGraphNotFoundError",
+    "SynthGraphRateLimitError",
+    "SynthGraphServerError",
+    "SynthGraphTransportError",
+    "SynthGraphValidationError",
+    "error_for_status",
+    "extract_error_message",
+]
+
+
+class SynthGraphError(Exception):
+    """Base class for every error raised by the SDK."""
+
+
+class SynthGraphConfigurationError(SynthGraphError):
+    """The SDK was not given usable configuration."""
+
+
+class SynthGraphValidationError(SynthGraphError):
+    """Input rejected client-side, or a 400/422 from the backend.
+
+    Client-side validation is developer experience only. It is not a security
+    boundary and does not replace backend validation (spec 17, 7.6).
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        field: str | None = None,
+        status_code: int | None = None,
+        operation: str | None = None,
+        path: str | None = None,
+        details: Any = None,
+    ) -> None:
+        super().__init__(message)
+        self.message = message
+        self.field = field
+        self.status_code = status_code
+        self.operation = operation
+        self.path = path
+        self.details = details
+
+
+class SynthGraphHTTPError(SynthGraphError):
+    """Raised when a SynthGraph API request fails.
+
+    Base class of the HTTP error categories below.
+    """
+
+    def __init__(
+        self,
+        status_code: int,
+        message: str,
+        *,
+        operation: str | None = None,
+        path: str | None = None,
+        details: Any = None,
+    ) -> None:
+        self.status_code = status_code
+        self.message = message
+        self.operation = operation
+        self.path = path
+        self.details = details
+
+        super().__init__(
+            f"SynthGraph API request failed with status {status_code}: {message}"
+        )
+
+
+class SynthGraphAuthenticationError(SynthGraphHTTPError):
+    """401 - the API key is missing, malformed or rejected."""
+
+
+class SynthGraphAuthorizationError(SynthGraphHTTPError):
+    """403 - authenticated, but not permitted to access this resource."""
+
+
+class SynthGraphNotFoundError(SynthGraphHTTPError):
+    """404 - no such resource, or it is not visible to this user.
+
+    Knowing an ID does not imply access to it (spec 65), so a 404 may also mean
+    the resource belongs to someone else.
+    """
+
+
+class SynthGraphConflictError(SynthGraphHTTPError):
+    """409 - the request conflicts with current backend state."""
+
+
+class SynthGraphRateLimitError(SynthGraphHTTPError):
+    """429 - too many requests."""
+
+
+class SynthGraphServerError(SynthGraphHTTPError):
+    """5xx - the backend failed to handle the request."""
+
+
+class SynthGraphTransportError(SynthGraphError):
+    """The request never produced a usable HTTP response.
+
+    Connection failures, timeouts, and responses whose shape the SDK cannot
+    trust. When ``outcome_unknown`` is true the request may still have been
+    applied by the backend, so the SDK must not report success and must not
+    silently retry a write (spec 7.5, 33).
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        operation: str | None = None,
+        path: str | None = None,
+        outcome_unknown: bool = False,
+    ) -> None:
+        super().__init__(message)
+        self.message = message
+        self.operation = operation
+        self.path = path
+        self.outcome_unknown = outcome_unknown
+
+
+_STATUS_MAP: dict[int, type[SynthGraphHTTPError]] = {
+    401: SynthGraphAuthenticationError,
+    403: SynthGraphAuthorizationError,
+    404: SynthGraphNotFoundError,
+    409: SynthGraphConflictError,
+    429: SynthGraphRateLimitError,
+}
+
+_VALIDATION_STATUSES = frozenset({400, 422})
+
+
+def error_for_status(
+    status_code: int,
+    *,
+    message: str,
+    operation: str | None = None,
+    path: str | None = None,
+    details: Any = None,
+) -> SynthGraphError:
+    """Translate an HTTP status into the SDK error taxonomy.
+
+    The mapping is deterministic (spec 16)::
+
+        400/422 -> SynthGraphValidationError
+        401     -> SynthGraphAuthenticationError
+        403     -> SynthGraphAuthorizationError
+        404     -> SynthGraphNotFoundError
+        409     -> SynthGraphConflictError
+        429     -> SynthGraphRateLimitError
+        5xx     -> SynthGraphServerError
+        other   -> SynthGraphHTTPError
+    """
+    if status_code in _VALIDATION_STATUSES:
+        return SynthGraphValidationError(
+            message,
+            status_code=status_code,
+            operation=operation,
+            path=path,
+            details=details,
+        )
+
+    error_class = _STATUS_MAP.get(status_code)
+    if error_class is None:
+        error_class = SynthGraphServerError if status_code >= 500 else SynthGraphHTTPError
+
+    return error_class(
+        status_code,
+        message,
+        operation=operation,
+        path=path,
+        details=details,
+    )
+
+
+def extract_error_message(payload: Any, fallback: str) -> str:
+    """Pull a safe, human-usable message out of a backend error body.
+
+    NestJS typically returns ``{"statusCode":.., "message":.., "error":..}``
+    where ``message`` is a string or a list of validation strings. Anything that
+    is not a string is not echoed verbatim, so backend internals cannot leak
+    through the SDK (spec 16, 54).
+    """
+    if isinstance(payload, dict):
+        for key in ("detail", "message", "error"):
+            value = payload.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+            if isinstance(value, (list, tuple)):
+                items = [item.strip() for item in value if isinstance(item, str) and item.strip()]
+                if items:
+                    return "; ".join(items)
+    return fallback
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\evaluation.py ==========
+
+"""Evaluation result capture (spec 24).
+
+Metrics are a flexible mapping. The SDK does not know what mAP is, and should
+not need a release to learn about a new metric.
+
+The routes used here are flagged UNVERIFIED in CONTRACT.md (spec 63).
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from .http import SynthGraphHTTPClient
+from .models import EvaluationResult
+from .routes import Routes
+from .serialization import compact, require_identifier, require_mapping
+
+#: Alias so the return annotation is not shadowed by ``EvaluationsAPI.list``.
+EvaluationResultList = list[EvaluationResult]
+
+
+class EvaluationsAPI:
+    """API operations for evaluation results."""
+
+    def __init__(self, http: SynthGraphHTTPClient) -> None:
+        self._http = http
+
+    def create(
+        self,
+        *,
+        training_run_id: str,
+        metrics: dict[str, Any],
+        dataset_version_id: str | None = None,
+        name: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> EvaluationResult:
+        """Record an evaluation of a training run.
+
+        ``dataset_version_id`` names the exact dataset version the model was
+        evaluated against, which is what makes the number comparable later.
+        """
+        training_run_id = require_identifier(training_run_id, field="training_run_id")
+
+        payload = compact(
+            {
+                "name": name,
+                "metrics": require_mapping(metrics, field="metrics"),
+                "dataset_version_id": (
+                    require_identifier(dataset_version_id, field="dataset_version_id")
+                    if dataset_version_id is not None
+                    else None
+                ),
+                "metadata": (
+                    require_mapping(metadata, field="metadata") if metadata is not None else None
+                ),
+            }
+        )
+
+        data = self._http.post(
+            Routes.training_run_evaluations(training_run_id),
+            json=payload,
+            operation="evaluations.create",
+        )
+
+        return EvaluationResult.model_validate(data)
+
+    def get(self, evaluation_id: str) -> EvaluationResult:
+        """Retrieve an evaluation result by ID."""
+        evaluation_id = require_identifier(evaluation_id, field="evaluation_id")
+
+        data = self._http.get(
+            Routes.evaluation_result(evaluation_id),
+            operation="evaluations.get",
+        )
+
+        return EvaluationResult.model_validate(data)
+
+    def list(self, *, training_run_id: str) -> EvaluationResultList:
+        """List evaluation results for a training run."""
+        training_run_id = require_identifier(training_run_id, field="training_run_id")
+
+        data = self._http.get_list(
+            Routes.training_run_evaluations(training_run_id),
+            operation="evaluations.list",
+        )
+
+        return [EvaluationResult.model_validate(item) for item in data]
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\experiments.py ==========
+
+from __future__ import annotations
+
+from typing import Any
+
+from .http import SynthGraphHTTPClient
+from .models import Experiment
+from .routes import Routes
+from .serialization import compact, require_identifier, require_mapping, require_text
+
+#: Alias so the return annotation is not shadowed by ``ExperimentsAPI.list``.
+ExperimentList = list[Experiment]
+
+
+class ExperimentsAPI:
+    """API operations for SynthGraph experiments."""
+
+    def __init__(self, http: SynthGraphHTTPClient) -> None:
+        self._http = http
+
+    def create(
+        self,
+        *,
+        project_id: str,
+        name: str,
+        description: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> Experiment:
+        """Create a new experiment within a project."""
+        project_id = require_identifier(project_id, field="project_id")
+
+        payload: dict[str, Any] = compact(
+            {
+                "name": require_text(name, field="name"),
+                "description": description,
+                "metadata": (
+                    require_mapping(metadata, field="metadata") if metadata is not None else None
+                ),
+            }
+        )
+
+        data = self._http.post(
+            Routes.project_experiments(project_id),
+            json=payload,
+            operation="experiments.create",
+        )
+
+        return Experiment.model_validate(data)
+
+    def get(self, experiment_id: str) -> Experiment:
+        """Retrieve an experiment by ID."""
+        experiment_id = require_identifier(experiment_id, field="experiment_id")
+
+        data = self._http.get(
+            Routes.experiment(experiment_id),
+            operation="experiments.get",
+        )
+
+        return Experiment.model_validate(data)
+
+    def list(
+        self,
+        *,
+        project_id: str,
+        search: str | None = None,
+    ) -> ExperimentList:
+        """List experiments belonging to a project.
+
+        ``search`` is passed through to the backend's ``?search=`` filter
+        (spec 29); the SDK does not filter client-side.
+        """
+        project_id = require_identifier(project_id, field="project_id")
+
+        params: dict[str, Any] = {}
+        if search is not None:
+            params["search"] = require_text(search, field="search")
+
+        data = self._http.get_list(
+            Routes.project_experiments(project_id),
+            params=params,
+            operation="experiments.list",
+        )
+
+        return [Experiment.model_validate(item) for item in data]
+
+    def search(self, *, project_id: str, query: str) -> ExperimentList:
+        """Search experiments in a project by name/description."""
+        return self.list(project_id=project_id, search=query)
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\fluent.py ==========
+
+"""The ergonomic capture surface (spec 11, 35).
+
+These handles wrap a resource API and an already-created record, so a research
+script reads the way the work actually happened::
+
+    with SynthGraph(api_key=...) as sg:
+        experiment = sg.experiment(name="vehicle_detection_rain")
+
+        with experiment.generation(
+            generator="blender",
+            generator_version="4.2",
+            parameters={"weather": "rain", "occlusion": 0.3},
+            seed=42,
+        ) as generation:
+            run_blender()                      # the researcher's own code
+            dataset = generation.dataset(name="rain_v1", uri="/data/rain_v1")
+
+        training = experiment.training(model="yolo", framework="pytorch",
+                                       datasets=[dataset], config={"epochs": 50})
+        training.evaluation(metrics={"mAP": 0.724})
+
+Every handle is a thin view over the same resource APIs. Nothing here talks
+HTTP, and nothing here decides anything the backend should decide.
+"""
+
+from __future__ import annotations
+
+import contextlib
+from types import TracebackType
+from typing import TYPE_CHECKING, Any, Self
+
+from .errors import SynthGraphError, SynthGraphValidationError
+from .models import (
+    DatasetVersion,
+    EvaluationResult,
+    Experiment,
+    GenerationRun,
+    GenerationStatus,
+    Generator,
+    Project,
+    ReproductionManifest,
+    TrainingRun,
+)
+
+if TYPE_CHECKING:  # pragma: no cover - import cycle only matters to type checkers
+    from .client import SynthGraphClient
+
+__all__ = [
+    "EvaluationHandle",
+    "ExperimentHandle",
+    "GenerationHandle",
+    "ProjectHandle",
+    "TrainingHandle",
+]
+
+
+class _Handle:
+    """Common plumbing: a record plus the client that produced it."""
+
+    def __init__(self, client: SynthGraphClient) -> None:
+        self._client = client
+
+
+class ProjectHandle(_Handle):
+    """A project, with its experiments hanging off it."""
+
+    def __init__(self, client: SynthGraphClient, project: Project) -> None:
+        super().__init__(client)
+        self.project = project
+
+    @property
+    def id(self) -> str:
+        return self.project.id
+
+    @property
+    def name(self) -> str:
+        return self.project.name
+
+    def experiment(
+        self,
+        name: str,
+        *,
+        description: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> ExperimentHandle:
+        """Create an experiment in this project."""
+        experiment = self._client.experiments.create(
+            project_id=self.id,
+            name=name,
+            description=description,
+            metadata=metadata,
+        )
+        return ExperimentHandle(self._client, experiment)
+
+    def experiments(self, *, search: str | None = None) -> list[Experiment]:
+        """List (or search) the experiments in this project."""
+        return self._client.experiments.list(project_id=self.id, search=search)
+
+    def refresh(self) -> ProjectHandle:
+        """Re-read this project from the backend."""
+        return ProjectHandle(self._client, self._client.projects.get(self.id))
+
+    def __repr__(self) -> str:
+        return f"ProjectHandle(id={self.id!r}, name={self.name!r})"
+
+
+class ExperimentHandle(_Handle):
+    """An experiment, with generations and training runs hanging off it."""
+
+    def __init__(self, client: SynthGraphClient, experiment: Experiment) -> None:
+        super().__init__(client)
+        self.experiment = experiment
+
+    @property
+    def id(self) -> str:
+        return self.experiment.id
+
+    @property
+    def name(self) -> str:
+        return self.experiment.name
+
+    def generation(self, name: str | None = None, **kwargs: Any) -> GenerationHandle:
+        """Create a generation in this experiment.
+
+        The generation is created in its ``pending`` state; it is not started
+        here. Use ``.start()`` or the context manager (see
+        :class:`GenerationHandle`) to move it to ``running``.
+        """
+        generator = kwargs.get("generator")
+        resolved_name = name or kwargs.pop("name", None) or _default_generation_name(generator)
+        kwargs.pop("name", None)
+
+        generation = self._client.generations.create(
+            experiment_id=self.id,
+            name=resolved_name,
+            **kwargs,
+        )
+        return GenerationHandle(self._client, generation)
+
+    def generations(self, *, parameters: dict[str, Any] | None = None) -> list[GenerationRun]:
+        """List (or parameter-filter) the generations in this experiment."""
+        return self._client.generations.list(experiment_id=self.id, parameters=parameters)
+
+    def training(self, **kwargs: Any) -> TrainingHandle:
+        """Record a training run for this experiment.
+
+        This records provenance only. It does not start training - the
+        researcher's own training code keeps running exactly as before.
+        """
+        datasets = kwargs.pop("datasets", None)
+        dataset = kwargs.pop("dataset", None)
+        if dataset is not None:
+            if datasets is not None:
+                raise SynthGraphValidationError(
+                    "pass either dataset= or datasets=, not both",
+                    field="dataset",
+                )
+            datasets = [dataset]
+
+        training_run = self._client.training_runs.create(
+            experiment_id=self.id,
+            datasets=_unwrap_datasets(datasets),
+            **kwargs,
+        )
+        return TrainingHandle(self._client, training_run)
+
+    def training_runs(self) -> list[TrainingRun]:
+        """List the training runs recorded for this experiment."""
+        return self._client.training_runs.list(experiment_id=self.id)
+
+    def refresh(self) -> ExperimentHandle:
+        """Re-read this experiment from the backend."""
+        return ExperimentHandle(self._client, self._client.experiments.get(self.id))
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """Experiments have no lifecycle, so leaving the block changes nothing."""
+        return
+
+    def __repr__(self) -> str:
+        return f"ExperimentHandle(id={self.id!r}, name={self.name!r})"
+
+
+class GenerationHandle(_Handle):
+    """A generation run, with explicit lifecycle control.
+
+    **Context manager semantics** (spec 35 requires these to be spelled out):
+
+    * entering the block calls ``start()`` if the generation is still
+      ``pending``; an already-running generation is left alone
+    * leaving the block normally calls ``complete()``
+    * leaving the block because of an exception calls ``fail()`` and then
+      re-raises - the original exception is never swallowed
+    * if the lifecycle call itself fails on the error path, the researcher's
+      original exception still wins
+
+    A generation that is already ``completed`` or ``failed`` is not transitioned
+    again. If those semantics are not what an experiment needs, call ``start()``,
+    ``complete()`` and ``fail()`` directly and skip the ``with`` block.
+    """
+
+    def __init__(self, client: SynthGraphClient, generation: GenerationRun) -> None:
+        super().__init__(client)
+        self.generation = generation
+
+    @property
+    def id(self) -> str:
+        return self.generation.id
+
+    @property
+    def status(self) -> str:
+        return self.generation.status.value
+
+    def start(self) -> GenerationHandle:
+        """Mark this generation as running."""
+        self.generation = self._client.generations.start(self.id)
+        return self
+
+    def complete(self) -> GenerationHandle:
+        """Mark this generation as completed."""
+        self.generation = self._client.generations.complete(self.id)
+        return self
+
+    def fail(self) -> GenerationHandle:
+        """Mark this generation as failed."""
+        self.generation = self._client.generations.fail(self.id)
+        return self
+
+    def refresh(self) -> GenerationHandle:
+        """Re-read this generation from the backend."""
+        self.generation = self._client.generations.get(self.id)
+        return self
+
+    def dataset(
+        self,
+        *,
+        name: str,
+        uri: str,
+        **kwargs: Any,
+    ) -> DatasetVersion:
+        """Record a dataset this generation produced or consumed.
+
+        Metadata only - the data itself stays where it is (spec 6).
+        """
+        return self._client.datasets.create(
+            generation_id=self.id,
+            name=name,
+            uri=uri,
+            **kwargs,
+        )
+
+    def manifest(self) -> ReproductionManifest:
+        """Retrieve this generation's reproduction manifest."""
+        return self._client.reproduction.get(self.id)
+
+    def documentation(self) -> str:
+        """Retrieve backend-generated Markdown documentation for this generation."""
+        return self._client.documentation.get(self.id)
+
+    def __enter__(self) -> Self:
+        if self.generation.status is GenerationStatus.PENDING:
+            self.start()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        if self.generation.status.is_terminal:
+            return
+
+        if exc_type is None:
+            self.complete()
+            return
+
+        # The researcher's exception is the important one; a bookkeeping
+        # failure must not mask it. The generation then stays in whatever state
+        # the backend holds, which is honest (spec 7.5).
+        with contextlib.suppress(SynthGraphError):
+            self.fail()
+        return
+
+    def __repr__(self) -> str:
+        return f"GenerationHandle(id={self.id!r}, status={self.status!r})"
+
+
+class TrainingHandle(_Handle):
+    """A training run, with its evaluations hanging off it."""
+
+    def __init__(self, client: SynthGraphClient, training_run: TrainingRun) -> None:
+        super().__init__(client)
+        self.training_run = training_run
+
+    @property
+    def id(self) -> str:
+        return self.training_run.id
+
+    def evaluation(
+        self,
+        *,
+        metrics: dict[str, Any],
+        dataset_version_id: str | None = None,
+        name: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> EvaluationHandle:
+        """Record an evaluation of this training run."""
+        result = self._client.evaluations.create(
+            training_run_id=self.id,
+            metrics=metrics,
+            dataset_version_id=dataset_version_id,
+            name=name,
+            metadata=metadata,
+        )
+        return EvaluationHandle(self._client, result)
+
+    def evaluations(self) -> list[EvaluationResult]:
+        """List the evaluations recorded for this training run."""
+        return self._client.evaluations.list(training_run_id=self.id)
+
+    def add_dataset(self, dataset: Any) -> TrainingHandle:
+        """Attach another dataset version to this training run."""
+        unwrapped = _unwrap_datasets([dataset])
+        assert unwrapped is not None
+        self.training_run = self._client.training_runs.add_dataset(
+            training_run_id=self.id,
+            dataset=unwrapped[0],
+        )
+        return self
+
+    def refresh(self) -> TrainingHandle:
+        """Re-read this training run from the backend."""
+        self.training_run = self._client.training_runs.get(self.id)
+        return self
+
+    def __repr__(self) -> str:
+        return f"TrainingHandle(id={self.id!r})"
+
+
+class EvaluationHandle(_Handle):
+    """An evaluation result."""
+
+    def __init__(self, client: SynthGraphClient, result: EvaluationResult) -> None:
+        super().__init__(client)
+        self.result = result
+
+    @property
+    def id(self) -> str:
+        return self.result.id
+
+    @property
+    def metrics(self) -> dict[str, Any]:
+        return self.result.metrics
+
+    def refresh(self) -> EvaluationHandle:
+        """Re-read this evaluation from the backend."""
+        self.result = self._client.evaluations.get(self.id)
+        return self
+
+    def __repr__(self) -> str:
+        return f"EvaluationHandle(id={self.id!r})"
+
+
+def _default_generation_name(generator: Any) -> str:
+    """Name a generation after its generator when the caller did not name it."""
+    if isinstance(generator, Generator):
+        return generator.name
+    if isinstance(generator, str) and generator.strip():
+        return generator.strip()
+    return "generation"
+
+
+def _unwrap_datasets(datasets: Any) -> list[Any] | None:
+    """Accept a single dataset or a list of them wherever datasets are expected."""
+    if datasets is None:
+        return None
+    if isinstance(datasets, (list, tuple)):
+        return list(datasets)
+    return [datasets]
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\generations.py ==========
+
+"""Generation capture - the central provenance operation (spec 5, 19, 20)."""
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
+from .comparison import ComparisonAPI
+from .errors import SynthGraphValidationError
+from .http import SynthGraphHTTPClient
+from .models import (
+    ComparisonResult,
+    DataReference,
+    GenerationRun,
+    GenerationStatus,
+    Generator,
+    Reproducibility,
+)
+from .routes import Routes
+from .serialization import (
+    compact,
+    require_identifier,
+    require_mapping,
+    require_sequence,
+    require_text,
+)
+
+ReferenceInput = str | DataReference | dict[str, Any]
+
+#: Aliases so annotations inside the class body are not shadowed by
+#: ``GenerationsAPI.list``.
+GenerationList = list[GenerationRun]
+ReferenceInputs = list[ReferenceInput]
+GenerationIds = list[str]
+
+
+class GenerationsAPI:
+    """API operations for generation runs."""
+
+    def __init__(self, http: SynthGraphHTTPClient) -> None:
+        self._http = http
+
+    def create(
+        self,
+        *,
+        experiment_id: str,
+        name: str,
+        generator: Generator | str,
+        parameters: dict[str, Any] | None = None,
+        reproducibility: Reproducibility | dict[str, Any] | None = None,
+        generator_version: str | None = None,
+        generator_type: str | None = None,
+        seed: int | None = None,
+        code_version: str | None = None,
+        environment: dict[str, Any] | None = None,
+        description: str | None = None,
+        inputs: ReferenceInputs | None = None,
+        outputs: ReferenceInputs | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> GenerationRun:
+        """Create a new generation run within an experiment.
+
+        ``generator`` accepts either a :class:`Generator` or a plain name with
+        ``generator_version`` / ``generator_type`` alongside it.
+
+        ``seed``, ``code_version`` and ``environment`` are shorthand for the
+        matching :class:`Reproducibility` fields; passing both a populated
+        ``reproducibility`` and its shorthand for the same field is rejected
+        rather than silently resolved.
+        """
+        experiment_id = require_identifier(experiment_id, field="experiment_id")
+
+        resolved_generator = _resolve_generator(
+            generator,
+            version=generator_version,
+            type_=generator_type,
+        )
+        resolved_reproducibility = _resolve_reproducibility(
+            reproducibility,
+            seed=seed,
+            code_version=code_version,
+            environment=environment,
+        )
+
+        payload: dict[str, Any] = {
+            "name": require_text(name, field="name"),
+            "generator": resolved_generator.model_dump(
+                mode="json",
+                exclude_none=True,
+            ),
+            "parameters": (
+                require_mapping(parameters, field="parameters") if parameters is not None else {}
+            ),
+            "reproducibility": resolved_reproducibility.model_dump(
+                mode="json",
+                exclude_none=True,
+                exclude_defaults=True,
+            ),
+            "inputs": _normalize_references(inputs, field="inputs"),
+            "outputs": _normalize_references(outputs, field="outputs"),
+        }
+
+        if description is not None:
+            payload["description"] = description
+        if metadata is not None:
+            payload["metadata"] = require_mapping(metadata, field="metadata")
+
+        data = self._http.post(
+            Routes.experiment_generations(experiment_id),
+            json=payload,
+            operation="generations.create",
+        )
+
+        return GenerationRun.model_validate(data)
+
+    def get(self, generation_id: str) -> GenerationRun:
+        """Retrieve a generation run by ID."""
+        generation_id = require_identifier(generation_id, field="generation_id")
+
+        data = self._http.get(
+            Routes.generation(generation_id),
+            operation="generations.get",
+        )
+
+        return GenerationRun.model_validate(data)
+
+    def list(
+        self,
+        *,
+        experiment_id: str,
+        parameters: dict[str, Any] | None = None,
+    ) -> GenerationList:
+        """List generation runs belonging to an experiment.
+
+        ``parameters`` is sent as the backend's JSON-object ``?parameters=``
+        filter (spec 29). Filtering happens on the backend.
+        """
+        experiment_id = require_identifier(experiment_id, field="experiment_id")
+
+        params: dict[str, Any] = {}
+        if parameters is not None:
+            params["parameters"] = json.dumps(
+                require_mapping(parameters, field="parameters"),
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+
+        data = self._http.get_list(
+            Routes.experiment_generations(experiment_id),
+            params=params,
+            operation="generations.list",
+        )
+
+        return [GenerationRun.model_validate(item) for item in data]
+
+    def update(
+        self,
+        generation_id: str,
+        *,
+        status: GenerationStatus | str | None = None,
+        name: str | None = None,
+        description: str | None = None,
+        outputs: ReferenceInputs | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> GenerationRun:
+        """Patch a generation run.
+
+        Once a generation is running its recorded configuration is history: a
+        changed configuration is a new generation, not an edited one (spec 5).
+        This method therefore covers lifecycle, naming and outputs, not
+        generator or parameters.
+        """
+        generation_id = require_identifier(generation_id, field="generation_id")
+
+        payload = compact(
+            {
+                "status": _normalize_status(status),
+                "name": name,
+                "description": description,
+                "outputs": (
+                    _normalize_references(outputs, field="outputs")
+                    if outputs is not None
+                    else None
+                ),
+                "metadata": (
+                    require_mapping(metadata, field="metadata") if metadata is not None else None
+                ),
+            }
+        )
+
+        if not payload:
+            raise SynthGraphValidationError("update() requires at least one field to change")
+
+        data = self._http.patch(
+            Routes.generation(generation_id),
+            json=payload,
+            operation="generations.update",
+        )
+
+        return GenerationRun.model_validate(data)
+
+    def start(self, generation_id: str) -> GenerationRun:
+        """Mark a generation run as running."""
+        return self._update_status(generation_id, GenerationStatus.RUNNING)
+
+    def complete(self, generation_id: str) -> GenerationRun:
+        """Mark a generation run as completed."""
+        return self._update_status(generation_id, GenerationStatus.COMPLETED)
+
+    def fail(self, generation_id: str) -> GenerationRun:
+        """Mark a generation run as failed.
+
+        Failed generations are kept: a failed experiment is still a scientific
+        record (spec 5).
+        """
+        return self._update_status(generation_id, GenerationStatus.FAILED)
+
+    def compare(self, generation_ids: GenerationIds) -> ComparisonResult:
+        """Compare two or more generations. The backend performs the comparison."""
+        return ComparisonAPI(self._http).compare(generation_ids)
+
+    def _update_status(
+        self,
+        generation_id: str,
+        status: GenerationStatus,
+    ) -> GenerationRun:
+        """Update the lifecycle status of a generation run."""
+        generation_id = require_identifier(generation_id, field="generation_id")
+
+        data = self._http.patch(
+            Routes.generation(generation_id),
+            json={"status": status.value},
+            operation=f"generations.{status.value}",
+        )
+
+        return GenerationRun.model_validate(data)
+
+
+def _resolve_generator(
+    generator: Generator | str,
+    *,
+    version: str | None,
+    type_: str | None,
+) -> Generator:
+    """Accept a Generator or a plain name plus optional version/type."""
+    if isinstance(generator, Generator):
+        if version is not None and generator.version not in (None, version):
+            raise SynthGraphValidationError(
+                "generator_version conflicts with the version on the Generator object",
+                field="generator_version",
+            )
+        if type_ is not None and generator.type not in (None, type_):
+            raise SynthGraphValidationError(
+                "generator_type conflicts with the type on the Generator object",
+                field="generator_type",
+            )
+        if version is None and type_ is None:
+            return generator
+        return Generator(
+            name=generator.name,
+            version=generator.version or version,
+            type=generator.type or type_,
+        )
+
+    return Generator(
+        name=require_text(generator, field="generator"),
+        version=version,
+        type=type_,
+    )
+
+
+def _resolve_reproducibility(
+    reproducibility: Reproducibility | dict[str, Any] | None,
+    *,
+    seed: int | None,
+    code_version: str | None,
+    environment: dict[str, Any] | None,
+) -> Reproducibility:
+    """Merge the reproducibility object with its keyword shorthands."""
+    if reproducibility is None:
+        base = Reproducibility()
+    elif isinstance(reproducibility, Reproducibility):
+        base = reproducibility
+    else:
+        base = Reproducibility.model_validate(
+            require_mapping(reproducibility, field="reproducibility")
+        )
+
+    shorthands = {
+        "seed": seed,
+        "code_version": code_version,
+        "environment": environment,
+    }
+    updates: dict[str, Any] = {}
+    for field, value in shorthands.items():
+        if value is None:
+            continue
+        existing = getattr(base, field)
+        if existing not in (None, {}) and existing != value:
+            raise SynthGraphValidationError(
+                f"{field} was given both directly and inside reproducibility with "
+                "different values",
+                field=field,
+            )
+        updates[field] = (
+            require_mapping(value, field="environment") if field == "environment" else value
+        )
+
+    if not updates:
+        return base
+    return base.model_copy(update=updates)
+
+
+def _normalize_status(status: GenerationStatus | str | None) -> str | None:
+    """Validate a status against the backend's lifecycle vocabulary."""
+    if status is None:
+        return None
+    if isinstance(status, GenerationStatus):
+        return status.value
+    try:
+        return GenerationStatus(status).value
+    except ValueError:
+        valid = ", ".join(member.value for member in GenerationStatus)
+        raise SynthGraphValidationError(
+            f"status must be one of: {valid}",
+            field="status",
+        ) from None
+
+
+def _normalize_references(
+    references: ReferenceInputs | None,
+    *,
+    field: str,
+) -> list[dict[str, Any]]:
+    """Turn reference inputs into wire objects.
+
+    A bare string is treated as an existing reference ID. Reference models and
+    plain dicts are passed through as JSON. Reference *bytes* are never read or
+    transferred (spec 6).
+    """
+    if references is None:
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    for index, reference in enumerate(require_sequence(references, field=field)):
+        item_field = f"{field}[{index}]"
+        if isinstance(reference, str):
+            normalized.append({"id": require_identifier(reference, field=item_field)})
+        elif isinstance(reference, DataReference):
+            normalized.append(reference.model_dump(mode="json", exclude_none=True))
+        elif isinstance(reference, dict):
+            normalized.append(require_mapping(reference, field=item_field))
+        else:
+            raise SynthGraphValidationError(
+                f"{item_field} must be a reference ID, a reference model or a mapping, "
+                f"got {type(reference).__name__}",
+                field=item_field,
+            )
+    return normalized
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\http.py ==========
+
+"""Low-level HTTP transport (spec 15).
+
+Everything HTTP lives here: methods, headers, authentication, timeouts, JSON
+encoding/decoding, response-shape validation, error translation and retries.
+Resource modules never touch httpx directly, and the CLI never opens its own
+transport (spec 43).
+"""
+
+from __future__ import annotations
+
+import time
+from types import TracebackType
+from typing import Any, Self
+
+import httpx
+
+from ._version import __version__
+from .config import SynthGraphConfig
+from .errors import (
+    SynthGraphAuthenticationError,
+    SynthGraphAuthorizationError,
+    SynthGraphConflictError,
+    SynthGraphError,
+    SynthGraphHTTPError,
+    SynthGraphNotFoundError,
+    SynthGraphRateLimitError,
+    SynthGraphServerError,
+    SynthGraphTransportError,
+    SynthGraphValidationError,
+    error_for_status,
+    extract_error_message,
+)
+from .serialization import unwrap_list, unwrap_object
+
+__all__ = [
+    "SynthGraphAuthenticationError",
+    "SynthGraphAuthorizationError",
+    "SynthGraphConflictError",
+    "SynthGraphHTTPClient",
+    "SynthGraphHTTPError",
+    "SynthGraphNotFoundError",
+    "SynthGraphRateLimitError",
+    "SynthGraphServerError",
+    "SynthGraphTransportError",
+    "SynthGraphValidationError",
+]
+
+USER_AGENT = "synthgraph-python"
+
+#: Methods the SDK may retry on its own. A retried POST/PATCH could duplicate
+#: provenance because the backend exposes no idempotency key yet (spec 33).
+SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
+class SynthGraphHTTPClient:
+    """Low-level HTTP client for the SynthGraph API."""
+
+    def __init__(
+        self,
+        config: SynthGraphConfig,
+        *,
+        transport: httpx.BaseTransport | None = None,
+        sleep: Any = time.sleep,
+    ) -> None:
+        self.config = config
+        self._sleep = sleep
+
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": f"{USER_AGENT}/{__version__}",
+        }
+
+        if config.api_key is not None:
+            headers["Authorization"] = f"Bearer {config.api_key}"
+
+        self._client = httpx.Client(
+            base_url=config.api_url.rstrip("/"),
+            headers=headers,
+            timeout=config.timeout,
+            transport=transport,
+        )
+
+    # -- public request helpers -------------------------------------------
+
+    def get(
+        self,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        operation: str | None = None,
+    ) -> dict[str, Any]:
+        """Send a GET request expecting a JSON object response."""
+        response = self._request("GET", path, params=params, operation=operation)
+        return self._handle_response(response, operation=operation, path=path)
+
+    def get_list(
+        self,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        operation: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Send a GET request expecting a JSON array response."""
+        response = self._request("GET", path, params=params, operation=operation)
+        return self._handle_list_response(response, operation=operation, path=path)
+
+    def get_text(
+        self,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        accept: str = "text/markdown, text/plain, application/json",
+        operation: str | None = None,
+    ) -> str:
+        """Send a GET request expecting text (Markdown documentation, spec 28)."""
+        response = self._request(
+            "GET",
+            path,
+            params=params,
+            operation=operation,
+            headers={"Accept": accept},
+        )
+        self._raise_for_status(response, operation=operation, path=path)
+        return self._decode_text(response)
+
+    def post(
+        self,
+        path: str,
+        *,
+        json: dict[str, Any] | None = None,
+        operation: str | None = None,
+    ) -> dict[str, Any]:
+        """Send a POST request, optionally with a JSON body."""
+        response = self._request("POST", path, json=json, operation=operation)
+        return self._handle_response(response, operation=operation, path=path)
+
+    def post_list(
+        self,
+        path: str,
+        *,
+        json: dict[str, Any] | None = None,
+        operation: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Send a POST request expecting a JSON array response."""
+        response = self._request("POST", path, json=json, operation=operation)
+        return self._handle_list_response(response, operation=operation, path=path)
+
+    def patch(
+        self,
+        path: str,
+        *,
+        json: dict[str, Any] | None = None,
+        operation: str | None = None,
+    ) -> dict[str, Any]:
+        """Send a PATCH request, optionally with a JSON body."""
+        response = self._request("PATCH", path, json=json, operation=operation)
+        return self._handle_response(response, operation=operation, path=path)
+
+    def close(self) -> None:
+        """Close the underlying HTTP client."""
+        self._client.close()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        self.close()
+
+    # -- request execution -------------------------------------------------
+
+    def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+        operation: str | None = None,
+    ) -> httpx.Response:
+        """Execute a request, retrying only when that is provably safe."""
+        retryable = method.upper() in SAFE_METHODS
+        policy = self.config.retry
+        attempts = policy.max_attempts if retryable else 1
+        last_error: SynthGraphError | None = None
+
+        request_params = {key: value for key, value in (params or {}).items() if value is not None}
+
+        for attempt in range(1, attempts + 1):
+            try:
+                response = self._client.request(
+                    method,
+                    path,
+                    params=request_params or None,
+                    json=json,
+                    headers=headers,
+                )
+            except httpx.TimeoutException:
+                last_error = SynthGraphTransportError(
+                    f"Request timed out after {self.config.timeout}s",
+                    operation=operation,
+                    path=path,
+                    outcome_unknown=not retryable,
+                )
+            except httpx.TransportError as exc:
+                last_error = SynthGraphTransportError(
+                    f"Could not reach the SynthGraph backend at {self.config.api_url} "
+                    f"({type(exc).__name__})",
+                    operation=operation,
+                    path=path,
+                    outcome_unknown=not retryable,
+                )
+            else:
+                if (
+                    retryable
+                    and attempt < attempts
+                    and response.status_code in policy.retry_statuses
+                ):
+                    self._sleep(policy.backoff_seconds(attempt))
+                    continue
+                return response
+
+            if attempt < attempts:
+                self._sleep(policy.backoff_seconds(attempt))
+
+        assert last_error is not None  # only reachable after a transport failure
+        raise last_error
+
+    # -- response handling -------------------------------------------------
+
+    def _handle_response(
+        self,
+        response: httpx.Response,
+        *,
+        operation: str | None = None,
+        path: str | None = None,
+    ) -> dict[str, Any]:
+        """Validate and decode an API object response."""
+        self._raise_for_status(response, operation=operation, path=path)
+
+        if not response.content:
+            return {}
+
+        return unwrap_object(
+            self._decode_json(response, operation=operation, path=path),
+            operation=operation,
+            path=path or str(response.request.url.path),
+        )
+
+    def _handle_list_response(
+        self,
+        response: httpx.Response,
+        *,
+        operation: str | None = None,
+        path: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Validate and decode an API list response."""
+        self._raise_for_status(response, operation=operation, path=path)
+
+        if not response.content:
+            return []
+
+        return unwrap_list(
+            self._decode_json(response, operation=operation, path=path),
+            operation=operation,
+            path=path or str(response.request.url.path),
+        )
+
+    def _raise_for_status(
+        self,
+        response: httpx.Response,
+        *,
+        operation: str | None = None,
+        path: str | None = None,
+    ) -> None:
+        """Translate an error response into the SDK error taxonomy."""
+        if not response.is_error:
+            return
+
+        try:
+            payload: Any = response.json()
+        except ValueError:
+            payload = None
+
+        message = extract_error_message(
+            payload,
+            fallback=f"Request failed with HTTP {response.status_code}",
+        )
+
+        raise error_for_status(
+            response.status_code,
+            message=message,
+            operation=operation,
+            path=path,
+            details=payload if isinstance(payload, dict) else None,
+        )
+
+    @staticmethod
+    def _decode_json(
+        response: httpx.Response,
+        *,
+        operation: str | None = None,
+        path: str | None = None,
+    ) -> Any:
+        try:
+            return response.json()
+        except ValueError:
+            raise SynthGraphTransportError(
+                "The SynthGraph backend returned a response that is not valid JSON",
+                operation=operation,
+                path=path,
+            ) from None
+
+    @staticmethod
+    def _decode_text(response: httpx.Response) -> str:
+        """Return the body as text, unwrapping a JSON-wrapped document.
+
+        The documentation route returns Markdown; whether it arrives as
+        ``text/markdown`` or wrapped in a JSON field is an open contract item,
+        so both are accepted (spec 28, CONTRACT.md).
+        """
+        content_type = response.headers.get("content-type", "")
+        if "json" in content_type:
+            try:
+                payload = response.json()
+            except ValueError:
+                return response.text
+            if isinstance(payload, str):
+                return payload
+            if isinstance(payload, dict):
+                for key in ("documentation", "markdown", "content", "data"):
+                    value = payload.get(key)
+                    if isinstance(value, str):
+                        return value
+        return response.text
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\projects.py ==========
+
+from __future__ import annotations
+
+from typing import Any
+
+from .http import SynthGraphHTTPClient
+from .models import Project
+from .routes import Routes
+from .serialization import compact, require_identifier, require_mapping, require_text
+
+#: Alias so the return annotation is not shadowed by ``ProjectsAPI.list``.
+ProjectList = list[Project]
+
+
+class ProjectsAPI:
+    """API operations for SynthGraph projects."""
+
+    def __init__(self, http: SynthGraphHTTPClient) -> None:
+        self._http = http
+
+    def create(
+        self,
+        *,
+        name: str,
+        description: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> Project:
+        """Create a new SynthGraph project."""
+        payload: dict[str, Any] = compact(
+            {
+                "name": require_text(name, field="name"),
+                "description": description,
+                "metadata": (
+                    require_mapping(metadata, field="metadata") if metadata is not None else None
+                ),
+            }
+        )
+
+        data = self._http.post(
+            Routes.projects(),
+            json=payload,
+            operation="projects.create",
+        )
+
+        return Project.model_validate(data)
+
+    def get(self, project_id: str) -> Project:
+        """Retrieve a SynthGraph project by ID."""
+        project_id = require_identifier(project_id, field="project_id")
+
+        data = self._http.get(
+            Routes.project(project_id),
+            operation="projects.get",
+        )
+
+        return Project.model_validate(data)
+
+    def list(self) -> ProjectList:
+        """List the projects visible to the authenticated user."""
+        data = self._http.get_list(
+            Routes.projects(),
+            operation="projects.list",
+        )
+
+        return [Project.model_validate(item) for item in data]
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\reproduction.py ==========
+
+"""Reproduction manifest retrieval (spec 26, 27)."""
+
+from __future__ import annotations
+
+from .http import SynthGraphHTTPClient
+from .models import ReproductionManifest
+from .routes import Routes
+from .serialization import require_identifier
+
+
+class ReproductionAPI:
+    """API operations for reproduction manifests."""
+
+    def __init__(self, http: SynthGraphHTTPClient) -> None:
+        self._http = http
+
+    def get(self, generation_id: str) -> ReproductionManifest:
+        """Retrieve the reproduction manifest for a generation.
+
+        The manifest describes what would be needed to reconstruct the
+        experiment. It is a record, not an executable plan, and it carries no
+        dataset bytes and no credentials.
+        """
+        generation_id = require_identifier(generation_id, field="generation_id")
+
+        data = self._http.get(
+            Routes.generation_manifest(generation_id),
+            operation="reproduction.get",
+        )
+
+        return ReproductionManifest.from_payload(data)
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\routes.py ==========
+
+"""Every backend path the SDK knows, in one place.
+
+Routes fall into two groups:
+
+**Verified** - listed in the backend API inventory of the handoff spec (62).
+
+**Unverified** - required by the domain model, but the spec explicitly refuses
+to freeze their route names and payloads until the backend controllers are
+inspected (63). They follow the same nesting convention as the verified routes:
+a collection hangs off its parent, a single resource is addressed at the top
+level.
+
+Keeping them here means reconciling the SDK with the real backend is a
+single-file change rather than a hunt through the resource modules.
+See CONTRACT.md.
+"""
+
+from __future__ import annotations
+
+from urllib.parse import quote
+
+__all__ = ["UNVERIFIED_ROUTES", "Routes", "encode_id"]
+
+
+def encode_id(value: str) -> str:
+    """Percent-encode a path segment so an identifier cannot alter the path."""
+    return quote(str(value), safe="")
+
+
+class Routes:
+    """Path builders. Every returned path is absolute."""
+
+    # -- verified ----------------------------------------------------------
+
+    @staticmethod
+    def auth_me() -> str:
+        return "/auth/me"
+
+    @staticmethod
+    def projects() -> str:
+        return "/projects"
+
+    @staticmethod
+    def project(project_id: str) -> str:
+        return f"/projects/{encode_id(project_id)}"
+
+    @staticmethod
+    def project_experiments(project_id: str) -> str:
+        return f"/projects/{encode_id(project_id)}/experiments"
+
+    @staticmethod
+    def experiment(experiment_id: str) -> str:
+        return f"/experiments/{encode_id(experiment_id)}"
+
+    @staticmethod
+    def experiment_generations(experiment_id: str) -> str:
+        return f"/experiments/{encode_id(experiment_id)}/generations"
+
+    @staticmethod
+    def generation(generation_id: str) -> str:
+        return f"/generations/{encode_id(generation_id)}"
+
+    @staticmethod
+    def generation_datasets(generation_id: str) -> str:
+        return f"/generations/{encode_id(generation_id)}/datasets"
+
+    @staticmethod
+    def generation_manifest(generation_id: str) -> str:
+        return f"/generations/{encode_id(generation_id)}/reproduction-manifest"
+
+    @staticmethod
+    def generation_documentation(generation_id: str) -> str:
+        return f"/generations/{encode_id(generation_id)}/documentation"
+
+    @staticmethod
+    def generations_compare() -> str:
+        return "/generations/compare"
+
+    # -- unverified (spec 63) ---------------------------------------------
+
+    @staticmethod
+    def generation_assets(generation_id: str) -> str:
+        return f"/generations/{encode_id(generation_id)}/assets"
+
+    @staticmethod
+    def experiment_training_runs(experiment_id: str) -> str:
+        return f"/experiments/{encode_id(experiment_id)}/training-runs"
+
+    @staticmethod
+    def training_run(training_run_id: str) -> str:
+        return f"/training-runs/{encode_id(training_run_id)}"
+
+    @staticmethod
+    def training_run_datasets(training_run_id: str) -> str:
+        return f"/training-runs/{encode_id(training_run_id)}/datasets"
+
+    @staticmethod
+    def training_run_evaluations(training_run_id: str) -> str:
+        return f"/training-runs/{encode_id(training_run_id)}/evaluation-results"
+
+    @staticmethod
+    def evaluation_result(evaluation_id: str) -> str:
+        return f"/evaluation-results/{encode_id(evaluation_id)}"
+
+
+#: Route builders whose shape the spec has not frozen. Exposed so tests and
+#: docs can assert on the set instead of rediscovering it.
+UNVERIFIED_ROUTES = frozenset(
+    {
+        "generation_assets",
+        "experiment_training_runs",
+        "training_run",
+        "training_run_datasets",
+        "training_run_evaluations",
+        "evaluation_result",
+    }
+)
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\training.py ==========
+
+"""Training run capture (spec 23).
+
+SynthGraph records that training happened and what went into it. It does not
+start, wrap or supervise the researcher's training code.
+
+The routes used here are flagged UNVERIFIED in CONTRACT.md: the spec (63)
+requires them to be checked against the backend's training-run controller
+before v1.0.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from .errors import SynthGraphValidationError
+from .http import SynthGraphHTTPClient
+from .models import DatasetVersion, TrainingRun
+from .routes import Routes
+from .serialization import (
+    compact,
+    require_identifier,
+    require_mapping,
+    require_sequence,
+    require_text,
+)
+
+DatasetInput = str | DatasetVersion | dict[str, Any]
+
+#: Aliases so annotations inside the class body are not shadowed by
+#: ``TrainingRunsAPI.list``.
+TrainingRunList = list[TrainingRun]
+DatasetInputs = list[DatasetInput]
+
+
+class TrainingRunsAPI:
+    """API operations for training runs."""
+
+    def __init__(self, http: SynthGraphHTTPClient) -> None:
+        self._http = http
+
+    def create(
+        self,
+        *,
+        experiment_id: str,
+        model: str,
+        framework: str | None = None,
+        framework_version: str | None = None,
+        datasets: DatasetInputs | None = None,
+        config: dict[str, Any] | None = None,
+        name: str | None = None,
+        description: str | None = None,
+        status: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> TrainingRun:
+        """Record a training run against an experiment.
+
+        ``datasets`` should reference the exact dataset versions the model was
+        trained on, so lineage points at data that cannot change underneath the
+        record (spec 4, 21).
+        """
+        experiment_id = require_identifier(experiment_id, field="experiment_id")
+
+        payload = compact(
+            {
+                "name": name,
+                "description": description,
+                "model": require_text(model, field="model"),
+                "framework": framework,
+                "framework_version": framework_version,
+                "config": (
+                    require_mapping(config, field="config") if config is not None else None
+                ),
+                "datasets": normalize_dataset_references(datasets),
+                "status": status,
+                "metadata": (
+                    require_mapping(metadata, field="metadata") if metadata is not None else None
+                ),
+            }
+        )
+
+        data = self._http.post(
+            Routes.experiment_training_runs(experiment_id),
+            json=payload,
+            operation="training_runs.create",
+        )
+
+        return TrainingRun.model_validate(data)
+
+    def get(self, training_run_id: str) -> TrainingRun:
+        """Retrieve a training run by ID."""
+        training_run_id = require_identifier(training_run_id, field="training_run_id")
+
+        data = self._http.get(
+            Routes.training_run(training_run_id),
+            operation="training_runs.get",
+        )
+
+        return TrainingRun.model_validate(data)
+
+    def list(self, *, experiment_id: str) -> TrainingRunList:
+        """List training runs belonging to an experiment."""
+        experiment_id = require_identifier(experiment_id, field="experiment_id")
+
+        data = self._http.get_list(
+            Routes.experiment_training_runs(experiment_id),
+            operation="training_runs.list",
+        )
+
+        return [TrainingRun.model_validate(item) for item in data]
+
+    def add_dataset(
+        self,
+        *,
+        training_run_id: str,
+        dataset: DatasetInput,
+    ) -> TrainingRun:
+        """Attach another dataset version to an existing training run."""
+        training_run_id = require_identifier(training_run_id, field="training_run_id")
+
+        references = normalize_dataset_references([dataset])
+        assert references is not None  # a one-item list always normalizes
+
+        data = self._http.post(
+            Routes.training_run_datasets(training_run_id),
+            json=references[0],
+            operation="training_runs.add_dataset",
+        )
+
+        return TrainingRun.model_validate(data)
+
+
+def normalize_dataset_references(
+    datasets: DatasetInputs | None,
+) -> list[dict[str, Any]] | None:
+    """Turn dataset inputs into wire objects.
+
+    A bare string is a dataset-version ID.
+    """
+    if datasets is None:
+        return None
+
+    normalized: list[dict[str, Any]] = []
+    for index, dataset in enumerate(require_sequence(datasets, field="datasets")):
+        field = f"datasets[{index}]"
+        if isinstance(dataset, str):
+            normalized.append({"id": require_identifier(dataset, field=field)})
+        elif isinstance(dataset, DatasetVersion):
+            normalized.append({"id": dataset.id})
+        elif isinstance(dataset, dict):
+            normalized.append(require_mapping(dataset, field=field))
+        else:
+            raise SynthGraphValidationError(
+                f"{field} must be a dataset version ID, a DatasetVersion or a mapping, "
+                f"got {type(dataset).__name__}",
+                field=field,
+            )
+    return normalized
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\_version.py ==========
+
+"""Single source of the package version."""
+
+from __future__ import annotations
+
+__version__ = "0.2.0"
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\__init__.py ==========
+
+"""SynthGraph - provenance and lineage capture for synthetic-data research.
+
+The SDK captures what a researcher already does; it does not run Blender,
+Unity, PyTorch or anything else, and it does not move datasets.
+"""
+
+from __future__ import annotations
+
+from ._version import __version__
+from .client import SynthGraph, SynthGraphClient
+from .config import RetryPolicy, SynthGraphConfig
+from .environment import environment_metadata, git_metadata
+from .errors import (
+    SynthGraphAuthenticationError,
+    SynthGraphAuthorizationError,
+    SynthGraphConfigurationError,
+    SynthGraphConflictError,
+    SynthGraphError,
+    SynthGraphHTTPError,
+    SynthGraphNotFoundError,
+    SynthGraphRateLimitError,
+    SynthGraphServerError,
+    SynthGraphTransportError,
+    SynthGraphValidationError,
+)
+from .fluent import (
+    EvaluationHandle,
+    ExperimentHandle,
+    GenerationHandle,
+    ProjectHandle,
+    TrainingHandle,
+)
+from .http import SynthGraphHTTPClient
+from .models import (
+    Asset,
+    AssetReference,
+    AssetVersion,
+    ComparisonResult,
+    DataReference,
+    Dataset,
+    DatasetReference,
+    DatasetVersion,
+    EvaluationResult,
+    Experiment,
+    GenerationRun,
+    GenerationStatus,
+    Generator,
+    Project,
+    Reproducibility,
+    ReproductionManifest,
+    TrainingRun,
+    User,
+)
+from .projects import ProjectsAPI
+
+__all__ = [
+    "Asset",
+    "AssetReference",
+    "AssetVersion",
+    "ComparisonResult",
+    "DataReference",
+    "Dataset",
+    "DatasetReference",
+    "DatasetVersion",
+    "EvaluationHandle",
+    "EvaluationResult",
+    "Experiment",
+    "ExperimentHandle",
+    "GenerationHandle",
+    "GenerationRun",
+    "GenerationStatus",
+    "Generator",
+    "Project",
+    "ProjectHandle",
+    "ProjectsAPI",
+    "Reproducibility",
+    "ReproductionManifest",
+    "RetryPolicy",
+    "SynthGraph",
+    "SynthGraphAuthenticationError",
+    "SynthGraphAuthorizationError",
+    "SynthGraphClient",
+    "SynthGraphConfig",
+    "SynthGraphConfigurationError",
+    "SynthGraphConflictError",
+    "SynthGraphError",
+    "SynthGraphHTTPClient",
+    "SynthGraphHTTPError",
+    "SynthGraphNotFoundError",
+    "SynthGraphRateLimitError",
+    "SynthGraphServerError",
+    "SynthGraphTransportError",
+    "SynthGraphValidationError",
+    "TrainingHandle",
+    "TrainingRun",
+    "User",
+    "__version__",
+    "environment_metadata",
+    "git_metadata",
+]
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\cli\context.py ==========
+
+"""Shared CLI state: global options and the one SDK client (spec 43, 56)."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+from ..client import SynthGraphClient
+from ..config import SynthGraphConfig
+from .output import Output
+
+__all__ = ["CLIContext"]
+
+
+@dataclass
+class CLIContext:
+    """Global options plus a lazily created SDK client.
+
+    The client is created on first use so ``--help`` and ``--version`` work
+    without credentials.
+    """
+
+    json_mode: bool = False
+    api_url: str | None = None
+    timeout: float | None = None
+    _client: SynthGraphClient | None = field(default=None, repr=False, init=False)
+
+    def output(self, json_override: bool = False) -> Output:
+        """The renderer for this invocation."""
+        return Output(json_mode=self.json_mode or json_override)
+
+    def client(self) -> SynthGraphClient:
+        """The SDK client, configured from CLI options and the environment.
+
+        Credentials come from the environment only. There is deliberately no
+        ``--api-key`` option: it would land the key in shell history, in ``ps``
+        output and in CI logs (spec 57).
+        """
+        if self._client is None:
+            config = SynthGraphConfig.from_env(
+                api_url=self.api_url,
+                timeout=self.timeout,
+            )
+            config.require_api_key()
+            self._client = SynthGraphClient(config=config)
+        return self._client
+
+    def close(self) -> None:
+        """Release the HTTP client, if one was ever created."""
+        if self._client is not None:
+            self._client.close()
+            self._client = None
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\cli\errors.py ==========
+
+"""Turning SDK exceptions into CLI messages and exit codes (spec 53, 54).
+
+Messages are short and actionable. Stack traces, backend internals and
+credentials never reach the terminal.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from enum import IntEnum
+
+from ..errors import (
+    SynthGraphAuthenticationError,
+    SynthGraphAuthorizationError,
+    SynthGraphConfigurationError,
+    SynthGraphConflictError,
+    SynthGraphError,
+    SynthGraphHTTPError,
+    SynthGraphNotFoundError,
+    SynthGraphRateLimitError,
+    SynthGraphServerError,
+    SynthGraphTransportError,
+    SynthGraphValidationError,
+)
+
+__all__ = ["ExitCode", "describe_error"]
+
+
+class ExitCode(IntEnum):
+    """Exit codes scripts can branch on."""
+
+    SUCCESS = 0
+    FAILURE = 1
+    USAGE = 2
+    AUTHENTICATION = 3
+    AUTHORIZATION = 4
+    NOT_FOUND = 5
+    VALIDATION = 6
+    TRANSPORT = 7
+
+
+def _transport_message(error: BaseException) -> str:
+    assert isinstance(error, SynthGraphTransportError)
+    if error.outcome_unknown:
+        return f"{error.message} The request may or may not have been applied."
+    return error.message
+
+
+def _server_message(error: BaseException) -> str:
+    assert isinstance(error, SynthGraphHTTPError)
+    return f"The SynthGraph backend failed (HTTP {error.status_code})."
+
+
+def _backend_message(error: BaseException) -> str:
+    assert isinstance(error, SynthGraphHTTPError | SynthGraphValidationError)
+    return error.message
+
+
+#: Checked in order, most specific first. Each entry is
+#: (exception type, message or message builder, exit code).
+_Message = str | Callable[[BaseException], str]
+
+_HANDLERS: tuple[tuple[type[BaseException], _Message, ExitCode], ...] = (
+    (
+        SynthGraphAuthenticationError,
+        "Authentication failed. Check your SynthGraph API key (SYNTHGRAPH_API_KEY).",
+        ExitCode.AUTHENTICATION,
+    ),
+    (
+        SynthGraphAuthorizationError,
+        "You do not have access to that resource.",
+        ExitCode.AUTHORIZATION,
+    ),
+    (
+        SynthGraphNotFoundError,
+        "Not found. Check the ID, or confirm it belongs to your account.",
+        ExitCode.NOT_FOUND,
+    ),
+    (SynthGraphConflictError, _backend_message, ExitCode.VALIDATION),
+    (SynthGraphValidationError, _backend_message, ExitCode.VALIDATION),
+    (
+        SynthGraphRateLimitError,
+        "The SynthGraph backend is rate limiting this API key. Try again shortly.",
+        ExitCode.TRANSPORT,
+    ),
+    (SynthGraphServerError, _server_message, ExitCode.TRANSPORT),
+    (SynthGraphTransportError, _transport_message, ExitCode.TRANSPORT),
+    (SynthGraphConfigurationError, str, ExitCode.USAGE),
+    (SynthGraphHTTPError, _backend_message, ExitCode.FAILURE),
+    (SynthGraphError, str, ExitCode.FAILURE),
+    # A failed export lands here: a bad --output path, a read-only volume.
+    (OSError, str, ExitCode.FAILURE),
+)
+
+
+def describe_error(error: BaseException) -> tuple[str, ExitCode]:
+    """Map an exception to the message to print and the code to exit with."""
+    for error_type, message, code in _HANDLERS:
+        if isinstance(error, error_type):
+            return (message(error) if callable(message) else message, code)
+
+    return (str(error) or error.__class__.__name__, ExitCode.FAILURE)
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\cli\main.py ==========
+
+"""``synthgraph`` entry point (spec 44, 53, 55).
+
+Error handling lives here rather than in each command: commands let SDK
+exceptions propagate, and this module turns them into one short message and one
+meaningful exit code.
+"""
+
+from __future__ import annotations
+
+import sys
+
+import typer
+
+from .. import __version__
+from .commands import auth, compare, docs, experiments, generations, manifest, projects
+from .context import CLIContext
+from .errors import ExitCode, describe_error
+
+app = typer.Typer(
+    name="synthgraph",
+    no_args_is_help=True,
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    help=(
+        "Query, inspect and export SynthGraph provenance.\n\n"
+        "Provenance is captured with the Python SDK while your research runs. "
+        "This CLI is how you inspect and export it afterwards.\n\n"
+        "Credentials come from the environment:\n\n"
+        "\b\n"
+        "  export SYNTHGRAPH_API_KEY=...\n"
+        "  export SYNTHGRAPH_API_URL=https://your-synthgraph-backend\n\n"
+        "There is deliberately no --api-key option: it would put your key into "
+        "shell history and process listings."
+    ),
+)
+
+app.add_typer(auth.app, name="auth")
+app.add_typer(projects.app, name="projects")
+app.add_typer(experiments.app, name="experiments")
+app.add_typer(generations.app, name="generations")
+
+app.command("compare")(compare.compare)
+app.command("manifest")(manifest.manifest)
+app.command("docs")(docs.docs)
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"synthgraph {__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def main_callback(
+    ctx: typer.Context,
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON from every command.",
+    ),
+    api_url: str | None = typer.Option(
+        None,
+        "--api-url",
+        help="SynthGraph backend URL. Defaults to $SYNTHGRAPH_API_URL.",
+        envvar=None,
+    ),
+    timeout: float | None = typer.Option(
+        None,
+        "--timeout",
+        help="Request timeout in seconds.",
+    ),
+    version: bool = typer.Option(
+        False,
+        "--version",
+        callback=_version_callback,
+        is_eager=True,
+        help="Show the installed version and exit.",
+    ),
+) -> None:
+    """Set up shared state for whichever command runs next."""
+    ctx.obj = CLIContext(json_mode=json_output, api_url=api_url, timeout=timeout)
+    ctx.call_on_close(ctx.obj.close)
+
+
+def run(argv: list[str] | None = None) -> int:
+    """Run the CLI and return an exit code instead of exiting.
+
+    Kept separate from :func:`main` so tests can assert on exit codes.
+    """
+    try:
+        app(args=argv, standalone_mode=False)
+    except SystemExit as exc:  # pragma: no cover - defensive
+        return int(exc.code) if isinstance(exc.code, int) else int(ExitCode.FAILURE)
+    except KeyboardInterrupt:
+        print("Interrupted.", file=sys.stderr)
+        return int(ExitCode.FAILURE)
+    except BaseException as exc:  # noqa: BLE001 - the CLI is the last line of defence
+        return _handle(exc)
+    return int(ExitCode.SUCCESS)
+
+
+def _handle(error: BaseException) -> int:
+    """Render an exception and choose an exit code.
+
+    Framework control-flow exceptions are recognized by shape rather than by
+    class: Typer vendors its own copies of Click's exception hierarchy in newer
+    releases, so ``isinstance`` against ``click`` is not portable across the
+    versions this package supports.
+    """
+    if isinstance(error, typer.Abort):
+        print("Aborted.", file=sys.stderr)
+        return int(ExitCode.FAILURE)
+
+    exit_code = getattr(error, "exit_code", None)
+    if isinstance(exit_code, int):
+        show = getattr(error, "show", None)
+        if callable(show):
+            show()
+        return exit_code
+
+    message, code = describe_error(error)
+    print(f"Error: {message}", file=sys.stderr)
+    return int(code)
+
+
+def main() -> None:
+    """Console-script entry point."""
+    raise SystemExit(run())
+
+
+if __name__ == "__main__":  # pragma: no cover
+    main()
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\cli\output.py ==========
+
+"""CLI rendering (spec 52).
+
+Two modes, applied identically by every command:
+
+* human - aligned tables and key/value blocks
+* ``--json`` - the payload only, no decorative text, safe to pipe
+
+Nested structures are printed as indented JSON rather than flattened, because a
+generation's parameters are the point of the record.
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+from collections.abc import Callable, Mapping, Sequence
+from datetime import date, datetime
+from typing import Any, TextIO
+
+__all__ = ["Output", "format_value"]
+
+_MAX_CELL = 48
+
+
+def _default(value: Any) -> Any:
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    return str(value)
+
+
+def format_value(value: Any, *, indent: int = 2) -> str:
+    """Render a value for human output."""
+    if value is None:
+        return "-"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (Mapping, list, tuple)):
+        if not value:
+            return "-"
+        return json.dumps(value, indent=indent, default=_default, ensure_ascii=False)
+    return str(value)
+
+
+def _truncate(text: str) -> str:
+    single_line = text.replace("\n", " ")
+    if len(single_line) <= _MAX_CELL:
+        return single_line
+    return single_line[: _MAX_CELL - 1] + "…"
+
+
+class Output:
+    """Writes command results in the mode the user asked for."""
+
+    def __init__(
+        self,
+        *,
+        json_mode: bool = False,
+        stream: TextIO | None = None,
+        error_stream: TextIO | None = None,
+    ) -> None:
+        self.json_mode = json_mode
+        self._stream = stream if stream is not None else sys.stdout
+        self._error_stream = error_stream if error_stream is not None else sys.stderr
+
+    # -- primitives --------------------------------------------------------
+
+    def line(self, text: str = "") -> None:
+        """Write one line of human output. Suppressed in JSON mode."""
+        if not self.json_mode:
+            print(text, file=self._stream)
+
+    def note(self, text: str) -> None:
+        """Write an informational message to stderr, so stdout stays pipeable."""
+        print(text, file=self._error_stream)
+
+    def error(self, text: str) -> None:
+        """Write an error message to stderr."""
+        print(f"Error: {text}", file=self._error_stream)
+
+    def json(self, data: Any) -> None:
+        """Write JSON to stdout regardless of mode."""
+        print(json.dumps(data, indent=2, default=_default, ensure_ascii=False), file=self._stream)
+
+    def raw(self, text: str) -> None:
+        """Write text verbatim, with no trailing newline added twice."""
+        self._stream.write(text)
+        if not text.endswith("\n"):
+            self._stream.write("\n")
+
+    # -- structured results ------------------------------------------------
+
+    def emit(self, data: Any, render: Callable[[], None]) -> None:
+        """Emit ``data`` as JSON, or call ``render`` for human output."""
+        if self.json_mode:
+            self.json(data)
+        else:
+            render()
+
+    def table(
+        self,
+        rows: Sequence[Mapping[str, Any]],
+        columns: Sequence[tuple[str, str]],
+        *,
+        empty: str = "No results.",
+    ) -> None:
+        """Print an aligned table. ``columns`` is a sequence of (header, key)."""
+        if not rows:
+            self.line(empty)
+            return
+
+        headers = [header for header, _ in columns]
+        cells = [
+            [_truncate(format_value(row.get(key))) for _, key in columns] for row in rows
+        ]
+
+        widths = [len(header) for header in headers]
+        for line in cells:
+            for index, cell in enumerate(line):
+                widths[index] = max(widths[index], len(cell))
+
+        self.line("  ".join(header.ljust(widths[i]) for i, header in enumerate(headers)).rstrip())
+        self.line("  ".join("-" * width for width in widths))
+        for line in cells:
+            self.line("  ".join(cell.ljust(widths[i]) for i, cell in enumerate(line)).rstrip())
+
+    def fields(self, pairs: Sequence[tuple[str, Any]]) -> None:
+        """Print a key/value block, indenting multi-line values under their key."""
+        if not pairs:
+            return
+        width = max(len(label) for label, _ in pairs)
+        for label, value in pairs:
+            rendered = format_value(value)
+            if "\n" in rendered:
+                self.line(f"{label}:")
+                for line in rendered.splitlines():
+                    self.line(f"  {line}")
+            else:
+                self.line(f"{label.ljust(width)}  {rendered}")
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\cli\__init__.py ==========
+
+"""The SynthGraph command-line interface.
+
+The CLI is a query, inspection and export surface. It is a thin adapter over
+the SDK: it opens no HTTP connections of its own, builds no URLs, defines no
+models, and duplicates no backend logic (spec 43).
+
+Writing provenance is the SDK's job (spec 58), and reproducing an experiment is
+the researcher's (spec 59).
+"""
+
+from __future__ import annotations
+
+# ``main`` is deliberately not re-exported here: it would shadow the
+# ``synthgraph.cli.main`` submodule of the same name.
+from .main import app, run
+
+__all__ = ["app", "run"]
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\cli\commands\auth.py ==========
+
+"""``synthgraph auth`` (spec 45)."""
+
+from __future__ import annotations
+
+import typer
+
+from ..context import CLIContext
+
+app = typer.Typer(
+    no_args_is_help=True,
+    help="Inspect the identity behind the configured API key.",
+)
+
+
+@app.command("whoami")
+def whoami(
+    ctx: typer.Context,
+    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a table."),
+) -> None:
+    """Show which SynthGraph account the current API key belongs to.
+
+    The key itself is never printed.
+
+    Example:
+
+        synthgraph auth whoami
+    """
+    cli: CLIContext = ctx.obj
+    out = cli.output(json_output)
+
+    user = cli.client().auth.me()
+
+    out.emit(
+        user.to_dict(),
+        lambda: out.fields(
+            [
+                ("ID", user.id),
+                ("Email", user.email),
+                ("Name", user.name),
+            ]
+        ),
+    )
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\cli\commands\compare.py ==========
+
+"""``synthgraph compare`` (spec 49).
+
+The backend computes the comparison. This command presents it. Presentation may
+change how a difference *looks*; it never changes what the difference *is*.
+"""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Mapping
+from typing import Any
+
+import typer
+
+from ..context import CLIContext
+from ..output import Output
+
+app = typer.Typer()
+
+
+def compare(
+    ctx: typer.Context,
+    generation_ids: list[str] = typer.Argument(
+        ...,
+        help="Two or more generation IDs to compare.",
+        metavar="GENERATION_ID GENERATION_ID...",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Print the raw comparison JSON."),
+) -> None:
+    """Compare two or more generation runs.
+
+    Example:
+
+        synthgraph compare <generation-id-a> <generation-id-b>
+    """
+    cli: CLIContext = ctx.obj
+    out = cli.output(json_output)
+
+    result = cli.client().comparisons.compare(list(generation_ids))
+    payload = result.to_dict()
+
+    out.emit(payload, lambda: _render(out, payload))
+
+
+def _render(out: Output, payload: Mapping[str, Any]) -> None:
+    """Render whatever the backend returned, without inventing structure."""
+    ids = payload.get("generation_ids") or payload.get("generationIds")
+    if isinstance(ids, list):
+        for index, generation_id in enumerate(ids):
+            out.line(f"Generation {_label(index)}: {generation_id}")
+        out.line()
+
+    differences = payload.get("differences")
+    rendered_any = False
+
+    if isinstance(differences, Mapping):
+        for section, content in differences.items():
+            out.line(_titlecase(section))
+            _render_section(out, content, ids if isinstance(ids, list) else [])
+            out.line()
+            rendered_any = True
+    elif isinstance(differences, list) and differences:
+        out.line("Differences")
+        for item in differences:
+            out.line(f"  {_format_inline(item)}")
+        out.line()
+        rendered_any = True
+
+    summary = payload.get("summary")
+    if summary:
+        out.line("Summary")
+        out.fields([("", summary)] if not isinstance(summary, Mapping) else list(summary.items()))
+        rendered_any = True
+
+    if not rendered_any:
+        # No recognized difference structure: show the payload rather than
+        # claiming the generations are identical.
+        remaining = {
+            key: value
+            for key, value in payload.items()
+            if key not in {"generation_ids", "generationIds"}
+        }
+        if remaining:
+            out.fields(list(remaining.items()))
+        else:
+            out.line("The backend reported no differences.")
+
+
+def _render_section(out: Output, content: Any, ids: list[str]) -> None:
+    """Render one section of the difference map."""
+    if isinstance(content, Mapping):
+        for key, value in content.items():
+            if isinstance(value, Mapping):
+                parts = [f"{label}: {_format_inline(item)}" for label, item in value.items()]
+                out.line(f"  {key}: " + "  ".join(parts))
+            elif isinstance(value, list) and ids and len(value) == len(ids):
+                parts = [
+                    f"{_label(index)}: {_format_inline(item)}"
+                    for index, item in enumerate(value)
+                ]
+                out.line(f"  {key}: " + "  ".join(parts))
+            else:
+                out.line(f"  {key}: {_format_inline(value)}")
+    elif isinstance(content, list):
+        for item in content:
+            out.line(f"  {_format_inline(item)}")
+    else:
+        out.line(f"  {_format_inline(content)}")
+
+
+def _format_inline(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if value is None:
+        return "-"
+    if isinstance(value, (Mapping, list, tuple)):
+        return json.dumps(value, default=str, ensure_ascii=False)
+    return str(value)
+
+
+def _label(index: int) -> str:
+    """A, B, C ... then plain numbers past Z."""
+    return chr(ord("A") + index) if index < 26 else str(index + 1)
+
+
+def _titlecase(text: str) -> str:
+    return text.replace("_", " ").capitalize()
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\cli\commands\docs.py ==========
+
+"""``synthgraph docs`` (spec 51)."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import typer
+
+from ..context import CLIContext
+
+app = typer.Typer()
+
+
+def docs(
+    ctx: typer.Context,
+    generation_id: str = typer.Argument(..., help="Generation ID."),
+    output: Path | None = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Write the Markdown to this file instead of stdout.",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Wrap the Markdown in a JSON object for scripting.",
+    ),
+) -> None:
+    """Export backend-generated Markdown documentation for a generation.
+
+    Useful for paper supplements, lab records and experiment handover.
+
+    Examples:
+
+        synthgraph docs <generation-id>
+
+        synthgraph docs <generation-id> --output experiment.md
+    """
+    cli: CLIContext = ctx.obj
+    out = cli.output(json_output)
+
+    markdown = cli.client().documentation.get(generation_id)
+
+    if output is not None:
+        # Any failure here propagates: a failed export must not exit 0.
+        output.parent.mkdir(parents=True, exist_ok=True)
+        text = markdown if markdown.endswith("\n") else markdown + "\n"
+        output.write_text(text, encoding="utf-8")
+        out.note(f"Wrote documentation for {generation_id} to {output}")
+        return
+
+    if out.json_mode:
+        out.json({"generation_id": generation_id, "documentation": markdown})
+    else:
+        out.raw(markdown)
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\cli\commands\experiments.py ==========
+
+"""``synthgraph experiments`` (spec 47)."""
+
+from __future__ import annotations
+
+import typer
+
+from ..context import CLIContext
+
+app = typer.Typer(
+    no_args_is_help=True,
+    help="List, search and inspect experiments.",
+)
+
+_COLUMNS = [("ID", "id"), ("NAME", "name"), ("CREATED", "created_at")]
+
+
+@app.command("list")
+def list_experiments(
+    ctx: typer.Context,
+    project: str = typer.Option(..., "--project", "-p", help="Project ID."),
+    search: str | None = typer.Option(None, "--search", "-s", help="Filter by search term."),
+    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a table."),
+) -> None:
+    """List the experiments in a project.
+
+    Example:
+
+        synthgraph experiments list --project <project-id>
+    """
+    cli: CLIContext = ctx.obj
+    out = cli.output(json_output)
+
+    experiments = cli.client().experiments.list(project_id=project, search=search)
+    rows = [experiment.to_dict() for experiment in experiments]
+
+    out.emit(rows, lambda: out.table(rows, _COLUMNS, empty="No experiments found."))
+
+
+@app.command("search")
+def search_experiments(
+    ctx: typer.Context,
+    query: str = typer.Argument(..., help="Search term."),
+    project: str = typer.Option(..., "--project", "-p", help="Project ID."),
+    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a table."),
+) -> None:
+    """Search experiments in a project by name or description.
+
+    The backend performs the search; this does not filter locally.
+
+    Example:
+
+        synthgraph experiments search --project <project-id> "rain"
+    """
+    cli: CLIContext = ctx.obj
+    out = cli.output(json_output)
+
+    experiments = cli.client().experiments.search(project_id=project, query=query)
+    rows = [experiment.to_dict() for experiment in experiments]
+
+    out.emit(
+        rows,
+        lambda: out.table(rows, _COLUMNS, empty=f"No experiments match {query!r}."),
+    )
+
+
+@app.command("get")
+def get_experiment(
+    ctx: typer.Context,
+    experiment_id: str = typer.Argument(..., help="Experiment ID."),
+    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a field list."),
+) -> None:
+    """Show one experiment.
+
+    Example:
+
+        synthgraph experiments get <experiment-id>
+    """
+    cli: CLIContext = ctx.obj
+    out = cli.output(json_output)
+
+    experiment = cli.client().experiments.get(experiment_id)
+
+    out.emit(
+        experiment.to_dict(),
+        lambda: out.fields(
+            [
+                ("ID", experiment.id),
+                ("Project", experiment.project_id),
+                ("Name", experiment.name),
+                ("Description", experiment.description),
+                ("Created", experiment.created_at),
+                ("Updated", experiment.updated_at),
+                ("Metadata", experiment.metadata),
+            ]
+        ),
+    )
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\cli\commands\generations.py ==========
+
+"""``synthgraph generations`` (spec 48)."""
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
+import typer
+
+from ...errors import SynthGraphValidationError
+from ..context import CLIContext
+
+app = typer.Typer(
+    no_args_is_help=True,
+    help="List and inspect generation runs.",
+)
+
+
+@app.command("list")
+def list_generations(
+    ctx: typer.Context,
+    experiment: str = typer.Option(..., "--experiment", "-e", help="Experiment ID."),
+    parameters: str | None = typer.Option(
+        None,
+        "--parameters",
+        help='Filter by generation parameters, as a JSON object: \'{"weather":"rain"}\'',
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a table."),
+) -> None:
+    """List the generation runs in an experiment.
+
+    Filtering is performed by the backend.
+
+    Examples:
+
+        synthgraph generations list --experiment <experiment-id>
+
+        synthgraph generations list --experiment <experiment-id> \\
+            --parameters '{"weather":"rain","occlusion":0.3}'
+    """
+    cli: CLIContext = ctx.obj
+    out = cli.output(json_output)
+
+    generations = cli.client().generations.list(
+        experiment_id=experiment,
+        parameters=_parse_parameters(parameters),
+    )
+
+    rows = [
+        {
+            "id": generation.id,
+            "name": generation.name,
+            "generator": generation.generator.name,
+            "version": generation.generator.version,
+            "status": generation.status.value,
+            "created_at": generation.created_at,
+        }
+        for generation in generations
+    ]
+    payload = [generation.to_dict() for generation in generations]
+
+    out.emit(
+        payload,
+        lambda: out.table(
+            rows,
+            [
+                ("ID", "id"),
+                ("NAME", "name"),
+                ("GENERATOR", "generator"),
+                ("VERSION", "version"),
+                ("STATUS", "status"),
+                ("CREATED", "created_at"),
+            ],
+            empty="No generations found.",
+        ),
+    )
+
+
+@app.command("get")
+def get_generation(
+    ctx: typer.Context,
+    generation_id: str = typer.Argument(..., help="Generation ID."),
+    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a field list."),
+) -> None:
+    """Show one generation run, including its parameters and provenance.
+
+    Example:
+
+        synthgraph generations get <generation-id> --json
+    """
+    cli: CLIContext = ctx.obj
+    out = cli.output(json_output)
+
+    generation = cli.client().generations.get(generation_id)
+
+    out.emit(
+        generation.to_dict(),
+        lambda: out.fields(
+            [
+                ("ID", generation.id),
+                ("Experiment", generation.experiment_id),
+                ("Name", generation.name),
+                ("Description", generation.description),
+                ("Generator", generation.generator.name),
+                ("Generator version", generation.generator.version),
+                ("Generator type", generation.generator.type),
+                ("Status", generation.status.value),
+                ("Parameters", generation.parameters),
+                ("Reproducibility", generation.reproducibility.model_dump(mode="json")),
+                ("Inputs", [item.model_dump(mode="json") for item in generation.inputs]),
+                ("Outputs", [item.model_dump(mode="json") for item in generation.outputs]),
+                ("Started", generation.started_at),
+                ("Completed", generation.completed_at),
+                ("Created", generation.created_at),
+                ("Metadata", generation.metadata),
+            ]
+        ),
+    )
+
+
+def _parse_parameters(raw: str | None) -> dict[str, Any] | None:
+    """Parse the --parameters JSON object, failing with a usable message."""
+    if raw is None:
+        return None
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise SynthGraphValidationError(
+            f"--parameters must be a JSON object ({exc.msg} at position {exc.pos})",
+            field="parameters",
+        ) from None
+    if not isinstance(parsed, dict):
+        raise SynthGraphValidationError(
+            "--parameters must be a JSON object, for example "
+            '\'{"weather":"rain"}\'',
+            field="parameters",
+        )
+    return parsed
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\cli\commands\manifest.py ==========
+
+"""``synthgraph manifest`` (spec 50).
+
+Exports a reproduction manifest. It does not regenerate datasets, launch
+Blender or Unity, retrain models, or upload anything (spec 59).
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import typer
+
+from ..context import CLIContext
+
+app = typer.Typer()
+
+
+def manifest(
+    ctx: typer.Context,
+    generation_id: str = typer.Argument(..., help="Generation ID."),
+    output: Path | None = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Write the manifest to this file instead of stdout.",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Accepted for consistency; the manifest is always JSON.",
+    ),
+) -> None:
+    """Export the reproduction manifest for a generation.
+
+    The manifest records what would be needed to reconstruct the experiment.
+    It is a record, not a runnable script, and it carries no dataset bytes and
+    no credentials.
+
+    Examples:
+
+        synthgraph manifest <generation-id>
+
+        synthgraph manifest <generation-id> --output reproduction.json
+    """
+    cli: CLIContext = ctx.obj
+    out = cli.output(json_output)
+
+    document = cli.client().reproduction.get(generation_id)
+    payload = document.to_dict()
+    text = json.dumps(payload, indent=2, default=str, ensure_ascii=False)
+
+    if output is None:
+        out.json(payload)
+        return
+
+    # Any failure here propagates: a failed export must not exit 0 (spec 53).
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(text + "\n", encoding="utf-8")
+
+    out.note(f"Wrote reproduction manifest for {generation_id} to {output}")
+
+    if document.missing:
+        out.note(
+            f"Note: the backend reported {len(document.missing)} missing "
+            "dependency/dependencies. This manifest records provenance; it does not "
+            "guarantee reproducibility."
+        )
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\cli\commands\projects.py ==========
+
+"""``synthgraph projects`` (spec 46)."""
+
+from __future__ import annotations
+
+import typer
+
+from ..context import CLIContext
+
+app = typer.Typer(
+    no_args_is_help=True,
+    help="List and inspect projects.",
+)
+
+
+@app.command("list")
+def list_projects(
+    ctx: typer.Context,
+    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a table."),
+) -> None:
+    """List the projects visible to your account.
+
+    Example:
+
+        synthgraph projects list
+    """
+    cli: CLIContext = ctx.obj
+    out = cli.output(json_output)
+
+    projects = cli.client().projects.list()
+
+    out.emit(
+        [project.to_dict() for project in projects],
+        lambda: out.table(
+            [project.to_dict() for project in projects],
+            [("ID", "id"), ("NAME", "name"), ("CREATED", "created_at")],
+            empty="No projects yet.",
+        ),
+    )
+
+
+@app.command("get")
+def get_project(
+    ctx: typer.Context,
+    project_id: str = typer.Argument(..., help="Project ID."),
+    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a field list."),
+) -> None:
+    """Show one project.
+
+    Example:
+
+        synthgraph projects get 1d0c...  --json
+    """
+    cli: CLIContext = ctx.obj
+    out = cli.output(json_output)
+
+    project = cli.client().projects.get(project_id)
+
+    out.emit(
+        project.to_dict(),
+        lambda: out.fields(
+            [
+                ("ID", project.id),
+                ("Name", project.name),
+                ("Description", project.description),
+                ("Created", project.created_at),
+                ("Updated", project.updated_at),
+                ("Metadata", project.metadata),
+            ]
+        ),
+    )
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\cli\commands\__init__.py ==========
+
+"""CLI command groups."""
+
+from __future__ import annotations
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\models\asset.py ==========
+
+"""Asset identity and its immutable versions (spec 22).
+
+Assets are reusable generator inputs: models, textures, scenes, meshes. Like
+datasets they are referenced, never uploaded.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
+
+from pydantic import Field
+
+from .base import SynthGraphModel
+
+
+class AssetVersion(SynthGraphModel):
+    """An immutable version of an asset."""
+
+    id: str = Field(min_length=1)
+    asset_id: str | None = None
+    version: str | None = None
+    uri: str | None = None
+    checksum: str | None = None
+    size: int | None = Field(default=None, ge=0)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime | None = None
+
+
+class Asset(SynthGraphModel):
+    """The logical identity of an asset."""
+
+    id: str = Field(min_length=1)
+    name: str | None = None
+    type: str | None = None
+    description: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    versions: list[AssetVersion] = Field(default_factory=list)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\models\base.py ==========
+
+"""Shared model configuration.
+
+Every SynthGraph model is frozen, accepts either snake_case or camelCase from
+the backend, and preserves fields the SDK does not know about yet so a backend
+addition does not require an SDK release before researchers can see it
+(spec 7.7).
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict
+from pydantic.alias_generators import to_camel
+
+__all__ = ["SynthGraphModel"]
+
+
+class SynthGraphModel(BaseModel):
+    """Base class for SynthGraph domain models."""
+
+    model_config = ConfigDict(
+        frozen=True,
+        populate_by_name=True,
+        alias_generator=to_camel,
+        extra="allow",
+    )
+
+    def to_dict(self) -> dict[str, Any]:
+        """JSON-compatible snake_case representation of this model."""
+        return self.model_dump(mode="json")
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\models\comparison.py ==========
+
+"""Generation comparison result (spec 30).
+
+Comparison is an operation over existing generations, not a stored entity. The
+comparison itself is performed by the backend; the SDK carries the result and
+the CLI presents it. Neither recomputes it, because that would risk two
+different answers to a scientific question.
+
+``to_dict()`` returns the backend payload verbatim for the same reason the
+reproduction manifest does.
+"""
+
+from __future__ import annotations
+
+import copy
+from collections.abc import Mapping
+from typing import Any
+
+from pydantic import Field, PrivateAttr
+
+from .base import SynthGraphModel
+
+
+class ComparisonResult(SynthGraphModel):
+    """The backend's answer to "how do these generations differ?"."""
+
+    generation_ids: list[str] = Field(default_factory=list)
+    generations: list[dict[str, Any]] = Field(default_factory=list)
+    #: Shape is backend-defined; commonly a per-field mapping of differences.
+    differences: Any = None
+    summary: Any = None
+
+    _payload: dict[str, Any] = PrivateAttr(default_factory=dict)
+
+    @classmethod
+    def from_payload(cls, payload: Mapping[str, Any]) -> ComparisonResult:
+        result = cls.model_validate(dict(payload))
+        result._payload = copy.deepcopy(dict(payload))
+        return result
+
+    def to_dict(self) -> dict[str, Any]:
+        """The comparison exactly as the backend produced it."""
+        if self._payload:
+            return copy.deepcopy(self._payload)
+        return self.model_dump(mode="json", exclude_none=True)
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\models\dataset.py ==========
+
+"""Dataset identity and its immutable versions (spec 21).
+
+A ``Dataset`` is the logical identity. A ``DatasetVersion`` is an immutable
+historical reference that a generation or training run points at, so the record
+says which exact data was used rather than merely which dataset.
+
+None of these carry dataset bytes.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
+
+from pydantic import Field
+
+from .base import SynthGraphModel
+
+
+class DatasetVersion(SynthGraphModel):
+    """An immutable version of a dataset."""
+
+    id: str = Field(min_length=1)
+    dataset_id: str | None = None
+    version: str | None = None
+    uri: str | None = None
+    format: str | None = None
+    size: int | None = Field(default=None, ge=0)
+    checksum: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime | None = None
+
+
+class Dataset(SynthGraphModel):
+    """The logical identity of a dataset."""
+
+    id: str = Field(min_length=1)
+    name: str | None = None
+    description: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    versions: list[DatasetVersion] = Field(default_factory=list)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    @property
+    def latest_version(self) -> DatasetVersion | None:
+        return self.versions[-1] if self.versions else None
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\models\evaluation.py ==========
+
+"""Evaluation result provenance (spec 24).
+
+Metrics stay a flexible mapping. The SDK does not define a field per metric -
+mAP today, something else next quarter.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
+
+from pydantic import Field
+
+from .base import SynthGraphModel
+
+
+class EvaluationResult(SynthGraphModel):
+    """Metrics produced by evaluating a training run."""
+
+    id: str = Field(min_length=1)
+    training_run_id: str | None = None
+    #: The exact dataset version the model was evaluated against.
+    dataset_version_id: str | None = None
+    name: str | None = None
+    metrics: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\models\experiment.py ==========
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
+
+from pydantic import Field
+
+from .base import SynthGraphModel
+
+
+class Experiment(SynthGraphModel):
+    """A research experiment belonging to a SynthGraph project."""
+
+    id: str
+    project_id: str
+    name: str = Field(min_length=1)
+    description: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: datetime | None = None
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\models\generation.py ==========
+
+from __future__ import annotations
+
+from datetime import datetime
+from enum import Enum
+from typing import Any
+
+from pydantic import Field
+
+from .base import SynthGraphModel
+from .reference import DataReference
+
+
+class GenerationStatus(str, Enum):
+    """Lifecycle state of a generation run.
+
+    ``pending -> running -> completed | failed``. The backend is authoritative
+    for transitions; the SDK does not enforce its own state machine (spec 20).
+    """
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+    @property
+    def is_terminal(self) -> bool:
+        return self in {GenerationStatus.COMPLETED, GenerationStatus.FAILED}
+
+
+class Generator(SynthGraphModel):
+    """Information about the tool that produced a generation."""
+
+    name: str = Field(min_length=1)
+    version: str | None = None
+    type: str | None = None
+
+
+class Reproducibility(SynthGraphModel):
+    """Information required to reproduce a generation.
+
+    ``seed`` lives here rather than on the generation itself: it is
+    reproducibility metadata, and this is the field the backend stores it in.
+    """
+
+    seed: int | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
+    code_version: str | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
+    environment: dict[str, Any] = Field(
+        default_factory=dict,
+        exclude_if=lambda value: not value,
+    )
+    configuration_hash: str | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
+
+
+class GenerationRun(SynthGraphModel):
+    """A single synthetic data generation execution."""
+
+    id: str = Field(min_length=1)
+    experiment_id: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    description: str | None = None
+
+    generator: Generator
+    parameters: dict[str, Any]
+
+    reproducibility: Reproducibility
+
+    inputs: list[DataReference] = Field(default_factory=list)
+    outputs: list[DataReference] = Field(default_factory=list)
+
+    status: GenerationStatus
+
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime | None = None
+
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @property
+    def seed(self) -> int | None:
+        """Convenience accessor for ``reproducibility.seed``."""
+        return self.reproducibility.seed
+
+    @property
+    def generator_name(self) -> str:
+        return self.generator.name
+
+    @property
+    def generator_version(self) -> str | None:
+        return self.generator.version
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\models\project.py ==========
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
+
+from pydantic import Field
+
+from .base import SynthGraphModel
+
+
+class Project(SynthGraphModel):
+    """A top-level SynthGraph research project."""
+
+    id: str
+    name: str = Field(min_length=1)
+    description: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: datetime | None = None
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\models\reference.py ==========
+
+"""References to data and assets that stay under researcher control.
+
+A reference is metadata: identity, location, version, shape. The SDK never
+transfers the bytes behind it (spec 6, 21, 22).
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from pydantic import Field
+
+from .base import SynthGraphModel
+
+
+class DataReference(SynthGraphModel):
+    """Reference to data managed outside or inside SynthGraph."""
+
+    id: str = Field(min_length=1)
+    uri: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class AssetReference(DataReference):
+    """Reference to a source or generated asset."""
+
+    type: str | None = None
+    version: str | None = None
+    checksum: str | None = None
+
+
+class DatasetReference(DataReference):
+    """Reference to a source or generated dataset."""
+
+    format: str | None = None
+    size: int | None = Field(default=None, ge=0)
+    version: str | None = None
+    checksum: str | None = None
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\models\reproduction.py ==========
+
+"""Reproduction manifest (spec 26, 27).
+
+The manifest is a record of provenance and reconstruction requirements. It is
+not a command that runs the researcher's tools, and it never claims guaranteed
+reproducibility.
+
+The exact manifest schema is produced by the backend and is not frozen in the
+SDK. The typed fields below are conveniences; ``to_dict()`` returns the
+backend's payload **verbatim**, so exporting a manifest never drops or reorders
+information the SDK did not happen to know about.
+"""
+
+from __future__ import annotations
+
+import copy
+from collections.abc import Mapping
+from datetime import datetime
+from typing import Any
+
+from pydantic import Field, PrivateAttr
+
+from .base import SynthGraphModel
+
+
+class ReproductionManifest(SynthGraphModel):
+    """A reproduction manifest for a single generation."""
+
+    generation_id: str | None = None
+    experiment_id: str | None = None
+    project_id: str | None = None
+
+    generator: dict[str, Any] | None = None
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    reproducibility: dict[str, Any] = Field(default_factory=dict)
+
+    inputs: list[Any] = Field(default_factory=list)
+    outputs: list[Any] = Field(default_factory=list)
+
+    #: Information the backend knows it cannot supply, e.g. external tooling.
+    missing: list[Any] = Field(default_factory=list)
+    warnings: list[Any] = Field(default_factory=list)
+
+    generated_at: datetime | None = None
+
+    _payload: dict[str, Any] = PrivateAttr(default_factory=dict)
+
+    @classmethod
+    def from_payload(cls, payload: Mapping[str, Any]) -> ReproductionManifest:
+        """Build a manifest, keeping the backend payload intact for export."""
+        manifest = cls.model_validate(dict(payload))
+        manifest._payload = copy.deepcopy(dict(payload))
+        return manifest
+
+    def to_dict(self) -> dict[str, Any]:
+        """The manifest exactly as the backend produced it."""
+        if self._payload:
+            return copy.deepcopy(self._payload)
+        return self.model_dump(mode="json", exclude_none=True)
+
+    @property
+    def is_complete(self) -> bool:
+        """True only when the backend reported nothing missing.
+
+        A manifest with missing external dependencies is still a valid record;
+        it just cannot promise reproducibility (spec 26).
+        """
+        return not self.missing
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\models\training.py ==========
+
+"""Training run provenance (spec 23).
+
+SynthGraph records that a training run happened and what went into it. It does
+not start, control or observe the actual training process - the researcher
+keeps running their own training code.
+
+Status is a plain string rather than an enum: the backend's training-run
+lifecycle vocabulary is an unverified contract item (spec 63).
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
+
+from pydantic import Field
+
+from .base import SynthGraphModel
+from .dataset import DatasetVersion
+
+
+class TrainingRun(SynthGraphModel):
+    """A model training execution recorded against an experiment."""
+
+    id: str = Field(min_length=1)
+    experiment_id: str | None = None
+    name: str | None = None
+    description: str | None = None
+
+    model: str | None = None
+    framework: str | None = None
+    framework_version: str | None = None
+
+    config: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    datasets: list[DatasetVersion] = Field(default_factory=list)
+
+    status: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\models\user.py ==========
+
+from __future__ import annotations
+
+from datetime import datetime
+
+from .base import SynthGraphModel
+
+
+class User(SynthGraphModel):
+    """The account behind the configured API key (``GET /auth/me``).
+
+    Never carries the API key itself.
+    """
+
+    id: str
+    email: str | None = None
+    name: str | None = None
+    created_at: datetime | None = None
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\models\__init__.py ==========
+
+from __future__ import annotations
+
+from .asset import Asset, AssetVersion
+from .base import SynthGraphModel
+from .comparison import ComparisonResult
+from .dataset import Dataset, DatasetVersion
+from .evaluation import EvaluationResult
+from .experiment import Experiment
+from .generation import GenerationRun, GenerationStatus, Generator, Reproducibility
+from .project import Project
+from .reference import AssetReference, DataReference, DatasetReference
+from .reproduction import ReproductionManifest
+from .training import TrainingRun
+from .user import User
+
+__all__ = [
+    "Asset",
+    "AssetReference",
+    "AssetVersion",
+    "ComparisonResult",
+    "DataReference",
+    "Dataset",
+    "DatasetReference",
+    "DatasetVersion",
+    "EvaluationResult",
+    "Experiment",
+    "GenerationRun",
+    "GenerationStatus",
+    "Generator",
+    "Project",
+    "Reproducibility",
+    "ReproductionManifest",
+    "SynthGraphModel",
+    "TrainingRun",
+    "User",
+]
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\serialization\json.py ==========
+
+"""The Python-object -> canonical JSON boundary (spec 36).
+
+Flexible fields (``parameters``, ``metadata``, ``metrics``, ``config``) hold
+whatever a researcher's domain needs, but what crosses the wire must be valid
+JSON. Unsupported objects are rejected loudly rather than coerced through
+``str()``, so provenance never silently degrades into repr noise.
+"""
+
+from __future__ import annotations
+
+import datetime as _dt
+import json
+import math
+from collections.abc import Mapping, Sequence
+from decimal import Decimal
+from enum import Enum
+from pathlib import PurePath
+from typing import Any
+from uuid import UUID
+
+from pydantic import BaseModel
+
+from ..errors import SynthGraphValidationError
+
+__all__ = ["compact", "model_to_dict", "model_to_json", "to_jsonable"]
+
+MAX_DEPTH = 32
+
+
+def model_to_dict(model: BaseModel) -> dict[str, Any]:
+    """Convert a SynthGraph model into JSON-compatible Python data."""
+    return model.model_dump(mode="json")
+
+
+def model_to_json(model: BaseModel) -> str:
+    """Convert a SynthGraph model into a JSON string."""
+    return json.dumps(model_to_dict(model))
+
+
+def to_jsonable(value: Any, *, field: str = "value", _depth: int = 0) -> Any:
+    """Convert *value* into something ``json.dumps`` accepts, or raise.
+
+    Normalized: ``datetime``/``date`` to ISO-8601, ``UUID``/``Path`` to string,
+    ``Decimal`` to float, ``Enum`` to its value, sets/tuples to lists, pydantic
+    models via ``model_dump(mode="json")``.
+
+    Rejected: non-finite floats (not valid JSON), non-string object keys, and
+    any other object type.
+    """
+    if _depth > MAX_DEPTH:
+        raise SynthGraphValidationError(
+            f"{field} is nested more than {MAX_DEPTH} levels deep",
+            field=field,
+        )
+
+    # bool is checked with str/int on purpose: bool is a subclass of int and
+    # both are already valid JSON scalars.
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        if math.isnan(value) or math.isinf(value):
+            raise SynthGraphValidationError(
+                f"{field} must be a finite number; NaN and Infinity are not valid JSON",
+                field=field,
+            )
+        return value
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, Enum):
+        return to_jsonable(value.value, field=field, _depth=_depth + 1)
+    if isinstance(value, (_dt.datetime, _dt.date)):
+        return value.isoformat()
+    if isinstance(value, UUID):
+        return str(value)
+    if isinstance(value, PurePath):
+        return str(value)
+    if isinstance(value, BaseModel):
+        return value.model_dump(mode="json", exclude_none=True)
+    if isinstance(value, Mapping):
+        result: dict[str, Any] = {}
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise SynthGraphValidationError(
+                    f"{field} has a non-string key {key!r}; JSON object keys must be strings",
+                    field=field,
+                )
+            result[key] = to_jsonable(item, field=f"{field}.{key}", _depth=_depth + 1)
+        return result
+    if isinstance(value, (set, frozenset)):
+        return [
+            to_jsonable(item, field=f"{field}[]", _depth=_depth + 1)
+            for item in sorted(value, key=repr)
+        ]
+    if isinstance(value, Sequence):
+        return [
+            to_jsonable(item, field=f"{field}[{index}]", _depth=_depth + 1)
+            for index, item in enumerate(value)
+        ]
+
+    raise SynthGraphValidationError(
+        f"{field} contains an unsupported value of type {type(value).__name__!r}. "
+        "Flexible fields must hold JSON-compatible values.",
+        field=field,
+    )
+
+
+def compact(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Drop ``None`` entries from a request body.
+
+    The SDK sends only what the caller actually set, so a partial update never
+    blanks a backend field the caller did not mention.
+    """
+    return {key: value for key, value in payload.items() if value is not None}
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\serialization\wire.py ==========
+
+"""Reading the wire: response-shape validation and client-side input checks.
+
+Two open contract items are handled here, in one place each, rather than as
+scattered compatibility hacks (spec 36, 66):
+
+* **List/object envelopes.** The spec leaves envelopes undecided, so a bare
+  body and a ``{"data": ...}`` envelope are both accepted on read.
+* **Field naming.** The SDK *sends* snake_case (spec 67 and the existing v0.1.0
+  models). It *reads* snake_case or camelCase, because a NestJS backend may
+  serialize either and the naming is not frozen yet.
+
+Both tolerances are documented in CONTRACT.md.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterable, Mapping, Sequence
+from typing import Any
+
+from ..errors import SynthGraphTransportError, SynthGraphValidationError
+from .json import to_jsonable
+
+__all__ = [
+    "get_field",
+    "require_identifier",
+    "require_mapping",
+    "require_sequence",
+    "require_text",
+    "unwrap_list",
+    "unwrap_object",
+]
+
+_ENVELOPE_KEYS = ("data", "items", "results")
+_ENVELOPE_OUTER_KEYS = set(_ENVELOPE_KEYS) | {"meta", "pagination", "total", "count"}
+
+
+def unwrap_object(
+    payload: Any,
+    *,
+    operation: str | None = None,
+    path: str | None = None,
+) -> dict[str, Any]:
+    """Validate that a response body is a JSON object and return it."""
+    if isinstance(payload, Mapping):
+        if set(payload) <= _ENVELOPE_OUTER_KEYS:
+            for key in _ENVELOPE_KEYS:
+                inner = payload.get(key)
+                if isinstance(inner, Mapping):
+                    return dict(inner)
+        return dict(payload)
+
+    raise SynthGraphTransportError(
+        f"Expected a JSON object from {path or 'the backend'} "
+        f"but received {type(payload).__name__}",
+        operation=operation,
+        path=path,
+    )
+
+
+def unwrap_list(
+    payload: Any,
+    *,
+    operation: str | None = None,
+    path: str | None = None,
+) -> list[dict[str, Any]]:
+    """Validate that a response body is a list of JSON objects and return it."""
+    items: Any = payload
+
+    if isinstance(payload, Mapping):
+        for key in _ENVELOPE_KEYS:
+            if isinstance(payload.get(key), list):
+                items = payload[key]
+                break
+        else:
+            raise SynthGraphTransportError(
+                f"Expected a JSON array from {path or 'the backend'} but received an "
+                "object with no recognized list envelope",
+                operation=operation,
+                path=path,
+            )
+
+    if not isinstance(items, list):
+        raise SynthGraphTransportError(
+            f"Expected a JSON array from {path or 'the backend'} "
+            f"but received {type(payload).__name__}",
+            operation=operation,
+            path=path,
+        )
+
+    result: list[dict[str, Any]] = []
+    for entry in items:
+        if not isinstance(entry, Mapping):
+            raise SynthGraphTransportError(
+                f"Expected every item from {path or 'the backend'} to be a JSON object",
+                operation=operation,
+                path=path,
+            )
+        result.append(dict(entry))
+    return result
+
+
+def _camel(name: str) -> str:
+    head, *rest = name.split("_")
+    return head + "".join(part[:1].upper() + part[1:] for part in rest)
+
+
+def get_field(data: Mapping[str, Any], name: str, *aliases: str, default: Any = None) -> Any:
+    """Read a field from a backend payload, accepting snake_case or camelCase."""
+    candidates: Iterable[str] = (name, _camel(name), *aliases)
+    for key in candidates:
+        if key in data:
+            return data[key]
+    return default
+
+
+def require_text(value: Any, *, field: str) -> str:
+    """Validate a required non-empty string."""
+    if not isinstance(value, str) or not value.strip():
+        raise SynthGraphValidationError(
+            f"{field} is required and must be a non-empty string",
+            field=field,
+        )
+    return value.strip()
+
+
+def require_identifier(value: Any, *, field: str) -> str:
+    """Validate a required identifier.
+
+    The identifier format is an open contract item (spec 67), so this checks
+    that the value is a usable single path segment rather than forcing a UUID
+    shape the backend may not use. It also stops an identifier from smuggling
+    extra path segments into a request URL.
+    """
+    text = require_text(value, field=field)
+    if "/" in text or "\\" in text or text in {".", ".."}:
+        raise SynthGraphValidationError(
+            f"{field} is not a valid identifier: {value!r}",
+            field=field,
+        )
+    return text
+
+
+def require_mapping(value: Any, *, field: str) -> dict[str, Any]:
+    """Validate that a flexible field is a JSON-serializable mapping."""
+    if not isinstance(value, Mapping):
+        raise SynthGraphValidationError(
+            f"{field} must be a mapping, got {type(value).__name__}",
+            field=field,
+        )
+    return to_jsonable(value, field=field)
+
+
+def require_sequence(value: Any, *, field: str) -> list[Any]:
+    """Validate that a field is a non-string sequence."""
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+        raise SynthGraphValidationError(
+            f"{field} must be a list, got {type(value).__name__}",
+            field=field,
+        )
+    return list(value)
+
+
+========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\serialization\__init__.py ==========
+
+from __future__ import annotations
+
+from .json import compact, model_to_dict, model_to_json, to_jsonable
+from .wire import (
+    get_field,
+    require_identifier,
+    require_mapping,
+    require_sequence,
+    require_text,
+    unwrap_list,
+    unwrap_object,
+)
+
+__all__ = [
+    "compact",
+    "get_field",
+    "model_to_dict",
+    "model_to_json",
+    "require_identifier",
+    "require_mapping",
+    "require_sequence",
+    "require_text",
+    "to_jsonable",
+    "unwrap_list",
+    "unwrap_object",
+]
