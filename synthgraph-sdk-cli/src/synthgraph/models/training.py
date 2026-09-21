@@ -34,6 +34,11 @@ class TrainingRun(SynthGraphModel):
     config: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
+    # None means this SDK version never reported on it - not the same thing
+    # as a report that found nothing attached. See integration_session.py
+    # and CONTRACT.md 2.27.
+    capture_status: dict[str, Any] | None = None
+
     datasets: list[DatasetVersion] = Field(default_factory=list)
 
     status: str | None = None

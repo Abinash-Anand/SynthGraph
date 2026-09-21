@@ -4,6 +4,7 @@ import type { Repository } from 'typeorm';
 
 import {
   TrainingRun,
+  TrainingRunCaptureStatus,
   TrainingRunStatus,
 } from '../../database/entities/training-run.entity.js';
 import { TrainingRunRepository } from './training-run.repository.js';
@@ -64,6 +65,18 @@ export class TypeOrmTrainingRunRepository
         startedAt,
         completedAt,
       },
+    );
+
+    return result.affected === 1;
+  }
+
+  async updateCaptureStatus(
+    trainingRunId: string,
+    captureStatus: TrainingRunCaptureStatus,
+  ): Promise<boolean> {
+    const result = await this.repository.update(
+      { id: trainingRunId },
+      { captureStatus },
     );
 
     return result.affected === 1;

@@ -241,6 +241,36 @@ class TrainingRunsAPI:
 
         return [TrainingRunMetric.model_validate(item) for item in data]
 
+    def update_capture_status(
+        self,
+        *,
+        training_run_id: str,
+        status: str,
+        integrations: dict[str, dict[str, Any]],
+    ) -> TrainingRun:
+        """Report which integrations were attached to this training run and
+        whether each closed cleanly.
+
+        Called by ``TrainingHandle.close()`` - not meant to be called
+        directly in normal use, since it reports ``IntegrationSession``'s own
+        bookkeeping rather than anything a researcher decides. See
+        ``integration_session.py`` and CONTRACT.md 2.26/2.27.
+        """
+        training_run_id = require_identifier(training_run_id, field="training_run_id")
+
+        payload = {
+            "status": require_text(status, field="status"),
+            "integrations": require_mapping(integrations, field="integrations"),
+        }
+
+        data = self._http.patch(
+            Routes.training_run_capture_status(training_run_id),
+            json=payload,
+            operation="training_runs.update_capture_status",
+        )
+
+        return TrainingRun.model_validate(data)
+
     def _update_status(self, training_run_id: str, status: str) -> TrainingRun:
         """Update the lifecycle status of a training run."""
         training_run_id = require_identifier(training_run_id, field="training_run_id")

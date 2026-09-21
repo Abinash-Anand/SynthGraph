@@ -673,3 +673,51 @@ the duck-typed no-session case) has its own suite
 `test_resource_monitor.py`, `test_integrations_skrl.py`, and `test_fluent.py`
 covering each integration's registration and `TrainingHandle`'s `close()`/
 context-manager behavior specifically.
+
+### 2.27 `capture_status` - reporting `IntegrationSession`'s state to a queryable backend column
+
+§2.26 solves data loss in-process; this closes the other half of the same
+problem, "did this run's capture actually work," which until now only ever
+had an answer while the process was alive and its warnings were still on
+screen. Backend: `training_runs` gained a nullable `jsonb` `capture_status`
+column (migration `AddCaptureStatusToTrainingRuns1788990000000`) and a new
+route, `PATCH /training-runs/{id}/capture-status`
+(`UpdateTrainingRunCaptureStatusService`), separate from the existing status
+PATCH for the same reason `TrainingHandle.close()` doesn't touch
+`start()`/`complete()`/`fail()` (§2.26) - lifecycle status and capture
+completeness are different concerns, and a state-machine-shaped endpoint
+(`UpdateTrainingRunStatusService`'s `validTransitions`) is the wrong home for
+an idempotent report that has no transitions to validate.
+
+**NULL is the deliberate default, not `{}`.** A training run this SDK
+version never reported on must stay distinguishable from one that reported
+"nothing was attached" - collapsing the two would make "did this run predate
+the feature, or genuinely use no integrations" unanswerable later from the
+data alone.
+
+**SDK side**: `IntegrationSession.close()` now records, per registered
+closer, whether it raised, and `.summary()` turns that into `{"status":
+"complete" | "partial", "integrations": {name: {"attached": true, "closed":
+bool}}}` - `None` when nothing was ever registered, so a training run that
+used no integrations at all triggers no report and no network call.
+`TrainingHandle.close()` sends this to `training_runs.update_capture_status()`
+after `IntegrationSession.close()` runs, and only on the call that actually
+performed the close - `IntegrationSession.close()` now returns whether it did
+the work (`False` on a repeat call), specifically so a second `close()` call
+cannot re-send the same report. A failure to reach the backend for the report
+itself is caught (`SynthGraphError`) and turned into a `warnings.warn()`,
+never raised - the same "capture must never be the reason the script
+crashes" principle used everywhere else in this SDK, now applied to
+reporting on capture itself, not just capture.
+
+**Verified end-to-end against the real backend and Postgres, not just
+mocked**: the exact `with experiment.training(...)` / `monitor_resources()`
+/ no explicit `.stop()` scenario from §2.26 was re-run through the real SDK
+against the real local backend. `client.training_runs.get(training.id)`
+after the block exited returned `capture_status = {"status": "complete",
+"integrations": {"resource_monitor": {"attached": true, "closed": true}}}`,
+confirmed independently by querying `training_runs.capture_status` directly
+in Postgres - the full path (`ResourceMonitor` → `IntegrationSession.close()`
+→ `.summary()` → `TrainingHandle.close()` → `update_capture_status()` → the
+new backend route → the new column) works end to end, not just at the unit
+level.

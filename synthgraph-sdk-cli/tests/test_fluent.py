@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import warnings
 
 import httpx
 import pytest
@@ -315,12 +316,23 @@ def test_experiment_context_manager_has_no_side_effects(experiment, backend):
     assert len(backend.requests) == before
 
 
-def test_training_close_runs_every_registered_integration_closer(experiment, backend):
+def _route_training_run_and_capture_status(backend):
     backend.route(
         "POST",
         "/experiments/e1/training-runs",
         httpx.Response(201, json={"id": "t1", "status": "pending"}),
     )
+    backend.route(
+        "PATCH",
+        "/training-runs/t1/capture-status",
+        lambda request: httpx.Response(
+            200, json={"id": "t1", "status": "pending", "captureStatus": None}
+        ),
+    )
+
+
+def test_training_close_runs_every_registered_integration_closer(experiment, backend):
+    _route_training_run_and_capture_status(backend)
 
     training = experiment.training(model="yolo")
     closed: list[str] = []
@@ -333,11 +345,7 @@ def test_training_close_runs_every_registered_integration_closer(experiment, bac
 
 
 def test_training_close_is_safe_to_call_twice(experiment, backend):
-    backend.route(
-        "POST",
-        "/experiments/e1/training-runs",
-        httpx.Response(201, json={"id": "t1", "status": "pending"}),
-    )
+    _route_training_run_and_capture_status(backend)
 
     training = experiment.training(model="yolo")
     calls: list[str] = []
@@ -349,12 +357,100 @@ def test_training_close_is_safe_to_call_twice(experiment, backend):
     assert calls == ["x"]
 
 
-def test_training_context_manager_closes_integrations_on_normal_exit(experiment, backend):
+def test_training_close_only_reports_capture_status_once(experiment, backend):
+    """The second close() must not re-send the same report - the exact
+    duplicate-report risk IntegrationSession.close()'s bool return exists to
+    prevent."""
+    _route_training_run_and_capture_status(backend)
+
+    training = experiment.training(model="yolo")
+    training._integration_session.register(lambda: None, name="x")
+
+    training.close()
+    training.close()
+
+    capture_status_requests = [
+        r for r in backend.requests if r.path == "/training-runs/t1/capture-status"
+    ]
+    assert len(capture_status_requests) == 1
+
+
+def test_training_close_reports_complete_when_every_integration_closes_cleanly(
+    experiment, backend
+):
+    _route_training_run_and_capture_status(backend)
+
+    training = experiment.training(model="yolo")
+    training._integration_session.register(lambda: None, name="resource_monitor")
+
+    training.close()
+
+    request = next(
+        r for r in backend.requests if r.path == "/training-runs/t1/capture-status"
+    )
+    assert request.body == {
+        "status": "complete",
+        "integrations": {"resource_monitor": {"attached": True, "closed": True}},
+    }
+
+
+def test_training_close_reports_partial_when_a_closer_fails(experiment, backend):
+    _route_training_run_and_capture_status(backend)
+
+    training = experiment.training(model="yolo")
+    training._integration_session.register(lambda: None, name="ok")
+
+    def boom():
+        raise RuntimeError("simulated close failure")
+
+    training._integration_session.register(boom, name="broken")
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # the closer's own failure warning
+        training.close()
+
+    request = next(
+        r for r in backend.requests if r.path == "/training-runs/t1/capture-status"
+    )
+    assert request.body == {
+        "status": "partial",
+        "integrations": {
+            "ok": {"attached": True, "closed": True},
+            "broken": {"attached": True, "closed": False},
+        },
+    }
+
+
+def test_training_close_does_not_report_when_nothing_was_attached(experiment, backend):
+    _route_training_run_and_capture_status(backend)
+
+    training = experiment.training(model="yolo")
+    training.close()
+
+    assert not any(r.path == "/training-runs/t1/capture-status" for r in backend.requests)
+
+
+def test_a_failed_capture_status_report_warns_but_does_not_raise(experiment, backend):
     backend.route(
         "POST",
         "/experiments/e1/training-runs",
         httpx.Response(201, json={"id": "t1", "status": "pending"}),
     )
+    # No capture-status route configured - the mock backend 404s, mapped to
+    # SynthGraphNotFoundError, which close() must catch rather than raise.
+
+    training = experiment.training(model="yolo")
+    training._integration_session.register(lambda: None, name="x")
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        training.close()  # must not raise
+
+    assert any("SynthGraph capture-status report failed" in str(w.message) for w in caught)
+
+
+def test_training_context_manager_closes_integrations_on_normal_exit(experiment, backend):
+    _route_training_run_and_capture_status(backend)
 
     calls: list[str] = []
     with experiment.training(model="yolo") as training:
@@ -367,11 +463,7 @@ def test_training_context_manager_closes_integrations_on_normal_exit(experiment,
 def test_training_context_manager_closes_integrations_and_reraises_on_exception(
     experiment, backend
 ):
-    backend.route(
-        "POST",
-        "/experiments/e1/training-runs",
-        httpx.Response(201, json={"id": "t1", "status": "pending"}),
-    )
+    _route_training_run_and_capture_status(backend)
 
     calls: list[str] = []
     with pytest.raises(RuntimeError, match="researcher's own bug"):

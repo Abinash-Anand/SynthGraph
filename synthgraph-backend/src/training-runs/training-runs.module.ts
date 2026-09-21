@@ -29,6 +29,7 @@ import { CreateTrainingRunDatasetReferenceService } from './services/create-trai
 import { CreateTrainingRunService } from './services/create-training-run.service.js';
 import { GetTrainingRunService } from './services/get-training-run.service.js';
 import { ListTrainingRunsService } from './services/list-training-runs.service.js';
+import { UpdateTrainingRunCaptureStatusService } from './services/update-training-run-capture-status.service.js';
 import { UpdateTrainingRunStatusService } from './services/update-training-run-status.service.js';
 
 @Module({
@@ -69,6 +70,7 @@ import { UpdateTrainingRunStatusService } from './services/update-training-run-s
     GetTrainingRunService,
     ListTrainingRunsService,
     UpdateTrainingRunStatusService,
+    UpdateTrainingRunCaptureStatusService,
     CreateTrainingRunDatasetReferenceService,
   ],
 })
