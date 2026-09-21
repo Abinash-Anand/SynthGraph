@@ -228,18 +228,11 @@ describe('Assets and datasets (e2e)', () => {
           .expect(404);
       });
 
-      it('returns no versions when user B lists under user A asset', async () => {
-        // ListAssetVersionsService doesn't check the parent asset's
-        // ownership before listing, unlike ListExperimentsService and
-        // ListTrainingRunsService - it relies solely on the version query's
-        // own user_id join, which correctly returns nothing instead of
-        // leaking data, but as 200 [] rather than 404.
-        const response = await request(app.getHttpServer())
+      it('prevents user B from listing user A asset versions', async () => {
+        await request(app.getHttpServer())
           .get(`/assets/${assetId}/versions`)
           .set('Authorization', `Bearer ${apiKeyB}`)
-          .expect(200);
-
-        expect(response.body).toEqual([]);
+          .expect(404);
       });
 
       it('prevents user B from retrieving user A asset version', async () => {
@@ -280,6 +273,13 @@ describe('Assets and datasets (e2e)', () => {
       it('returns 404 for a nonexistent asset version', async () => {
         await request(app.getHttpServer())
           .get('/asset-versions/00000000-0000-0000-0000-000000000000')
+          .set('Authorization', `Bearer ${apiKeyA}`)
+          .expect(404);
+      });
+
+      it('returns 404 when listing versions under a nonexistent asset', async () => {
+        await request(app.getHttpServer())
+          .get('/assets/00000000-0000-0000-0000-000000000000/versions')
           .set('Authorization', `Bearer ${apiKeyA}`)
           .expect(404);
       });
@@ -385,16 +385,11 @@ describe('Assets and datasets (e2e)', () => {
           .expect(404);
       });
 
-      it('returns no versions when user B lists under user A dataset', async () => {
-        // Same inconsistency as asset versions above: ownership is enforced
-        // via the version query's own user_id join (nothing leaks) but
-        // surfaces as 200 [] instead of a 404 on the unowned parent.
-        const response = await request(app.getHttpServer())
+      it('prevents user B from listing user A dataset versions', async () => {
+        await request(app.getHttpServer())
           .get(`/datasets/${datasetId}/versions`)
           .set('Authorization', `Bearer ${apiKeyB}`)
-          .expect(200);
-
-        expect(response.body).toEqual([]);
+          .expect(404);
       });
 
       it('prevents user B from retrieving user A dataset version', async () => {
@@ -437,6 +432,13 @@ describe('Assets and datasets (e2e)', () => {
       it('returns 404 for a nonexistent dataset version', async () => {
         await request(app.getHttpServer())
           .get('/dataset-versions/00000000-0000-0000-0000-000000000000')
+          .set('Authorization', `Bearer ${apiKeyA}`)
+          .expect(404);
+      });
+
+      it('returns 404 when listing versions under a nonexistent dataset', async () => {
+        await request(app.getHttpServer())
+          .get('/datasets/00000000-0000-0000-0000-000000000000/versions')
           .set('Authorization', `Bearer ${apiKeyA}`)
           .expect(404);
       });

@@ -993,6 +993,34 @@ cleaned up from Postgres afterward. New test file
 `tests/cli/test_evaluations.py` (8 tests) plus `evaluations` added to
 `test_main.py`'s registered-groups list. `ruff` and `mypy` clean.
 
+### 2.36 `ListAssetVersionsService`/`ListDatasetVersionsService` now 404 for an unowned parent
+
+Flagged while writing `assets-and-datasets.e2e-spec.ts` (PR #90): listing
+versions under an asset or dataset that belongs to another user returned
+`200 []` instead of `404`, unlike every other "list a sub-resource under a
+parent" endpoint in the backend (`ListExperimentsService`,
+`ListTrainingRunsService`), which check the parent's ownership first and
+404 before ever running the list query. **Never a security bug** - the
+version query's own `asset.user_id`/`dataset.user_id` join already
+correctly returned nothing, so no data ever leaked - just an inconsistency
+in what the caller sees.
+
+Fixed by giving `ListAssetVersionsService`/`ListDatasetVersionsService` the
+same shape as `ListExperimentsService`: inject the parent repository,
+`findByIdForUser()` first, throw `NotFoundException` if the parent isn't
+found or isn't the caller's, matching the same-message convention
+(`GetAssetService`/`GetDatasetService` also throw `'Asset not found'` /
+`'Dataset not found'` for a missing or unowned parent).
+
+**Verified live**: registered a second real user, created a real asset as
+the first, confirmed listing its versions as the second user now returns
+`404 {"message":"Asset not found"}` instead of `200 []`. Updated the two
+e2e tests in `assets-and-datasets.e2e-spec.ts` that had documented the old
+behavior to assert the new 404, and added two more for listing versions
+under a nonexistent parent (previously untested for the list route
+specifically, only for get/create). Backend suite: 152 e2e (2 new), clean
+build, lint unchanged.
+
 ### 2.37 `sg.assets`/`sg.datasets` gain `get`/`list`/`get_version`/`list_versions`
 
 Found during the same backend audit that produced 2.32/2.33: the backend
