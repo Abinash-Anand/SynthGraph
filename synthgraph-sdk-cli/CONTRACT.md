@@ -610,3 +610,66 @@ those semantics don't need real hardware or a real backend to verify.
 v0.1.0 declared `pydantic>=2.0,<3.0` while `models/generation.py` uses
 `Field(exclude_if=...)`, which requires pydantic 2.12+. On pydantic 2.0–2.11
 that package would install and then fail. The floor is now `>=2.12`.
+
+### 2.26 `IntegrationSession` - bundling cleanup for every integration attached to one training run
+
+§2.24 and §2.25 each document the same shape of bug: `create_writer()` and
+`ResourceMonitor` both hold state that only flushes on an explicit
+`.close()`/`.stop()` call, and a researcher's script has no natural reminder
+to make that call - it just ends. This was not a hypothetical risk: a naive
+script (`training.monitor_resources(interval_seconds=1.0)`, a 5-step loop,
+then the script simply ends - no `.stop()`, no `with`, no exception) was run
+against a real local backend and produced exactly 5 logged samples, zero
+warnings, and exit code 0. Nothing about that run signals anything is
+missing; the gap (no sample capturing the run's actual final state) is
+invisible unless you already know to look for it.
+
+`IntegrationSession` (`integration_session.py`) moves the responsibility for
+remembering from the researcher to the integration itself. `ResourceMonitor`
+and `create_writer()` each register their own cleanup (`self.stop` /
+`writer.close`) with `training._integration_session` at construction time -
+duck-typed via `getattr(training, "_integration_session", None)`, so a test
+fake with no session attribute at all (every existing integration test)
+keeps working unchanged. `TrainingHandle` owns the session and gained
+`close()` plus `__enter__`/`__exit__`: leaving a `with experiment.training(
+...) as training:` block, or calling `training.close()` directly, closes
+every registered integration together, once, in registration order. A
+closer that raises is caught and turned into a `warnings.warn()` rather than
+allowed to stop the rest from closing - the same "one integration's failure
+must not lose another's data too" principle used throughout
+`synthgraph.integrations`.
+
+**Deliberately not a hooks/monkey-patching orchestrator.** This only
+coordinates SynthGraph's own integration objects - it never reaches into a
+third-party framework or intercepts anything there. Every integration still
+only fires through the framework's own sanctioned extension point (SB3's
+callback list, skrl's writer object), exactly as §2.23/§2.24 established;
+`IntegrationSession` changes nothing about how or when an integration is
+invoked, only what happens to it when a researcher forgets to close it.
+
+**Explicitly out of scope for this change**: `create_callback()` (SB3) is
+not registered with the session, because it has nothing to flush - it logs
+synchronously on each `_on_rollout_end()` call and holds no pending state,
+unlike the writer's batch-per-timestep buffering. Registering it would add a
+no-op closer for no reason.
+
+**`TrainingHandle.__exit__` does not manage training-run status.** This is a
+deliberate difference from `GenerationHandle`'s context manager (which calls
+`start()`/`complete()`/`fail()` on enter/exit): bundling integration cleanup
+and transitioning a training run's lifecycle are different concerns, and
+conflating them here would have been a second, unrelated feature smuggled
+into this one. `start()`/`complete()`/`fail()` remain separate, explicit
+calls.
+
+**Verified twice against the real backend, before and after**: the naive
+script above (no `with`, no `.stop()`) produced 5 samples with a plain
+`TrainingHandle`. The identical script - still zero `.stop()` calls anywhere
+- wrapped in `with experiment.training(...) as training:` produced 6:
+sample 5 landed the moment the `with` block exited, 0.7s after the last
+periodic one, matching wall-clock exactly. Unit-level behavior (registration
+order, idempotent `close()`, one closer's failure not blocking another's,
+the duck-typed no-session case) has its own suite
+(`test_integration_session.py`), plus new cases in
+`test_resource_monitor.py`, `test_integrations_skrl.py`, and `test_fluent.py`
+covering each integration's registration and `TrainingHandle`'s `close()`/
+context-manager behavior specifically.

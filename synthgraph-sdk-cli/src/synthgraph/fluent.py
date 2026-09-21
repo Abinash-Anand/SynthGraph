@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, Any, Self
 
 from .environment import ResourceMonitor
 from .errors import SynthGraphError, SynthGraphValidationError
+from .integration_session import IntegrationSession
 from .models import (
     AssetVersion,
     DatasetVersion,
@@ -315,11 +316,23 @@ class GenerationHandle(_Handle):
 
 
 class TrainingHandle(_Handle):
-    """A training run, with its evaluations hanging off it."""
+    """A training run, with its evaluations hanging off it.
+
+    Owns an ``IntegrationSession`` (``self._integration_session``) that every
+    attached integration - ``monitor_resources()``, ``create_writer()`` from
+    ``synthgraph.integrations.skrl``, and anything added later - registers
+    its cleanup with automatically. Call ``close()``, or use this handle as a
+    context manager, to tear all of them down together instead of tracking
+    each one's ``.stop()``/``.close()`` separately (see
+    ``integration_session.py`` for why that matters). This does not change
+    the training run's own status - call ``start()``/``complete()``/``fail()``
+    yourself, the same as always; ``close()`` is only about integrations.
+    """
 
     def __init__(self, client: SynthGraphClient, training_run: TrainingRun) -> None:
         super().__init__(client)
         self.training_run = training_run
+        self._integration_session = IntegrationSession()
 
     @property
     def id(self) -> str:
@@ -386,8 +399,11 @@ class TrainingHandle(_Handle):
                 run_the_actual_training_loop()
 
         or call ``.stop()`` yourself if a ``with`` block doesn't fit your
-        control flow. Still opt-in, not automatic-by-default - nothing
-        samples anything until this is called.
+        control flow - or rely on this training run's own ``close()``
+        (registered automatically at construction, see
+        ``integration_session.py``), so even forgetting both of the above no
+        longer loses the final sample. Still opt-in, not automatic-by-default
+        - nothing samples anything until this is called.
         """
         return ResourceMonitor(self, interval_seconds=interval_seconds).start()
 
@@ -405,6 +421,32 @@ class TrainingHandle(_Handle):
         """Re-read this training run from the backend."""
         self.training_run = self._client.training_runs.get(self.id)
         return self
+
+    def close(self) -> None:
+        """Tear down every integration attached to this training run.
+
+        Stops any resource monitor, flushes any skrl writer, and so on for
+        whatever else has registered with ``self._integration_session`` -
+        together, once, regardless of which of them the caller remembered to
+        stop individually. Safe to call more than once. Does not change the
+        training run's status.
+        """
+        self._integration_session.close()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """Leaving the block closes every attached integration together (see
+        ``close()``). The training run's status is untouched either way -
+        this is not equivalent to ``GenerationHandle``'s context manager.
+        """
+        self.close()
 
     def __repr__(self) -> str:
         return f"TrainingHandle(id={self.id!r})"

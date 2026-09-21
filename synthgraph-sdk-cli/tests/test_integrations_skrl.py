@@ -5,6 +5,7 @@ import warnings
 import pytest
 
 from synthgraph.errors import SynthGraphError, SynthGraphValidationError
+from synthgraph.integration_session import IntegrationSession
 from synthgraph.integrations.skrl import create_writer, extract_training_config
 
 
@@ -121,9 +122,11 @@ def test_result_is_json_serializable():
 
 
 class FakeTrainingHandle:
-    def __init__(self, *, raise_on_call: bool = False) -> None:
+    def __init__(self, *, raise_on_call: bool = False, with_session: bool = False) -> None:
         self.calls: list[tuple[int, dict]] = []
         self._raise_on_call = raise_on_call
+        if with_session:
+            self._integration_session = IntegrationSession()
 
     def log_metric(self, *, step: int, metrics: dict) -> None:
         if self._raise_on_call:
@@ -251,3 +254,33 @@ def test_create_writer_drops_unconvertible_values_without_raising():
     writer.close()
 
     assert training.calls == [(1, {"good": 1.0})]
+
+
+def test_create_writer_registers_close_with_the_trainings_integration_session():
+    """The documented gotcha: nothing in skrl's own SequentialTrainer calls
+    .close(), so a researcher who forgets loses the final batch. When
+    `training` has a session, create_writer() registers close() with it, so
+    training.close() flushes the pending batch even if .close() is never
+    called directly on the writer."""
+    training = FakeTrainingHandle(with_session=True)
+    writer = create_writer(training)
+
+    writer.add_scalar(tag="loss", value=0.5, timestep=5)
+    assert training.calls == []  # not flushed yet - no close() call of any kind
+
+    training._integration_session.close()  # not writer.close() - the session's
+
+    assert training.calls == [(5, {"loss": 0.5})]
+
+
+def test_create_writer_without_a_session_does_not_error():
+    """A duck-typed training handle (every other test in this file) must
+    keep working exactly as before - the getattr guard must not require the
+    attribute to exist."""
+    training = FakeTrainingHandle(with_session=False)
+    writer = create_writer(training)
+
+    writer.add_scalar(tag="loss", value=0.5, timestep=5)
+    writer.close()
+
+    assert training.calls == [(5, {"loss": 0.5})]

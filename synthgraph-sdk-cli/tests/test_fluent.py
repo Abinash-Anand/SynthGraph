@@ -313,3 +313,86 @@ def test_experiment_context_manager_has_no_side_effects(experiment, backend):
     with experiment as same:
         assert same is experiment
     assert len(backend.requests) == before
+
+
+def test_training_close_runs_every_registered_integration_closer(experiment, backend):
+    backend.route(
+        "POST",
+        "/experiments/e1/training-runs",
+        httpx.Response(201, json={"id": "t1", "status": "pending"}),
+    )
+
+    training = experiment.training(model="yolo")
+    closed: list[str] = []
+    training._integration_session.register(lambda: closed.append("resource_monitor"), name="rm")
+    training._integration_session.register(lambda: closed.append("skrl_writer"), name="writer")
+
+    training.close()
+
+    assert closed == ["resource_monitor", "skrl_writer"]
+
+
+def test_training_close_is_safe_to_call_twice(experiment, backend):
+    backend.route(
+        "POST",
+        "/experiments/e1/training-runs",
+        httpx.Response(201, json={"id": "t1", "status": "pending"}),
+    )
+
+    training = experiment.training(model="yolo")
+    calls: list[str] = []
+    training._integration_session.register(lambda: calls.append("x"), name="x")
+
+    training.close()
+    training.close()
+
+    assert calls == ["x"]
+
+
+def test_training_context_manager_closes_integrations_on_normal_exit(experiment, backend):
+    backend.route(
+        "POST",
+        "/experiments/e1/training-runs",
+        httpx.Response(201, json={"id": "t1", "status": "pending"}),
+    )
+
+    calls: list[str] = []
+    with experiment.training(model="yolo") as training:
+        training._integration_session.register(lambda: calls.append("closed"), name="x")
+        assert calls == []
+
+    assert calls == ["closed"]
+
+
+def test_training_context_manager_closes_integrations_and_reraises_on_exception(
+    experiment, backend
+):
+    backend.route(
+        "POST",
+        "/experiments/e1/training-runs",
+        httpx.Response(201, json={"id": "t1", "status": "pending"}),
+    )
+
+    calls: list[str] = []
+    with pytest.raises(RuntimeError, match="researcher's own bug"):
+        with experiment.training(model="yolo") as training:
+            training._integration_session.register(lambda: calls.append("closed"), name="x")
+            raise RuntimeError("researcher's own bug")
+
+    assert calls == ["closed"]
+
+
+def test_training_context_manager_does_not_change_status(experiment, backend):
+    """Unlike GenerationHandle, leaving a training `with` block must not
+    call start()/complete()/fail() - close() is only about integrations."""
+    backend.route(
+        "POST",
+        "/experiments/e1/training-runs",
+        httpx.Response(201, json={"id": "t1", "status": "pending"}),
+    )
+
+    with experiment.training(model="yolo") as training:
+        pass
+
+    assert training.training_run.status == "pending"
+    assert not any(r.method == "PATCH" for r in backend.requests)

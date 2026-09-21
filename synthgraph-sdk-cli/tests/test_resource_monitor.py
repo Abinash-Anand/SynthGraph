@@ -15,6 +15,7 @@ import pytest
 
 from synthgraph.environment import ResourceMonitor
 from synthgraph.errors import SynthGraphError
+from synthgraph.integration_session import IntegrationSession
 
 # Fast enough to observe several ticks within a short test, slow enough not
 # to flood a slow CI machine with thread wakeups.
@@ -23,9 +24,11 @@ _SETTLE = _FAST_INTERVAL * 6
 
 
 class FakeTrainingHandle:
-    def __init__(self, *, fail_every: int | None = None) -> None:
+    def __init__(self, *, fail_every: int | None = None, with_session: bool = False) -> None:
         self.calls: list[tuple[int, dict]] = []
         self._fail_every = fail_every
+        if with_session:
+            self._integration_session = IntegrationSession()
 
     def log_metric(self, *, step: int, metrics: dict) -> None:
         if self._fail_every is not None and step % self._fail_every == 0:
@@ -174,3 +177,35 @@ def test_a_failed_sample_does_not_crash_the_thread(monkeypatch):
 
     assert any("SynthGraph resource sampling failed" in str(w.message) for w in caught)
     assert training.calls == []
+
+
+def test_construction_registers_stop_with_the_trainings_integration_session():
+    """The exact gap the dogfooding run exposed: a script that starts a
+    monitor and never calls .stop() loses the final sample, silently. When
+    `training` has a session, construction registers stop() with it, so
+    training.close() (which every TrainingHandle now has) closes this too -
+    without the caller ever calling monitor.stop() directly."""
+    training = FakeTrainingHandle(with_session=True)
+    monitor = ResourceMonitor(training, interval_seconds=60.0)
+
+    monitor.start()
+    time.sleep(0.05)
+    # No monitor.stop() call at all - only the session closes.
+    training._integration_session.close()
+
+    assert len(training.calls) == 2  # immediate first sample + the registered stop()'s final sample
+    assert monitor._thread is None
+
+
+def test_no_session_attribute_is_not_an_error():
+    """A duck-typed training handle (e.g. a test fake with no session, as
+    every other test in this file uses) must construct and run exactly as
+    before - the getattr guard must not require the attribute to exist."""
+    training = FakeTrainingHandle(with_session=False)
+
+    monitor = ResourceMonitor(training, interval_seconds=_FAST_INTERVAL)
+    monitor.start()
+    time.sleep(_SETTLE)
+    monitor.stop()
+
+    assert len(training.calls) >= 1
