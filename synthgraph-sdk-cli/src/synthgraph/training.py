@@ -11,7 +11,7 @@ from typing import Any
 from .environment import auto_capture
 from .errors import SynthGraphValidationError
 from .http import SynthGraphHTTPClient
-from .models import DatasetVersion, TrainingRun
+from .models import DatasetVersion, TrainingRun, TrainingRunMetric
 from .routes import Routes
 from .serialization import (
     compact,
@@ -27,6 +27,7 @@ DatasetInput = str | DatasetVersion | dict[str, Any]
 #: ``TrainingRunsAPI.list``.
 TrainingRunList = list[TrainingRun]
 DatasetInputs = list[DatasetInput]
+TrainingRunMetricList = list[TrainingRunMetric]
 
 
 class TrainingRunsAPI:
@@ -194,6 +195,51 @@ class TrainingRunsAPI:
         record (spec 5).
         """
         return self._update_status(training_run_id, "failed")
+
+    def log_metric(
+        self,
+        *,
+        training_run_id: str,
+        step: int,
+        metrics: dict[str, Any],
+    ) -> TrainingRunMetric:
+        """Record a training-metric observation at a given step.
+
+        Unlike EvaluationResult (one final score against an exact dataset
+        version), this is for tracking a metric's value *over the course of*
+        training - call it once per step/epoch you want recorded.
+        """
+        training_run_id = require_identifier(training_run_id, field="training_run_id")
+
+        if isinstance(step, bool) or not isinstance(step, int):
+            raise SynthGraphValidationError(
+                f"step must be an int, got {type(step).__name__}",
+                field="step",
+            )
+
+        payload = {
+            "step": step,
+            "metrics": require_mapping(metrics, field="metrics"),
+        }
+
+        data = self._http.post(
+            Routes.training_run_metrics(training_run_id),
+            json=payload,
+            operation="training_runs.log_metric",
+        )
+
+        return TrainingRunMetric.model_validate(data)
+
+    def metrics(self, *, training_run_id: str) -> TrainingRunMetricList:
+        """List the metric points recorded for a training run, ordered by step."""
+        training_run_id = require_identifier(training_run_id, field="training_run_id")
+
+        data = self._http.get_list(
+            Routes.training_run_metrics(training_run_id),
+            operation="training_runs.metrics",
+        )
+
+        return [TrainingRunMetric.model_validate(item) for item in data]
 
     def _update_status(self, training_run_id: str, status: str) -> TrainingRun:
         """Update the lifecycle status of a training run."""

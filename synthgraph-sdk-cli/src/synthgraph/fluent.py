@@ -41,6 +41,7 @@ from .models import (
     Project,
     ReproductionManifest,
     TrainingRun,
+    TrainingRunMetric,
 )
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle only matters to type checkers
@@ -363,6 +364,16 @@ class TrainingHandle(_Handle):
     def evaluations(self) -> list[EvaluationResult]:
         """List the evaluations recorded for this training run."""
         return self._client.evaluations.list(training_run_id=self.id)
+
+    def log_metric(self, *, step: int, metrics: dict[str, Any]) -> TrainingRunMetric:
+        """Record a training-metric observation for this training run at a given step."""
+        return self._client.training_runs.log_metric(
+            training_run_id=self.id, step=step, metrics=metrics
+        )
+
+    def metrics(self) -> list[TrainingRunMetric]:
+        """List the metric points recorded for this training run, ordered by step."""
+        return self._client.training_runs.metrics(training_run_id=self.id)
 
     def add_dataset(self, dataset: Any) -> TrainingHandle:
         """Attach another dataset version to this training run."""

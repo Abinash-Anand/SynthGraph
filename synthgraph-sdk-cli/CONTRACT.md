@@ -44,6 +44,8 @@ test.
 | Create evaluation | `sg.evaluations.create()` / `training.evaluation()` | — | POST | `/training-runs/{trainingRunId}/evaluations` |
 | Get evaluation | `sg.evaluations.get(id)` | — | GET | `/evaluation-results/{evaluationResultId}` |
 | List evaluations | `sg.evaluations.list()` / `training.evaluations()` | — | GET | `/training-runs/{trainingRunId}/evaluations` |
+| Log training metric | `sg.training_runs.log_metric()` / `training.log_metric()` | — | POST | `/training-runs/{trainingRunId}/metrics` |
+| List training metrics | `sg.training_runs.metrics()` / `training.metrics()` | — | GET | `/training-runs/{trainingRunId}/metrics` |
 | Create asset (step 1 of `sg.assets.create()`, skipped when `asset_id=` reuses an existing one) | — | — | POST | `/assets` |
 | Create asset version (step 2 of `sg.assets.create()`) | — | — | POST | `/assets/{assetId}/versions` |
 | Record asset (step 3 of `sg.assets.create()`: attach the version to the generation) | `sg.assets.create()` / `generation.asset()` | — | POST | `/generations/{generationId}/assets` |
@@ -209,6 +211,27 @@ its flow (2.13) and only fires the attach request for its side effect,
 because that is what `generation.dataset(...)` has always handed back to
 callers.
 
+### 2.17 Training-run metrics are a new capability, not a reconciliation
+
+`TrainingRunMetric` (`POST`/`GET /training-runs/{trainingRunId}/metrics`) has
+no prior SDK surface and no earlier backend precedent to reconcile against -
+unlike the routes above, which corrected assumptions against an existing
+backend controller (section 3), this is new on both sides at once. **New**,
+not reconciled.
+
+Two decisions made while adding it:
+
+* **No uniqueness constraint on `(training_run_id, step)`.** Multiple metric
+  points may be logged at the same step - e.g. one row for train-loss and
+  another for eval-reward recorded together at step 100 - so
+  `log_metric()` never checks for or rejects a duplicate step.
+* **Lives on `TrainingRunsAPI`/`TrainingHandle`, not its own top-level
+  resource.** A metric point only ever makes sense in the context of the
+  training run it was recorded against (same relationship `evaluations` has
+  to `training_runs`), so it is `sg.training_runs.log_metric()` /
+  `training.log_metric()`, not a new `sg.training_run_metrics` client
+  attribute.
+
 ### 2.18 `sg.assets.create()` mirrors the dataset three-request flow, with `type` on the `Asset` and no `format` anywhere
 
 The backend now implements `Asset`/`AssetVersion`/`GenerationAssetReference`
@@ -244,11 +267,11 @@ The attach payload for both the asset and dataset routes carries the backend
 DTO's actual field name, `{assetVersionId, role}` / `{datasetVersionId,
 role}` (camelCase, matching `CreateGenerationAssetReferenceDto` /
 `CreateGenerationDatasetReferenceDto` in the backend source) - `assets.py`
-sends `assetVersionId` deliberately. Note this is **not** what `datasets.py`
-currently sends (it sends snake_case `dataset_version_id`, inherited from
-2.3's "the SDK sends snake_case" rule applied too literally to this one
-field); that pre-existing mismatch is tracked separately and left alone here
-to keep this change scoped to assets.
+sends `assetVersionId` deliberately. At the time this was written,
+`datasets.py` sent snake_case `dataset_version_id` for the same kind of
+payload - §2.3's "the SDK sends snake_case" rule applied too literally to
+this one field - but that has since been fixed (§2.21) to also send the
+backend's real camelCase field name.
 
 ---
 
@@ -295,7 +318,7 @@ Deliberately **not** implemented, per the spec:
 - `synthgraph reproduce` (§59)
 - dataset or asset upload (§6)
 
-### 2.17 One framework integration exists, opt-in and unverified against a live install
+### 2.19 One framework integration exists, opt-in and unverified against a live install
 
 `synthgraph.integrations.isaaclab.extract_event_config()` (added after §10's
 "automatic instrumentation, hooks, decorators" was written) turns an Isaac
@@ -313,7 +336,7 @@ domain-randomization data, which W&B's generic metric logging does not
 model - W&B-style broader capture (training metrics over time, GPU/resource
 usage, media) is still open, tracked separately, not started.
 
-### 2.19 `resource_metadata()` is opt-in, not part of `auto_capture()`
+### 2.20 `resource_metadata()` is opt-in, not part of `auto_capture()`
 
 Unlike `git_metadata()`/`environment_metadata()`, a CPU/memory/GPU snapshot
 has real cost (a blocking ~100ms `psutil` sample, a subprocess spawn for
@@ -328,7 +351,7 @@ simply absent without it - verified end-to-end against real hardware
 (`psutil`'s CPU/memory sampling and a real `nvidia-smi` GPU query) in this
 environment, not just mocked, before the mocked tests were written.
 
-### 2.18 Reference-attach and comparison payloads use the backend's real camelCase field names
+### 2.21 Reference-attach and comparison payloads use the backend's real camelCase field names
 
 Found while reviewing the media/asset-reference feature (its attach-reference
 DTO correctly used camelCase from the start, which is what surfaced the
