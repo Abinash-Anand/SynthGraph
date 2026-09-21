@@ -494,6 +494,54 @@ backend's `name` field is required, so a `training()` call without an
 explicit `name=` fails with a validation error. Not fixed here (out of
 scope for this change), flagged for a follow-up.
 
+### 2.24 skrl's extension point is a writer object, not a callback list - `create_writer()`, not `create_callback()`
+
+The second framework-callback integration, following §2.23's reasoning, but
+skrl's own sanctioned extension point turned out to be structurally
+different from SB3's once actually checked against real source rather than
+assumed to match: every skrl agent owns `self.writer` (normally a
+TensorBoard `SummaryWriter`) and calls `self.writer.add_scalar(tag=, value=,
+timestep=)` once per tracked metric - not once per batch - whenever
+`agent.post_interaction()` crosses a `cfg.experiment.write_interval`
+boundary. Confirmed directly by driving the real
+`agent.track_data()`/`agent.post_interaction()` machinery with a spy in
+place of `agent.writer`: three `track_data()` calls followed by one
+`post_interaction()` crossing the boundary produced exactly three
+`add_scalar()` calls, all sharing one `timestep`.
+
+`skrl.create_writer(training, wrapped=agent.writer)` returns a drop-in
+writer that batches same-timestep `add_scalar()` calls into a single
+`training.log_metric()` call instead of one HTTP request per tag, and
+forwards every call to `wrapped` first so existing TensorBoard logging keeps
+working unchanged - SynthGraph logging is additive, not a replacement.
+Unlike `stable_baselines3.create_callback()`, this needs no lazy import of
+skrl at all: the writer is pure duck-typing (`add_scalar`/`flush`/`close`),
+so `create_writer()` itself has zero skrl dependency - only actually
+assigning its result to a real agent's `.writer` does.
+
+**A real gotcha this surfaced, not present in the SB3 callback**: batching
+by timestep means the final write_interval's worth of metrics only reaches
+SynthGraph once a later call arrives with a different timestep, or the
+writer is explicitly flushed. skrl's own `SequentialTrainer` never calls
+`.close()`/`.flush()` on the writer itself (confirmed by reading its
+`train()` method), so the last batch of a training run would be silently
+lost without an explicit `agent.writer.close()` after training - documented
+prominently on `create_writer()`, not left as a footnote, since it is easy
+to get this wrong and lose exactly the metrics from the end of a run.
+
+**Also found in passing**: skrl already has built-in Weights & Biases
+support (`cfg.experiment.wandb = True` makes skrl call `wandb.init()` and
+sync its own TensorBoard writer via `sync_tensorboard=True`) - meaning
+`wandb.extract_run_metrics()` (§2.22) is already a viable, zero-new-code
+path from skrl into SynthGraph today for anyone willing to add the `wandb`
+dependency, as an alternative to `create_writer()`.
+
+Verified the same way as `create_writer()`: a real spy in place of a real
+agent's `.writer`, confirming batching-by-timestep, `.close()`-flushes-the-
+final-batch, wrapped-writer-forwarding-continues-even-on-SynthGraph-failure,
+and a caught backend failure turning into a `warnings.warn()` rather than
+propagating - not fakes standing in for skrl's actual call pattern.
+
 v0.1.0 declared `pydantic>=2.0,<3.0` while `models/generation.py` uses
 `Field(exclude_if=...)`, which requires pydantic 2.12+. On pydantic 2.0–2.11
 that package would install and then fail. The floor is now `>=2.12`.
