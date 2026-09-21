@@ -30,10 +30,20 @@ test.
 | List/filter generations | `sg.generations.list(parameters=)` | `generations list` | GET | `/experiments/{experimentId}/generations?parameters=` |
 | Get generation | `sg.generations.get(id)` | `generations get` | GET | `/generations/{generationId}` |
 | Lifecycle | `.start()` `.complete()` `.fail()` | — | PATCH | `/generations/{generationId}` |
-| Record dataset | `sg.datasets.create()` | — | POST | `/generations/{generationId}/datasets` |
+| Create dataset (step 1 of `sg.datasets.create()`, skipped when `dataset_id=` reuses an existing one) | — | — | POST | `/datasets` |
+| Create dataset version (step 2 of `sg.datasets.create()`) | — | — | POST | `/datasets/{datasetId}/versions` |
+| Record dataset (step 3 of `sg.datasets.create()`: attach the version to the generation) | `sg.datasets.create()` | — | POST | `/generations/{generationId}/datasets` |
 | Reproduction manifest | `sg.reproduction.get(id)` | `manifest` | GET | `/generations/{generationId}/reproduction-manifest` |
 | Documentation | `sg.documentation.get(id)` | `docs` | GET | `/generations/{generationId}/documentation` |
 | Compare | `sg.comparisons.compare([...])` | `compare` | POST | `/generations/compare` |
+| Create training run | `sg.training_runs.create()` / `experiment.training()` | — | POST | `/experiments/{experimentId}/training-runs` |
+| List training runs | `sg.training_runs.list()` / `experiment.training_runs()` | — | GET | `/experiments/{experimentId}/training-runs` |
+| Get training run | `sg.training_runs.get(id)` | — | GET | `/training-runs/{trainingRunId}` |
+| Training run lifecycle | `.start()` `.complete()` `.fail()` | — | PATCH | `/training-runs/{trainingRunId}` |
+| Attach dataset to training run | `sg.training_runs.add_dataset()` | — | POST | `/training-runs/{trainingRunId}/datasets` |
+| Create evaluation | `sg.evaluations.create()` / `training.evaluation()` | — | POST | `/training-runs/{trainingRunId}/evaluations` |
+| Get evaluation | `sg.evaluations.get(id)` | — | GET | `/evaluation-results/{evaluationResultId}` |
+| List evaluations | `sg.evaluations.list()` / `training.evaluations()` | — | GET | `/training-runs/{trainingRunId}/evaluations` |
 
 Error mapping is deterministic for all of them:
 
@@ -113,12 +123,20 @@ already in a terminal state is left alone, and a failure of the lifecycle call
 itself never masks the researcher's own exception. §35 permits this only if the
 behaviour is written down; it is, here and in the README and the docstring.
 
-### 2.9 Environment and Git capture are opt-in
+### 2.9 Environment and Git capture are on by default for generations and training runs
 
-Nothing is collected automatically (§31, §32). `git_metadata()` strips
-credentials from remote URLs and returns `{}` outside a repository.
-`environment_metadata()` collects five fixed fields plus versions of packages
-the caller names.
+Superseded: this used to say capture was opt-in for everything (§31, §32).
+`git_metadata()` and `environment_metadata()` themselves are still only ever
+called explicitly by the SDK's own code, never by reaching into a researcher's
+process behind their back - but `generations.create()` and
+`training_runs.create()` now call `environment.auto_capture()` (the two
+composed) by default whenever the caller hasn't already supplied an
+`environment` (generations) or a `metadata["environment"]` (training runs,
+which has no dedicated reproducibility field). `capture_environment=False`
+turns it off per call. `git_metadata()` still strips credentials from remote
+URLs and returns `{}` outside a repository; `environment_metadata()` still
+collects only five fixed fields plus versions of packages the caller names -
+the *what* is unchanged, only the *automatic-by-default* part is new.
 
 ### 2.10 The CLI takes no `--api-key`
 
@@ -135,42 +153,74 @@ to the SDK, and running research tooling belongs to the researcher (§58, §59).
 It matches the existing `SynthGraphConfig.api_url` field. `SYNTHGRAPH_BASE_URL`
 is accepted as an alias because the spec text uses that spelling.
 
+### 2.13 `sg.datasets.create()` is a three-request flow
+
+The backend models a dataset as a logical `Dataset` (identity: `name`,
+`description`, `metadata`) with immutable `DatasetVersion` records hanging off
+it, plus a separate attachment record linking a version to a generation. The
+SDK's one-call ergonomic `datasets.create()` covers all three steps:
+
+1. `POST /datasets` to create a new `Dataset` named after the `name=`
+   argument - skipped when the caller passes `dataset_id=` to reuse an
+   existing logical dataset instead.
+2. `POST /datasets/{datasetId}/versions` to create the immutable version.
+   When `version=` is omitted, the SDK defaults it to the current UTC
+   timestamp in ISO-8601 (`_default_version()` in `datasets.py`): always
+   unique, and cheaper than an extra round trip to check for collisions.
+3. `POST /generations/{generationId}/datasets` to attach the new version to
+   the generation. When `role=` is omitted, the SDK defaults it to
+   `"output"` - a dataset a generation records is normally something it
+   produced.
+
+### 2.14 Training run payload maps ergonomic names onto `trainer`/`parameters`
+
+`training_runs.create()` keeps its existing Python-facing keywords - `model=`,
+`framework=`, `framework_version=`, `config=` - but the backend's DTO has no
+matching flat fields. The SDK maps them on the wire: `model` -> `trainer.name`,
+`framework` -> `trainer.type`, `framework_version` -> `trainer.version`,
+`config` -> `parameters`. `parameters` is always sent (defaulting to `{}`),
+matching how `generations.create()` already always sends `parameters`.
+
+The backend also does not accept `datasets` or `status` on create - every
+training run starts `pending`. Passing `status=` to `training_runs.create()`
+raises `SynthGraphValidationError` instead of being silently dropped.
+`datasets=` is instead attached with one `POST
+/training-runs/{trainingRunId}/datasets` call per dataset, after the training
+run itself is created; the object `create()` returns is then re-fetched with
+`GET /training-runs/{trainingRunId}` so it reflects the attached datasets
+rather than the empty list the create response carries.
+
+### 2.15 Evaluation `dataset_version_id` is required, not optional
+
+The backend's evaluation-result DTO validates `dataset_version_id` with
+`@IsUUID()` and no `@IsOptional()`. `evaluations.create()` now requires it
+too, rather than silently posting an evaluation with no comparable dataset
+version behind it.
+
+### 2.16 `sg.datasets.create()` returns the `DatasetVersion`, not the attachment record
+
+`POST /generations/{generationId}/datasets` returns the attachment record
+(what links a dataset version to a generation), not the `DatasetVersion`
+itself. `datasets.create()` returns the `DatasetVersion` produced by step 2 of
+its flow (2.13) and only fires the attach request for its side effect,
+because that is what `generation.dataset(...)` has always handed back to
+callers.
+
 ---
 
 ## 3. UNVERIFIED — routes that need checking against the backend
 
-Spec §63 explicitly refuses to freeze these until the backend controllers are
-inspected, and that inspection has **not** happened: no backend source was
-available when this client was built.
-
-All of them live in `src/synthgraph/routes.py` and are listed in
-`routes.UNVERIFIED_ROUTES`, so reconciling them is a one-file change.
+Spec §63 explicitly refuses to freeze a route until the backend controller
+behind it has been inspected. Training-run, dataset and evaluation-result
+routes have now been read from the backend source and corrected (section 1);
+this section is left with only the one route inspection never covered.
 
 | Operation | Assumed route | Assumed payload |
 |---|---|---|
-| Create training run | POST `/experiments/{id}/training-runs` | `{model, framework, framework_version, config, datasets, status, metadata}` |
-| List training runs | GET `/experiments/{id}/training-runs` | — |
-| Get training run | GET `/training-runs/{id}` | — |
-| Attach dataset | POST `/training-runs/{id}/datasets` | `{id}` |
-| Create evaluation | POST `/training-runs/{id}/evaluation-results` | `{name, metrics, dataset_version_id, metadata}` |
-| Get evaluation | GET `/evaluation-results/{id}` | — |
-| List evaluations | GET `/training-runs/{id}/evaluation-results` | — |
 | Asset references | POST `/generations/{id}/assets` | not yet used by any SDK method |
 
-They follow the naming convention the verified routes use: collections hang off
-their parent, single resources are addressed at the top level. That is a
-reasonable inference, not a contract.
-
-**To close this section:** read `src/training-runs/` and
-`src/evaluation-results/` (or the equivalent modules) in the backend, correct
-`routes.py` and the payload builders, then run:
-
-```bash
-SYNTHGRAPH_INTEGRATION_TESTS=1 SYNTHGRAPH_INTEGRATION_TRAINING=1 pytest -m integration
-```
-
-The training/evaluation integration test is behind its own flag precisely
-because it asserts an unverified contract.
+It follows the naming convention the verified routes use: a collection hangs
+off its parent. That is a reasonable inference, not a contract.
 
 Two smaller unknowns in the same category:
 
@@ -196,10 +246,7 @@ Per spec §36, §67 and §68, these must be frozen and this file updated:
 - [ ] error body shape
 - [ ] API versioning scheme
 - [ ] idempotency keys for writes — until then, writes are not retried
-- [ ] training-run and evaluation-result routes and payloads (section 3)
 - [ ] comparison response schema
-- [ ] whether `POST /generations/{id}/datasets` returns a `DatasetVersion`, a
-      link object, or the parent `Dataset`
 - [ ] credential storage for the CLI beyond environment variables
 - [ ] pagination for list endpoints (none is implemented, because none is documented)
 

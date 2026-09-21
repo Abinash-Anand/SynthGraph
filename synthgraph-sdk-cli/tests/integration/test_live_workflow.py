@@ -86,7 +86,7 @@ def test_full_researcher_workflow(live_client, live_project, tmp_path):
 @pytest.mark.skipif(
     os.environ.get("SYNTHGRAPH_INTEGRATION_TRAINING") != "1",
     reason=(
-        "training-run and evaluation routes are unverified against the backend; "
+        "training-run and evaluation routes exercise newer backend endpoints; "
         "opt in with SYNTHGRAPH_INTEGRATION_TRAINING=1 to check them (see CONTRACT.md)"
     ),
 )
@@ -94,18 +94,44 @@ def test_training_and_evaluation(live_client, live_project):
     experiment = live_client.experiments.create(
         project_id=live_project.id, name=f"training-{uuid.uuid4().hex[:6]}"
     )
+    generation = live_client.generations.create(
+        experiment_id=experiment.id,
+        name="training-source",
+        generator="blender",
+        parameters={},
+    )
+    dataset = live_client.datasets.create(
+        generation_id=generation.id,
+        name=f"training-dataset-{uuid.uuid4().hex[:6]}",
+        uri="s3://example-bucket/training_dataset_v1",
+    )
 
     training = live_client.training_runs.create(
         experiment_id=experiment.id,
         model="yolo",
         framework="pytorch",
         config={"epochs": 1},
+        datasets=[dataset.id],
     )
-    evaluation = live_client.evaluations.create(
-        training_run_id=training.id, metrics={"mAP": 0.5}
-    )
+    assert [dv.id for dv in training.datasets] == [dataset.id]
 
+    started = live_client.training_runs.start(training.id)
+    assert started.status == "running"
+    completed = live_client.training_runs.complete(training.id)
+    assert completed.status == "completed"
+
+    evaluation = live_client.evaluations.create(
+        training_run_id=training.id,
+        metrics={"mAP": 0.5},
+        dataset_version_id=dataset.id,
+    )
     assert evaluation.id
+    assert [item.id for item in live_client.evaluations.list(training_run_id=training.id)] == [
+        evaluation.id
+    ]
+    assert training.id in {
+        item.id for item in live_client.training_runs.list(experiment_id=experiment.id)
+    }
 
 
 def test_isolation_between_users(live_client):

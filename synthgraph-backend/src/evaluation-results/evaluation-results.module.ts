@@ -22,6 +22,7 @@ import type { EvaluationResultRepository } from './repositories/evaluation-resul
 import { TypeOrmEvaluationResultRepository } from './repositories/typeorm-evaluation-result.repository.js';
 import { CreateEvaluationResultService } from './services/create-evaluation-result.service.js';
 import { GetEvaluationResultService } from './services/get-evaluation-result.service.js';
+import { ListEvaluationResultsService } from './services/list-evaluation-results.service.js';
 
 @Module({
   imports: [
@@ -72,6 +73,7 @@ import { GetEvaluationResultService } from './services/get-evaluation-result.ser
 
     CreateEvaluationResultService,
     GetEvaluationResultService,
+    ListEvaluationResultsService,
   ],
 })
 export class EvaluationResultsModule {}

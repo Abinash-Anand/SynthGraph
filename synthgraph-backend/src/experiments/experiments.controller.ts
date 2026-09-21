@@ -12,6 +12,7 @@ import {
 import { ApiKeyGuard } from '../auth/guards/api-key.guard.js';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request.js';
 
+import { CreateExperimentDto } from './dto/create-experiment.dto.js';
 import { ListExperimentsQueryDto } from './dto/list-experiments-query.dto.js';
 import { CreateExperimentService } from './services/create-experiment.service.js';
 import { GetExperimentService } from './services/get-experiment.service.js';
@@ -29,11 +30,7 @@ export class ExperimentsController {
   @Post()
   async createExperiment(
     @Param('projectId') projectId: string,
-    @Body()
-    body: {
-      name: string;
-      description?: string;
-    },
+    @Body() body: CreateExperimentDto,
     @Req() request: AuthenticatedRequest,
   ) {
     return this.createExperimentService.execute(

@@ -1,12 +1,15 @@
-"""Optional provenance helpers for code and environment metadata (spec 31, 32).
+"""Provenance helpers for code and environment metadata (spec 31, 32).
 
-Nothing here runs automatically. The SDK collects this only when a researcher
-asks for it, because provenance capture must not turn into surveillance and
-must not become a magical dependency on a Git checkout existing.
+``git_metadata()`` and ``environment_metadata()`` are safe to call on every
+generation/training run by default: they never read repository contents,
+diffs, file lists, the full environment, installed-package inventories,
+environment variables, user names, host names, or anything else that could
+carry a secret. ``auto_capture()`` composes the two for the call sites in
+``generations.py``/``training.py`` that capture this by default unless the
+caller opts out with ``capture_environment=False``.
 
-What is deliberately *not* collected: repository contents, diffs, file lists,
-the full environment, installed-package inventories, environment variables,
-user names, host names, or anything else that could carry a secret.
+Deliberately not collected, even automatically: anything beyond the fixed,
+fixed-size fact set each function documents below.
 """
 
 from __future__ import annotations
@@ -20,7 +23,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
-__all__ = ["environment_metadata", "git_metadata", "scrub_remote_url"]
+__all__ = ["auto_capture", "environment_metadata", "git_metadata", "scrub_remote_url"]
 
 _GIT_TIMEOUT_SECONDS = 5
 
@@ -128,6 +131,19 @@ def environment_metadata(include_packages: list[str] | None = None) -> dict[str,
             metadata["packages"] = packages
 
     return metadata
+
+
+def auto_capture() -> dict[str, Any]:
+    """Compose ``environment_metadata()`` and ``git_metadata()`` for a call site
+    that captures both by default.
+
+    Called fresh on every invocation rather than cached: a generation's Git
+    ``dirty`` flag is meaningful precisely because it can change between two
+    calls in the same process, and caching it would silently misreport that.
+    The keys the two functions produce never collide, so this is a plain
+    merge, not a policy decision about precedence.
+    """
+    return {**environment_metadata(), **git_metadata()}
 
 
 def _package_version(name: str) -> str | None:

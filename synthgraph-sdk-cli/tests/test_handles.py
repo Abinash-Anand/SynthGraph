@@ -36,10 +36,10 @@ def handles(client, backend):
     backend.route("GET", "/training-runs/t1", httpx.Response(200, json=TRAINING_RUN))
     backend.route("POST", "/training-runs/t1/datasets", httpx.Response(200, json=TRAINING_RUN))
     backend.route(
-        "POST", "/training-runs/t1/evaluation-results", httpx.Response(201, json=EVALUATION)
+        "POST", "/training-runs/t1/evaluations", httpx.Response(201, json=EVALUATION)
     )
     backend.route(
-        "GET", "/training-runs/t1/evaluation-results", httpx.Response(200, json=[EVALUATION])
+        "GET", "/training-runs/t1/evaluations", httpx.Response(200, json=[EVALUATION])
     )
     backend.route("GET", "/evaluation-results/ev1", httpx.Response(200, json=EVALUATION))
     return client
@@ -102,7 +102,9 @@ def test_training_handle(handles):
 
 def test_evaluation_handle(handles):
     experiment = handles.project("Rain research").experiment("vehicle_detection_rain")
-    evaluation = experiment.training(model="yolo").evaluation(metrics={"mAP": 0.7})
+    evaluation = experiment.training(model="yolo").evaluation(
+        metrics={"mAP": 0.7}, dataset_version_id="dv1"
+    )
 
     assert evaluation.id == "ev1"
     assert evaluation.metrics["mAP"] == 0.7
@@ -116,5 +118,5 @@ def test_evaluations_get(handles):
 
 def test_training_add_dataset_sends_one_reference(handles, backend):
     handles.training_runs.add_dataset(training_run_id="t1", dataset="dv1")
-    assert backend.last().body == {"id": "dv1"}
+    assert backend.last().body == {"dataset_version_id": "dv1", "role": "training"}
     assert backend.last().path == "/training-runs/t1/datasets"

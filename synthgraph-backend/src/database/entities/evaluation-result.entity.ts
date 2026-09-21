@@ -39,6 +39,9 @@ export class EvaluationResult {
   @JoinColumn({ name: 'dataset_version_id' })
   datasetVersion: Relation<DatasetVersion>;
 
+  @Column({ type: 'varchar', nullable: true })
+  name: string | null;
+
   @Column({ type: 'jsonb' })
   metrics: Record<string, unknown>;
 

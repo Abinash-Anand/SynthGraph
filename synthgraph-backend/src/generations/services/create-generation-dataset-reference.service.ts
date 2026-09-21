@@ -10,6 +10,8 @@ import { DATASET_VERSION_REPOSITORY } from '../../datasets/repositories/dataset.
 
 import { GenerationDatasetReference } from '../../database/entities/generation-dataset-reference.entity.js';
 
+import { TypeOrmGenerationRepository } from '../repositories/typeorm-generation.repository.js';
+
 import type { GenerationDatasetReferenceRepository } from '../repositories/generation-dataset-reference.repository.js';
 import { GENERATION_DATASET_REFERENCE_REPOSITORY } from '../repositories/generation-dataset-reference.tokens.js';
 
@@ -21,6 +23,8 @@ export class CreateGenerationDatasetReferenceService {
 
     @Inject(DATASET_VERSION_REPOSITORY)
     private readonly datasetVersionRepository: DatasetVersionRepository,
+
+    private readonly generationRepository: TypeOrmGenerationRepository,
   ) {}
 
   async execute(
@@ -31,6 +35,15 @@ export class CreateGenerationDatasetReferenceService {
       role: string;
     },
   ): Promise<GenerationDatasetReference> {
+    const generation = await this.generationRepository.findByIdForUser(
+      generationId,
+      userId,
+    );
+
+    if (!generation) {
+      throw new NotFoundException('Generation not found');
+    }
+
     const datasetVersion =
       await this.datasetVersionRepository.findByIdForUser(
         input.datasetVersionId,

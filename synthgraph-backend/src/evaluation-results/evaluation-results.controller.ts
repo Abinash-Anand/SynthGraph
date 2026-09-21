@@ -12,6 +12,7 @@ import { ApiKeyGuard } from '../auth/guards/api-key.guard.js';
 import { CreateEvaluationResultDto } from './dto/create-evaluation-result.dto.js';
 import { CreateEvaluationResultService } from './services/create-evaluation-result.service.js';
 import { GetEvaluationResultService } from './services/get-evaluation-result.service.js';
+import { ListEvaluationResultsService } from './services/list-evaluation-results.service.js';
 
 @Controller()
 @UseGuards(ApiKeyGuard)
@@ -19,6 +20,7 @@ export class EvaluationResultsController {
   constructor(
     private readonly createEvaluationResultService: CreateEvaluationResultService,
     private readonly getEvaluationResultService: GetEvaluationResultService,
+    private readonly listEvaluationResultsService: ListEvaluationResultsService,
   ) {}
 
   @Post('training-runs/:trainingRunId/evaluations')
@@ -33,6 +35,7 @@ export class EvaluationResultsController {
       dto.datasetVersionId,
       dto.metrics,
       dto.metadata,
+      dto.name,
     );
   }
 
@@ -43,6 +46,17 @@ export class EvaluationResultsController {
   ) {
     return this.getEvaluationResultService.execute(
       evaluationResultId,
+      request.user.id,
+    );
+  }
+
+  @Get('training-runs/:trainingRunId/evaluations')
+  async list(
+    @Param('trainingRunId') trainingRunId: string,
+    @Req() request: any,
+  ) {
+    return this.listEvaluationResultsService.execute(
+      trainingRunId,
       request.user.id,
     );
   }

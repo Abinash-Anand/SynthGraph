@@ -7,11 +7,12 @@ render stays exactly where the researcher put it.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 from .errors import SynthGraphValidationError
 from .http import SynthGraphHTTPClient
-from .models import DatasetVersion
+from .models import Dataset, DatasetVersion
 from .routes import Routes
 from .serialization import compact, require_identifier, require_mapping, require_text
 
@@ -28,6 +29,7 @@ class DatasetsAPI:
         generation_id: str,
         name: str,
         uri: str,
+        dataset_id: str | None = None,
         version: str | None = None,
         format: str | None = None,
         size: int | None = None,
@@ -37,34 +39,65 @@ class DatasetsAPI:
     ) -> DatasetVersion:
         """Record a dataset produced by (or used in) a generation.
 
+        The backend models a dataset as a logical ``Dataset`` (identity) with
+        immutable ``DatasetVersion`` records hanging off it. This method
+        bridges that with a single call: it creates a new ``Dataset`` (named
+        ``name``) unless ``dataset_id`` names an existing one to reuse, adds a
+        version to it, and attaches that version to the generation.
+
         ``size`` and ``checksum`` are accepted when the researcher already
         knows them. The SDK does not compute them, because that would mean
         reading the dataset (spec 38).
         """
         generation_id = require_identifier(generation_id, field="generation_id")
 
-        payload = compact(
+        if dataset_id is not None:
+            dataset_id = require_identifier(dataset_id, field="dataset_id")
+        else:
+            dataset_payload = compact({"name": require_text(name, field="name")})
+            dataset_data = self._http.post(
+                Routes.datasets(),
+                json=dataset_payload,
+                operation="datasets.create_dataset",
+            )
+            dataset_id = Dataset.model_validate(dataset_data).id
+
+        version_payload = compact(
             {
-                "name": require_text(name, field="name"),
+                "version": version or _default_version(),
                 "uri": require_text(uri, field="uri"),
-                "version": version,
                 "format": format,
                 "size": _validate_size(size),
                 "checksum": checksum,
-                "role": role,
                 "metadata": (
                     require_mapping(metadata, field="metadata") if metadata is not None else None
                 ),
             }
         )
 
-        data = self._http.post(
+        version_data = self._http.post(
+            Routes.dataset_versions(dataset_id),
+            json=version_payload,
+            operation="datasets.create_version",
+        )
+        dataset_version = DatasetVersion.model_validate(version_data)
+
+        self._http.post(
             Routes.generation_datasets(generation_id),
-            json=payload,
-            operation="datasets.create",
+            json={"dataset_version_id": dataset_version.id, "role": role or "output"},
+            operation="datasets.attach_to_generation",
         )
 
-        return DatasetVersion.model_validate(data)
+        return dataset_version
+
+
+def _default_version() -> str:
+    """A unique version label when the caller does not supply one.
+
+    An ISO-8601 UTC timestamp is always unique and needs no extra network
+    round trip to check for collisions.
+    """
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _validate_size(size: int | None) -> int | None:

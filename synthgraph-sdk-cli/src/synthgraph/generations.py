@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from .comparison import ComparisonAPI
+from .environment import auto_capture
 from .errors import SynthGraphValidationError
 from .http import SynthGraphHTTPClient
 from .models import (
@@ -53,6 +54,7 @@ class GenerationsAPI:
         seed: int | None = None,
         code_version: str | None = None,
         environment: dict[str, Any] | None = None,
+        capture_environment: bool = True,
         description: str | None = None,
         inputs: ReferenceInputs | None = None,
         outputs: ReferenceInputs | None = None,
@@ -67,6 +69,12 @@ class GenerationsAPI:
         matching :class:`Reproducibility` fields; passing both a populated
         ``reproducibility`` and its shorthand for the same field is rejected
         rather than silently resolved.
+
+        When ``environment`` (and any ``reproducibility.environment``) is not
+        given, ``environment_metadata()`` and ``git_metadata()`` are captured
+        automatically and used to fill it - a caller who explicitly sets
+        ``environment`` (directly or via ``reproducibility``) always wins, and
+        ``capture_environment=False`` turns this off entirely.
         """
         experiment_id = require_identifier(experiment_id, field="experiment_id")
 
@@ -81,6 +89,11 @@ class GenerationsAPI:
             code_version=code_version,
             environment=environment,
         )
+
+        if capture_environment and not resolved_reproducibility.environment:
+            resolved_reproducibility = resolved_reproducibility.model_copy(
+                update={"environment": auto_capture()}
+            )
 
         payload: dict[str, Any] = {
             "name": require_text(name, field="name"),

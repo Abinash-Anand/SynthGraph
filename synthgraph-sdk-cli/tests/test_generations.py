@@ -27,6 +27,7 @@ def test_create_builds_the_canonical_payload(client, backend):
         generator_version="4.2",
         parameters={"weather": "rain", "occlusion": 0.3},
         seed=42,
+        capture_environment=False,
     )
 
     assert backend.last().body == {
@@ -48,11 +49,56 @@ def test_create_accepts_a_generator_model(client, backend):
         generator=Generator(name="unity", version="2022.3", type="simulator"),
         parameters={},
         reproducibility=Reproducibility(seed=7, code_version="abc123"),
+        capture_environment=False,
     )
 
     body = backend.last().body
     assert body["generator"] == {"name": "unity", "version": "2022.3", "type": "simulator"}
     assert body["reproducibility"] == {"seed": 7, "code_version": "abc123"}
+
+
+def test_environment_is_captured_by_default(client, backend):
+    """Without an explicit environment, git_metadata()/environment_metadata()
+    fill reproducibility.environment automatically (spec: capture_environment
+    default)."""
+    _created(backend)
+
+    client.generations.create(
+        experiment_id="e1",
+        name="x",
+        generator="blender",
+        seed=42,
+    )
+
+    environment = backend.last().body["reproducibility"]["environment"]
+    assert environment["python_implementation"] == "CPython"
+    assert "os" in environment
+
+
+def test_capture_environment_false_leaves_reproducibility_empty(client, backend):
+    _created(backend)
+
+    client.generations.create(
+        experiment_id="e1",
+        name="x",
+        generator="blender",
+        capture_environment=False,
+    )
+
+    assert backend.last().body["reproducibility"] == {}
+
+
+def test_explicit_environment_is_not_overwritten_by_auto_capture(client, backend):
+    _created(backend)
+
+    client.generations.create(
+        experiment_id="e1",
+        name="x",
+        generator="blender",
+        environment={"python_version": "3.11.9"},
+    )
+
+    assert backend.last().body["reproducibility"]["environment"] == {"python_version": "3.11.9"}
 
 
 def test_seed_travels_inside_reproducibility(client, backend):

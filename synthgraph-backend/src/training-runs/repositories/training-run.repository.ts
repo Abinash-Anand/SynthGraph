@@ -1,4 +1,7 @@
-import { TrainingRun } from '../../database/entities/training-run.entity.js';
+import {
+  TrainingRun,
+  TrainingRunStatus,
+} from '../../database/entities/training-run.entity.js';
 
 export interface TrainingRunRepository {
   create(trainingRun: TrainingRun): Promise<TrainingRun>;
@@ -11,4 +14,12 @@ export interface TrainingRunRepository {
   findAllForExperiment(
     experimentId: string,
   ): Promise<TrainingRun[]>;
+
+  transitionStatus(
+    trainingRunId: string,
+    currentStatus: TrainingRunStatus,
+    nextStatus: TrainingRunStatus,
+    startedAt: Date | null,
+    completedAt: Date | null,
+  ): Promise<boolean>;
 }

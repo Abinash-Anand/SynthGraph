@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Req,
   UseGuards,
@@ -11,12 +12,16 @@ import {
 
 import { ApiKeyGuard } from '../auth/guards/api-key.guard.js';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request.js';
+import { TrainingRunStatus } from '../database/entities/training-run.entity.js';
 
 import { CreateTrainingRunDto } from './dto/create-training-run.dto.js';
 import { CreateTrainingRunDatasetReferenceDto } from './dto/create-training-run-dataset-reference.dto.js';
+import { UpdateTrainingRunStatusDto } from './dto/update-training-run-status.dto.js';
 
 import { CreateTrainingRunService } from './services/create-training-run.service.js';
 import { GetTrainingRunService } from './services/get-training-run.service.js';
+import { ListTrainingRunsService } from './services/list-training-runs.service.js';
+import { UpdateTrainingRunStatusService } from './services/update-training-run-status.service.js';
 import { CreateTrainingRunDatasetReferenceService } from './services/create-training-run-dataset-reference.service.js';
 
 @Controller()
@@ -25,6 +30,8 @@ export class TrainingRunsController {
   constructor(
     private readonly createTrainingRunService: CreateTrainingRunService,
     private readonly getTrainingRunService: GetTrainingRunService,
+    private readonly listTrainingRunsService: ListTrainingRunsService,
+    private readonly updateTrainingRunStatusService: UpdateTrainingRunStatusService,
     private readonly createTrainingRunDatasetReferenceService: CreateTrainingRunDatasetReferenceService,
   ) {}
 
@@ -48,6 +55,18 @@ export class TrainingRunsController {
     );
   }
 
+  @Get('experiments/:experimentId/training-runs')
+  async listTrainingRuns(
+    @Param('experimentId', new ParseUUIDPipe({ version: '4' }))
+    experimentId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.listTrainingRunsService.execute(
+      experimentId,
+      request.user.id,
+    );
+  }
+
   @Get('training-runs/:trainingRunId')
   async getTrainingRun(
     @Param('trainingRunId', new ParseUUIDPipe({ version: '4' }))
@@ -57,6 +76,20 @@ export class TrainingRunsController {
     return this.getTrainingRunService.execute(
       trainingRunId,
       request.user.id,
+    );
+  }
+
+  @Patch('training-runs/:trainingRunId')
+  async updateTrainingRunStatus(
+    @Param('trainingRunId', new ParseUUIDPipe({ version: '4' }))
+    trainingRunId: string,
+    @Body() body: UpdateTrainingRunStatusDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.updateTrainingRunStatusService.execute(
+      trainingRunId,
+      request.user.id,
+      body.status as TrainingRunStatus,
     );
   }
 

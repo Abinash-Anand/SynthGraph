@@ -5,6 +5,8 @@ import { ApiKeyService } from '../auth/services/api-key.service.js';
 import { CreateTrainingRunService } from './services/create-training-run.service.js';
 import { CreateTrainingRunDatasetReferenceService } from './services/create-training-run-dataset-reference.service.js';
 import { GetTrainingRunService } from './services/get-training-run.service.js';
+import { ListTrainingRunsService } from './services/list-training-runs.service.js';
+import { UpdateTrainingRunStatusService } from './services/update-training-run-status.service.js';
 import { TrainingRunsController } from './training-runs.controller.js';
 
 describe('TrainingRunsController', () => {
@@ -24,6 +26,14 @@ describe('TrainingRunsController', () => {
         },
         {
           provide: CreateTrainingRunDatasetReferenceService,
+          useValue: {},
+        },
+        {
+          provide: ListTrainingRunsService,
+          useValue: {},
+        },
+        {
+          provide: UpdateTrainingRunStatusService,
           useValue: {},
         },
         {
