@@ -44,6 +44,8 @@ test.
 | Create evaluation | `sg.evaluations.create()` / `training.evaluation()` | — | POST | `/training-runs/{trainingRunId}/evaluations` |
 | Get evaluation | `sg.evaluations.get(id)` | — | GET | `/evaluation-results/{evaluationResultId}` |
 | List evaluations | `sg.evaluations.list()` / `training.evaluations()` | — | GET | `/training-runs/{trainingRunId}/evaluations` |
+| Log training metric | `sg.training_runs.log_metric()` / `training.log_metric()` | — | POST | `/training-runs/{trainingRunId}/metrics` |
+| List training metrics | `sg.training_runs.metrics()` / `training.metrics()` | — | GET | `/training-runs/{trainingRunId}/metrics` |
 
 Error mapping is deterministic for all of them:
 
@@ -205,6 +207,27 @@ itself. `datasets.create()` returns the `DatasetVersion` produced by step 2 of
 its flow (2.13) and only fires the attach request for its side effect,
 because that is what `generation.dataset(...)` has always handed back to
 callers.
+
+### 2.18 Training-run metrics are a new capability, not a reconciliation
+
+`TrainingRunMetric` (`POST`/`GET /training-runs/{trainingRunId}/metrics`) has
+no prior SDK surface and no earlier backend precedent to reconcile against -
+unlike the routes above, which corrected assumptions against an existing
+backend controller (section 3), this is new on both sides at once. **New**,
+not reconciled.
+
+Two decisions made while adding it:
+
+* **No uniqueness constraint on `(training_run_id, step)`.** Multiple metric
+  points may be logged at the same step - e.g. one row for train-loss and
+  another for eval-reward recorded together at step 100 - so
+  `log_metric()` never checks for or rejects a duplicate step.
+* **Lives on `TrainingRunsAPI`/`TrainingHandle`, not its own top-level
+  resource.** A metric point only ever makes sense in the context of the
+  training run it was recorded against (same relationship `evaluations` has
+  to `training_runs`), so it is `sg.training_runs.log_metric()` /
+  `training.log_metric()`, not a new `sg.training_run_metrics` client
+  attribute.
 
 ---
 

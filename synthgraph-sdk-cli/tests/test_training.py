@@ -14,6 +14,13 @@ TRAINING_RUN = {
     "status": "pending",
 }
 
+TRAINING_RUN_METRIC = {
+    "id": "m1",
+    "training_run_id": "t1",
+    "step": 100,
+    "metrics": {"loss": 0.42},
+}
+
 
 def test_create_posts_under_the_experiment(client, backend):
     backend.route(
@@ -195,3 +202,67 @@ def test_lifecycle_methods_patch_status(client, backend, method_name, status):
     assert backend.last().path == "/training-runs/t1"
     assert backend.last().body == {"status": status}
     assert run.status == status
+
+
+def test_log_metric_posts_under_the_training_run(client, backend):
+    backend.route(
+        "POST", "/training-runs/t1/metrics", httpx.Response(201, json=TRAINING_RUN_METRIC)
+    )
+
+    result = client.training_runs.log_metric(
+        training_run_id="t1", step=100, metrics={"loss": 0.42}
+    )
+
+    assert backend.last().path == "/training-runs/t1/metrics"
+    assert backend.last().body == {"step": 100, "metrics": {"loss": 0.42}}
+    assert result.id == "m1"
+    assert result.step == 100
+    assert result.metrics["loss"] == 0.42
+
+
+def test_log_metric_step_must_be_an_int(client, backend):
+    with pytest.raises(SynthGraphValidationError):
+        client.training_runs.log_metric(training_run_id="t1", step="100", metrics={"loss": 0.42})  # type: ignore[arg-type]
+    assert backend.requests == []
+
+
+def test_log_metric_rejects_bool_step(client, backend):
+    # bool is a subclass of int in Python; guard against it slipping through.
+    with pytest.raises(SynthGraphValidationError):
+        client.training_runs.log_metric(training_run_id="t1", step=True, metrics={"loss": 0.42})
+    assert backend.requests == []
+
+
+def test_log_metric_metrics_must_be_a_mapping(client, backend):
+    with pytest.raises(SynthGraphValidationError):
+        client.training_runs.log_metric(training_run_id="t1", step=100, metrics=[("loss", 0.42)])  # type: ignore[arg-type]
+    assert backend.requests == []
+
+
+def test_metrics_are_allowed_to_repeat_a_step(client, backend):
+    """No uniqueness constraint on (training_run_id, step) - see CONTRACT.md 2.18."""
+    backend.route(
+        "POST",
+        "/training-runs/t1/metrics",
+        lambda request: httpx.Response(201, json=dict(TRAINING_RUN_METRIC, id="m2")),
+    )
+
+    client.training_runs.log_metric(training_run_id="t1", step=100, metrics={"loss": 0.4})
+    client.training_runs.log_metric(training_run_id="t1", step=100, metrics={"reward": 1.1})
+
+    assert len(backend.requests) == 2
+
+
+def test_list_metrics(client, backend):
+    second_point = dict(TRAINING_RUN_METRIC, id="m2", step=200, metrics={"loss": 0.31})
+    backend.route(
+        "GET",
+        "/training-runs/t1/metrics",
+        httpx.Response(200, json=[TRAINING_RUN_METRIC, second_point]),
+    )
+
+    points = client.training_runs.metrics(training_run_id="t1")
+
+    assert backend.last().path == "/training-runs/t1/metrics"
+    assert [point.id for point in points] == ["m1", "m2"]
+    assert [point.step for point in points] == [100, 200]

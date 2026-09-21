@@ -229,6 +229,54 @@ def test_training_rejects_dataset_and_datasets_together(experiment):
         experiment.training(model="yolo", dataset="dv1", datasets=["dv2"])
 
 
+def test_training_handle_log_metric(experiment, backend):
+    backend.route(
+        "POST",
+        "/experiments/e1/training-runs",
+        httpx.Response(201, json={"id": "t1", "status": "pending"}),
+    )
+    backend.route(
+        "POST",
+        "/training-runs/t1/metrics",
+        httpx.Response(
+            201, json={"id": "m1", "training_run_id": "t1", "step": 100, "metrics": {"loss": 0.42}}
+        ),
+    )
+
+    training = experiment.training(model="yolo")
+    metric = training.log_metric(step=100, metrics={"loss": 0.42})
+
+    assert backend.last().path == "/training-runs/t1/metrics"
+    assert backend.last().body == {"step": 100, "metrics": {"loss": 0.42}}
+    assert metric.step == 100
+    assert metric.metrics["loss"] == 0.42
+
+
+def test_training_handle_metrics_lists_points_for_this_run(experiment, backend):
+    backend.route(
+        "POST",
+        "/experiments/e1/training-runs",
+        httpx.Response(201, json={"id": "t1", "status": "pending"}),
+    )
+    backend.route(
+        "GET",
+        "/training-runs/t1/metrics",
+        httpx.Response(
+            200,
+            json=[
+                {"id": "m1", "training_run_id": "t1", "step": 100, "metrics": {"loss": 0.42}},
+                {"id": "m2", "training_run_id": "t1", "step": 200, "metrics": {"loss": 0.31}},
+            ],
+        ),
+    )
+
+    training = experiment.training(model="yolo")
+    points = training.metrics()
+
+    assert backend.last().path == "/training-runs/t1/metrics"
+    assert [point.step for point in points] == [100, 200]
+
+
 def test_experiment_context_manager_has_no_side_effects(experiment, backend):
     before = len(backend.requests)
     with experiment as same:
