@@ -444,6 +444,56 @@ live verification, because `isaaclab` itself isn't pip-installable and its
 runtime dependency is a GPU-simulation stack this environment cannot run at
 all - source-verification was the strongest tier available for it.
 
+### 2.23 Framework callbacks, not hooks or monkey-patching, are the answer to "capture still needs manual calls"
+
+`stable_baselines3.create_callback()` is the first of what's meant to become
+a small family of framework-callback integrations, answering a real
+objection: `log_metric()` being a manual call per training step is genuine
+friction, and "automatic" elsewhere in this SDK (§2.9) only ever meant
+"bundled into a call you already make," never "zero SynthGraph-related code
+in your script." Two ways exist to actually reduce that friction:
+
+1. **Hooks/monkey-patching** - intercept a framework's calls without an
+   explicit invocation at that point. Rejected as a general strategy (§2.22's
+   `wandb` entry, and the standing "nothing runs automatically" design
+   throughout this SDK) - fragile across framework versions, hard to debug
+   ("why did this HTTP call fire?"), and no explicit consent for what gets
+   captured.
+2. **The framework's own callback system** - SB3 (and skrl, PyTorch
+   Lightning, Keras) each ship a documented, sanctioned extension point
+   exactly for this (it's how W&B's and TensorBoard's own SB3 integrations
+   work). Registering a callback is itself one explicit line of code
+   (`model.learn(callback=create_callback(training))`) - after that, the
+   *framework's own code* invokes the callback at each rollout, not
+   SynthGraph reaching into the framework uninvited. This is the approach
+   taken.
+
+`create_callback()` lazily imports `stable_baselines3.common.callbacks.
+BaseCallback` only when called - a bare `import synthgraph.integrations.
+stable_baselines3` still never requires SB3, preserving the rest of this
+module's zero-cost-when-unused contract; only building a callback does.
+
+**Verified at the strongest tier used anywhere in this SDK**: a real local
+backend, a real project/experiment/training run created through the real
+SDK, a real `PPO` model trained on `CartPole-v1` for 320 timesteps with the
+callback attached, and the resulting metric points read back from Postgres
+afterward. That run caught two real things before they shipped:
+`model.logger.name_to_value` is empty on the first rollout (before SB3's
+first training update runs) - skipped rather than logged as a no-op point -
+and its values are a mix of `numpy.float32`/`numpy.float64`, only one of
+which happens to already subclass Python's `float`; both are coerced via
+`_numeric_metrics()` rather than assumed to already be JSON-safe. A failure
+to reach the backend for one rollout is caught and turned into a
+`warnings.warn()`, not raised - losing one metric point beats aborting a
+training run that might run for hours.
+
+**Also found, unrelated to the callback itself**: `experiment.training()`
+has no default-name behavior the way `experiment.generation()` does (the
+latter derives one from `generator` via `_default_generation_name()`) - the
+backend's `name` field is required, so a `training()` call without an
+explicit `name=` fails with a validation error. Not fixed here (out of
+scope for this change), flagged for a follow-up.
+
 v0.1.0 declared `pydantic>=2.0,<3.0` while `models/generation.py` uses
 `Field(exclude_if=...)`, which requires pydantic 2.12+. On pydantic 2.0–2.11
 that package would install and then fail. The floor is now `>=2.12`.
