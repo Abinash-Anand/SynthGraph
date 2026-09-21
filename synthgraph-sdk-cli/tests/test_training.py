@@ -266,3 +266,55 @@ def test_list_metrics(client, backend):
     assert backend.last().path == "/training-runs/t1/metrics"
     assert [point.id for point in points] == ["m1", "m2"]
     assert [point.step for point in points] == [100, 200]
+
+
+def test_update_capture_status_patches_the_capture_status_route(client, backend):
+    integrations = {"resource_monitor": {"attached": True, "closed": True}}
+    backend.route(
+        "PATCH",
+        "/training-runs/t1/capture-status",
+        lambda request: httpx.Response(
+            200,
+            json=dict(
+                TRAINING_RUN,
+                capture_status={"status": "complete", "integrations": integrations},
+            ),
+        ),
+    )
+
+    result = client.training_runs.update_capture_status(
+        training_run_id="t1", status="complete", integrations=integrations
+    )
+
+    assert backend.last().method == "PATCH"
+    assert backend.last().path == "/training-runs/t1/capture-status"
+    assert backend.last().body == {"status": "complete", "integrations": integrations}
+    assert result.id == "t1"
+
+
+def test_update_capture_status_reads_back_the_returned_value(client, backend):
+    backend.route(
+        "PATCH",
+        "/training-runs/t1/capture-status",
+        httpx.Response(
+            200,
+            json=dict(
+                TRAINING_RUN,
+                capture_status={
+                    "status": "partial",
+                    "integrations": {"skrl_writer": {"attached": True, "closed": False}},
+                },
+            ),
+        ),
+    )
+
+    result = client.training_runs.update_capture_status(
+        training_run_id="t1",
+        status="partial",
+        integrations={"skrl_writer": {"attached": True, "closed": False}},
+    )
+
+    assert result.capture_status == {
+        "status": "partial",
+        "integrations": {"skrl_writer": {"attached": True, "closed": False}},
+    }

@@ -120,6 +120,10 @@ class Routes:
     def training_run_metrics(training_run_id: str) -> str:
         return f"/training-runs/{encode_id(training_run_id)}/metrics"
 
+    @staticmethod
+    def training_run_capture_status(training_run_id: str) -> str:
+        return f"/training-runs/{encode_id(training_run_id)}/capture-status"
+
     # -- unverified (spec 63) ---------------------------------------------
     #
     # (empty - the last entry, generation_assets, was verified and moved to

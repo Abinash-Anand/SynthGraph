@@ -6,6 +6,7 @@ import { CreateTrainingRunService } from './services/create-training-run.service
 import { CreateTrainingRunDatasetReferenceService } from './services/create-training-run-dataset-reference.service.js';
 import { GetTrainingRunService } from './services/get-training-run.service.js';
 import { ListTrainingRunsService } from './services/list-training-runs.service.js';
+import { UpdateTrainingRunCaptureStatusService } from './services/update-training-run-capture-status.service.js';
 import { UpdateTrainingRunStatusService } from './services/update-training-run-status.service.js';
 import { TrainingRunsController } from './training-runs.controller.js';
 
@@ -34,6 +35,10 @@ describe('TrainingRunsController', () => {
         },
         {
           provide: UpdateTrainingRunStatusService,
+          useValue: {},
+        },
+        {
+          provide: UpdateTrainingRunCaptureStatusService,
           useValue: {},
         },
         {

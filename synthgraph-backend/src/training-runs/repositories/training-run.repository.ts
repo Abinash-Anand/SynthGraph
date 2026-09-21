@@ -1,5 +1,6 @@
 import {
   TrainingRun,
+  TrainingRunCaptureStatus,
   TrainingRunStatus,
 } from '../../database/entities/training-run.entity.js';
 
@@ -21,5 +22,10 @@ export interface TrainingRunRepository {
     nextStatus: TrainingRunStatus,
     startedAt: Date | null,
     completedAt: Date | null,
+  ): Promise<boolean>;
+
+  updateCaptureStatus(
+    trainingRunId: string,
+    captureStatus: TrainingRunCaptureStatus,
   ): Promise<boolean>;
 }

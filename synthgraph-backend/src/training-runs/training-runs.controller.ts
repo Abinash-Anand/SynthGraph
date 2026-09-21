@@ -16,11 +16,13 @@ import { TrainingRunStatus } from '../database/entities/training-run.entity.js';
 
 import { CreateTrainingRunDto } from './dto/create-training-run.dto.js';
 import { CreateTrainingRunDatasetReferenceDto } from './dto/create-training-run-dataset-reference.dto.js';
+import { UpdateTrainingRunCaptureStatusDto } from './dto/update-training-run-capture-status.dto.js';
 import { UpdateTrainingRunStatusDto } from './dto/update-training-run-status.dto.js';
 
 import { CreateTrainingRunService } from './services/create-training-run.service.js';
 import { GetTrainingRunService } from './services/get-training-run.service.js';
 import { ListTrainingRunsService } from './services/list-training-runs.service.js';
+import { UpdateTrainingRunCaptureStatusService } from './services/update-training-run-capture-status.service.js';
 import { UpdateTrainingRunStatusService } from './services/update-training-run-status.service.js';
 import { CreateTrainingRunDatasetReferenceService } from './services/create-training-run-dataset-reference.service.js';
 
@@ -32,6 +34,7 @@ export class TrainingRunsController {
     private readonly getTrainingRunService: GetTrainingRunService,
     private readonly listTrainingRunsService: ListTrainingRunsService,
     private readonly updateTrainingRunStatusService: UpdateTrainingRunStatusService,
+    private readonly updateTrainingRunCaptureStatusService: UpdateTrainingRunCaptureStatusService,
     private readonly createTrainingRunDatasetReferenceService: CreateTrainingRunDatasetReferenceService,
   ) {}
 
@@ -90,6 +93,23 @@ export class TrainingRunsController {
       trainingRunId,
       request.user.id,
       body.status as TrainingRunStatus,
+    );
+  }
+
+  @Patch('training-runs/:trainingRunId/capture-status')
+  async updateTrainingRunCaptureStatus(
+    @Param('trainingRunId', new ParseUUIDPipe({ version: '4' }))
+    trainingRunId: string,
+    @Body() body: UpdateTrainingRunCaptureStatusDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.updateTrainingRunCaptureStatusService.execute(
+      trainingRunId,
+      request.user.id,
+      {
+        status: body.status,
+        integrations: body.integrations,
+      },
     );
   }
 

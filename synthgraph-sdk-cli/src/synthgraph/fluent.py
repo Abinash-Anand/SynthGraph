@@ -26,6 +26,7 @@ HTTP, and nothing here decides anything the backend should decide.
 from __future__ import annotations
 
 import contextlib
+import warnings
 from types import TracebackType
 from typing import TYPE_CHECKING, Any, Self
 
@@ -430,8 +431,36 @@ class TrainingHandle(_Handle):
         together, once, regardless of which of them the caller remembered to
         stop individually. Safe to call more than once. Does not change the
         training run's status.
+
+        Also reports what happened to the backend's ``capture_status``
+        column (CONTRACT.md 2.27), so "did this run's capture actually
+        work" is answerable later without having kept this process's
+        warnings. Skipped entirely when no integration was ever attached -
+        nothing to report - or when this training run was already closed,
+        so a second call doesn't re-send the same report. A failure to
+        reach the backend for the report itself is caught and warned,
+        never raised: the report must not be the reason a researcher's
+        script fails on its way out.
         """
-        self._integration_session.close()
+        did_close = self._integration_session.close()
+        if not did_close:
+            return
+
+        summary = self._integration_session.summary()
+        if summary is None:
+            return
+
+        try:
+            self._client.training_runs.update_capture_status(
+                training_run_id=self.id,
+                status=summary["status"],
+                integrations=summary["integrations"],
+            )
+        except SynthGraphError as error:
+            warnings.warn(
+                f"SynthGraph capture-status report failed: {error}",
+                stacklevel=2,
+            )
 
     def __enter__(self) -> Self:
         return self
