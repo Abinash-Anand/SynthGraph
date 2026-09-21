@@ -14,6 +14,7 @@ fixed-size fact set each function documents below.
 
 from __future__ import annotations
 
+import os
 import platform
 import subprocess
 import sys
@@ -23,9 +24,16 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
-__all__ = ["auto_capture", "environment_metadata", "git_metadata", "scrub_remote_url"]
+__all__ = [
+    "auto_capture",
+    "environment_metadata",
+    "git_metadata",
+    "resource_metadata",
+    "scrub_remote_url",
+]
 
 _GIT_TIMEOUT_SECONDS = 5
+_NVIDIA_SMI_TIMEOUT_SECONDS = 5
 
 
 def scrub_remote_url(url: str) -> str:
@@ -144,6 +152,97 @@ def auto_capture() -> dict[str, Any]:
     merge, not a policy decision about precedence.
     """
     return {**environment_metadata(), **git_metadata()}
+
+
+def resource_metadata() -> dict[str, Any]:
+    """Collect a point-in-time snapshot of CPU/memory/GPU resource usage.
+
+    Unlike ``environment_metadata()`` (fixed, effectively-free platform
+    facts), this samples live usage and costs on the order of 100ms - the
+    CPU percentage needs a short blocking interval to mean anything, and a
+    GPU query spawns a subprocess. Call it explicitly at the point a
+    resource snapshot is actually wanted (e.g. once per training step or
+    epoch); it is never part of ``auto_capture()`` and never called by any
+    ``create()`` method.
+
+    Always present: ``cpu_count`` (``os.cpu_count()``, stdlib, no
+    dependency). If the optional ``psutil`` package is installed:
+    ``cpu_percent``, ``memory_total_mb``, ``memory_available_mb``,
+    ``memory_percent``. If ``nvidia-smi`` is on ``PATH``: ``gpu``, a list of
+    one dict per GPU with ``name``, ``memory_total_mb``, ``memory_used_mb``,
+    ``utilization_percent``. Neither ``psutil`` nor an NVIDIA GPU is
+    required - each piece is simply absent from the result when its source
+    isn't available, matching ``git_metadata()``'s "never raises" contract.
+    """
+    metadata: dict[str, Any] = {"cpu_count": os.cpu_count()}
+    metadata.update(_psutil_metadata())
+
+    gpus = _nvidia_smi_metadata()
+    if gpus:
+        metadata["gpu"] = gpus
+
+    return metadata
+
+
+def _psutil_metadata() -> dict[str, Any]:
+    """CPU/memory usage via the optional ``psutil`` dependency, or {} without it."""
+    try:
+        import psutil  # type: ignore[import-untyped]
+    except ImportError:
+        return {}
+
+    try:
+        memory = psutil.virtual_memory()
+        return {
+            "cpu_percent": psutil.cpu_percent(interval=0.1),
+            "memory_total_mb": round(memory.total / (1024 * 1024), 1),
+            "memory_available_mb": round(memory.available / (1024 * 1024), 1),
+            "memory_percent": memory.percent,
+        }
+    except Exception:
+        # A resource snapshot must never be the reason a researcher's script
+        # crashes - any psutil failure on an unusual platform is silently
+        # treated the same as psutil not being installed at all.
+        return {}
+
+
+def _nvidia_smi_metadata() -> list[dict[str, Any]]:
+    """Per-GPU utilization via ``nvidia-smi``, or [] when it's unavailable."""
+    try:
+        result = subprocess.run(
+            [
+                "nvidia-smi",
+                "--query-gpu=name,memory.total,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=_NVIDIA_SMI_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if result.returncode != 0 or not result.stdout.strip():
+        return []
+
+    gpus: list[dict[str, Any]] = []
+    for line in result.stdout.strip().splitlines():
+        parts = [part.strip() for part in line.split(",")]
+        if len(parts) != 4:
+            continue
+        name, memory_total, memory_used, utilization = parts
+        try:
+            gpus.append(
+                {
+                    "name": name,
+                    "memory_total_mb": int(memory_total),
+                    "memory_used_mb": int(memory_used),
+                    "utilization_percent": int(utilization),
+                }
+            )
+        except ValueError:
+            continue
+    return gpus
 
 
 def _package_version(name: str) -> str | None:
