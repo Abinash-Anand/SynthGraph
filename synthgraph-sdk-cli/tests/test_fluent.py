@@ -148,6 +148,37 @@ def test_generation_records_a_dataset(experiment, backend):
     assert dataset.id == "dv1"
 
 
+def test_generation_records_an_asset(experiment, backend):
+    _generation_routes(backend)
+    backend.route(
+        "POST",
+        "/assets",
+        httpx.Response(201, json={"id": "a1", "name": "rain_render", "type": "video"}),
+    )
+    backend.route(
+        "POST",
+        "/assets/a1/versions",
+        httpx.Response(
+            201, json={"id": "av1", "asset_id": "a1", "uri": "/data/rain_render.mp4"}
+        ),
+    )
+    backend.route(
+        "POST",
+        "/generations/g1/assets",
+        httpx.Response(201, json={"assetVersionId": "av1", "role": "output"}),
+    )
+
+    generation = experiment.generation(generator="blender", parameters={})
+    asset = generation.asset(name="rain_render", uri="/data/rain_render.mp4", type="video")
+
+    assert asset.id == "av1"
+    assert [r.path for r in backend.requests if r.method == "POST"][-3:] == [
+        "/assets",
+        "/assets/a1/versions",
+        "/generations/g1/assets",
+    ]
+
+
 def test_training_accepts_a_dataset_handle(experiment, backend):
     backend.route(
         "POST",
@@ -175,7 +206,7 @@ def test_training_accepts_a_dataset_handle(experiment, backend):
 
     training = experiment.training(model="yolo", framework="pytorch", dataset="dv1")
     attach_request = next(r for r in backend.requests if r.path == "/training-runs/t1/datasets")
-    assert attach_request.body == {"dataset_version_id": "dv1", "role": "training"}
+    assert attach_request.body == {"datasetVersionId": "dv1", "role": "training"}
 
     evaluation = training.evaluation(metrics={"mAP": 0.724}, dataset_version_id="dv1")
     assert evaluation.metrics["mAP"] == 0.724

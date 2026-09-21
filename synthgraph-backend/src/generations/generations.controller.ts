@@ -15,12 +15,14 @@ import { ApiKeyGuard } from '../auth/guards/api-key.guard.js';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request.js';
 
 import { CreateGenerationDatasetReferenceDto } from './dto/create-generation-dataset-reference.dto.js';
+import { CreateGenerationAssetReferenceDto } from './dto/create-generation-asset-reference.dto.js';
 import { ListGenerationsQueryDto } from './dto/list-generations-query.dto.js';
 import {
   validateCreateGenerationRequest,
   validateUpdateGenerationStatusRequest,
 } from './dto/generation-request.dto.js';
 import { GenerationDatasetReference } from '../database/entities/generation-dataset-reference.entity.js';
+import { GenerationAssetReference } from '../database/entities/generation-asset-reference.entity.js';
 
 import {
   GenerationResponse,
@@ -28,6 +30,7 @@ import {
 } from './responses/generation.response.js';
 
 import { CreateGenerationDatasetReferenceService } from './services/create-generation-dataset-reference.service.js';
+import { CreateGenerationAssetReferenceService } from './services/create-generation-asset-reference.service.js';
 import { CreateGenerationService } from './services/create-generation.service.js';
 import { GetGenerationService } from './services/get-generation.service.js';
 import { ListGenerationsService } from './services/list-generations.service.js';
@@ -42,6 +45,7 @@ export class GenerationsController {
     private readonly listGenerationsService: ListGenerationsService,
     private readonly updateGenerationStatusService: UpdateGenerationStatusService,
     private readonly createGenerationDatasetReferenceService: CreateGenerationDatasetReferenceService,
+    private readonly createGenerationAssetReferenceService: CreateGenerationAssetReferenceService,
   ) {}
 
   @Post('experiments/:experimentId/generations')
@@ -121,6 +125,23 @@ export class GenerationsController {
       request.user.id,
       {
         datasetVersionId: body.datasetVersionId,
+        role: body.role,
+      },
+    );
+  }
+
+  @Post('generations/:generationId/assets')
+  async createGenerationAssetReference(
+    @Param('generationId', new ParseUUIDPipe({ version: '4' }))
+    generationId: string,
+    @Body() body: CreateGenerationAssetReferenceDto,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<GenerationAssetReference> {
+    return this.createGenerationAssetReferenceService.execute(
+      generationId,
+      request.user.id,
+      {
+        assetVersionId: body.assetVersionId,
         role: body.role,
       },
     );

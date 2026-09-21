@@ -85,6 +85,18 @@ class Routes:
         return f"/datasets/{encode_id(dataset_id)}/versions"
 
     @staticmethod
+    def assets() -> str:
+        return "/assets"
+
+    @staticmethod
+    def asset_versions(asset_id: str) -> str:
+        return f"/assets/{encode_id(asset_id)}/versions"
+
+    @staticmethod
+    def generation_assets(generation_id: str) -> str:
+        return f"/generations/{encode_id(generation_id)}/assets"
+
+    @staticmethod
     def experiment_training_runs(experiment_id: str) -> str:
         return f"/experiments/{encode_id(experiment_id)}/training-runs"
 
@@ -109,16 +121,11 @@ class Routes:
         return f"/training-runs/{encode_id(training_run_id)}/metrics"
 
     # -- unverified (spec 63) ---------------------------------------------
-
-    @staticmethod
-    def generation_assets(generation_id: str) -> str:
-        return f"/generations/{encode_id(generation_id)}/assets"
+    #
+    # (empty - the last entry, generation_assets, was verified and moved to
+    # the verified section above; see CONTRACT.md 2.18.)
 
 
 #: Route builders whose shape the spec has not frozen. Exposed so tests and
 #: docs can assert on the set instead of rediscovering it.
-UNVERIFIED_ROUTES = frozenset(
-    {
-        "generation_assets",
-    }
-)
+UNVERIFIED_ROUTES: frozenset[str] = frozenset()

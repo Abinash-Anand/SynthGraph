@@ -46,6 +46,9 @@ test.
 | List evaluations | `sg.evaluations.list()` / `training.evaluations()` | — | GET | `/training-runs/{trainingRunId}/evaluations` |
 | Log training metric | `sg.training_runs.log_metric()` / `training.log_metric()` | — | POST | `/training-runs/{trainingRunId}/metrics` |
 | List training metrics | `sg.training_runs.metrics()` / `training.metrics()` | — | GET | `/training-runs/{trainingRunId}/metrics` |
+| Create asset (step 1 of `sg.assets.create()`, skipped when `asset_id=` reuses an existing one) | — | — | POST | `/assets` |
+| Create asset version (step 2 of `sg.assets.create()`) | — | — | POST | `/assets/{assetId}/versions` |
+| Record asset (step 3 of `sg.assets.create()`: attach the version to the generation) | `sg.assets.create()` / `generation.asset()` | — | POST | `/generations/{generationId}/assets` |
 
 Error mapping is deterministic for all of them:
 
@@ -208,7 +211,7 @@ its flow (2.13) and only fires the attach request for its side effect,
 because that is what `generation.dataset(...)` has always handed back to
 callers.
 
-### 2.18 Training-run metrics are a new capability, not a reconciliation
+### 2.17 Training-run metrics are a new capability, not a reconciliation
 
 `TrainingRunMetric` (`POST`/`GET /training-runs/{trainingRunId}/metrics`) has
 no prior SDK surface and no earlier backend precedent to reconcile against -
@@ -229,23 +232,57 @@ Two decisions made while adding it:
   `training.log_metric()`, not a new `sg.training_run_metrics` client
   attribute.
 
+### 2.18 `sg.assets.create()` mirrors the dataset three-request flow, with `type` on the `Asset` and no `format` anywhere
+
+The backend now implements `Asset`/`AssetVersion`/`GenerationAssetReference`
+(mirroring `Dataset`/`DatasetVersion`/`GenerationDatasetReference` almost
+exactly), so the previously-unverified `POST /generations/{id}/assets` route
+is verified and moved to section 1; `UNVERIFIED_ROUTES` is now empty.
+`assets.create()` follows the identical three-step shape as `datasets.create()`
+(2.13):
+
+1. `POST /assets` to create a new `Asset` named after `name=` - skipped when
+   `asset_id=` reuses an existing logical asset.
+2. `POST /assets/{assetId}/versions` to create the immutable `AssetVersion`.
+   `version=` defaults to a UTC timestamp the same way `datasets.create()`
+   does.
+3. `POST /generations/{generationId}/assets` to attach the version to the
+   generation, with `role=` defaulting to `"output"`.
+
+Two field-shape differences from `Dataset`/`DatasetVersion`, both driven
+directly by the SDK's existing Pydantic models
+(`synthgraph/models/asset.py`), which were never changed to invent new
+fields:
+
+* **`type` lives on `Asset`, not `AssetVersion`.** `Asset.type` is a
+  free-form string (e.g. `"video"`, `"plot"`, `"checkpoint"`) the backend
+  never validates the meaning of - the same pattern as `Generator.type`.
+  `Dataset` has no equivalent field. `assets.create()`'s `type=` keyword goes
+  into the step-1 payload (`POST /assets`), not step 2.
+* **`AssetVersion` has no `format` field**, unlike `DatasetVersion`.
+  `assets.create()` has no `format=` parameter, and the step-2 payload
+  (`POST /assets/{assetId}/versions`) never sends one.
+
+The attach payload for both the asset and dataset routes carries the backend
+DTO's actual field name, `{assetVersionId, role}` / `{datasetVersionId,
+role}` (camelCase, matching `CreateGenerationAssetReferenceDto` /
+`CreateGenerationDatasetReferenceDto` in the backend source) - `assets.py`
+sends `assetVersionId` deliberately. At the time this was written,
+`datasets.py` sent snake_case `dataset_version_id` for the same kind of
+payload - §2.3's "the SDK sends snake_case" rule applied too literally to
+this one field - but that has since been fixed (§2.20) to also send the
+backend's real camelCase field name.
+
 ---
 
 ## 3. UNVERIFIED — routes that need checking against the backend
 
 Spec §63 explicitly refuses to freeze a route until the backend controller
-behind it has been inspected. Training-run, dataset and evaluation-result
-routes have now been read from the backend source and corrected (section 1);
-this section is left with only the one route inspection never covered.
+behind it has been inspected. Training-run, dataset, evaluation-result and
+asset-reference routes have now been read from the backend source and
+corrected (section 1); nothing is left unverified.
 
-| Operation | Assumed route | Assumed payload |
-|---|---|---|
-| Asset references | POST `/generations/{id}/assets` | not yet used by any SDK method |
-
-It follows the naming convention the verified routes use: a collection hangs
-off its parent. That is a reasonable inference, not a contract.
-
-Two smaller unknowns in the same category:
+Two smaller unknowns in a related category:
 
 * **Comparison response shape.** `POST /generations/compare` is a verified
   route, but the shape of what it returns is not. The CLI renders a
@@ -281,7 +318,7 @@ Deliberately **not** implemented, per the spec:
 - `synthgraph reproduce` (§59)
 - dataset or asset upload (§6)
 
-### 2.17 One framework integration exists, opt-in and unverified against a live install
+### 2.19 One framework integration exists, opt-in and unverified against a live install
 
 `synthgraph.integrations.isaaclab.extract_event_config()` (added after §10's
 "automatic instrumentation, hooks, decorators" was written) turns an Isaac
@@ -298,6 +335,33 @@ now, because `Generation.parameters` already exists specifically to hold
 domain-randomization data, which W&B's generic metric logging does not
 model - W&B-style broader capture (training metrics over time, GPU/resource
 usage, media) is still open, tracked separately, not started.
+
+### 2.20 Reference-attach and comparison payloads use the backend's real camelCase field names
+
+Found while reviewing the media/asset-reference feature (its attach-reference
+DTO correctly used camelCase from the start, which is what surfaced the
+mismatch elsewhere): `sg.datasets.create()`'s
+attach step, `sg.training_runs.add_dataset()`, `sg.evaluations.create()`, and
+`sg.comparisons.compare()`/`client.compare()` were all sending snake_case keys
+(`dataset_version_id`, `generation_ids`) into request bodies whose backend DTOs
+declare plain camelCase TypeScript properties (`datasetVersionId`,
+`generationIds`) with no naming-strategy transform anywhere in the backend -
+confirmed by reading `main.ts`'s `ValidationPipe({ whitelist: true,
+forbidNonWhitelisted: true })` and every relevant DTO directly, not assumed.
+Under `forbidNonWhitelisted`, a snake_case body key the DTO doesn't recognize
+makes the whole request 400. This is unrelated to §2.3 ("the SDK sends
+snake_case and reads either case"), which is about the SDK's own response
+*parsing* tolerance (`models/base.py`'s alias generator) - it was never a
+license for request bodies to diverge from the backend's literal DTO field
+names. The `comparisons.compare()` instance of this predates every other fix
+in this file; the three others were introduced or made unconditionally
+reachable by §2.13/§2.14/§2.15. All four are now fixed to send the DTOs'
+actual field names. The SDK's own Python-facing parameter names
+(`dataset_version_id=`, `generation_ids`) are unchanged - only the JSON keys
+sent over the wire moved to camelCase for these four calls specifically; every
+other endpoint's payload fields (`name`, `metrics`, `parameters`, `role`,
+`step`, ...) are single words with no casing ambiguity, checked directly
+against every DTO in the backend rather than assumed to be fine.
 
 ---
 

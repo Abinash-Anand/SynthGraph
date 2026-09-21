@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, Any, Self
 
 from .errors import SynthGraphError, SynthGraphValidationError
 from .models import (
+    AssetVersion,
     DatasetVersion,
     EvaluationResult,
     Experiment,
@@ -251,6 +252,24 @@ class GenerationHandle(_Handle):
         Metadata only - the data itself stays where it is (spec 6).
         """
         return self._client.datasets.create(
+            generation_id=self.id,
+            name=name,
+            uri=uri,
+            **kwargs,
+        )
+
+    def asset(
+        self,
+        *,
+        name: str,
+        uri: str,
+        **kwargs: Any,
+    ) -> AssetVersion:
+        """Record a media/asset reference this generation produced (e.g. a
+        rendered video or plot). Metadata only - the file itself stays where
+        it is.
+        """
+        return self._client.assets.create(
             generation_id=self.id,
             name=name,
             uri=uri,
