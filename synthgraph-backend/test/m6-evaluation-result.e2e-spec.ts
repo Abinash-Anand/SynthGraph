@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
@@ -36,6 +36,13 @@ describe('M6 EvaluationResult E2E', () => {
     }).compile();
 
     app = moduleRef.createNestApplication();
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
+    );
     await app.init();
 
     dataSource = app.get(DataSource);
