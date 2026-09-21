@@ -16,12 +16,55 @@ from .models import Dataset, DatasetVersion
 from .routes import Routes
 from .serialization import compact, require_identifier, require_mapping, require_text
 
+#: Aliases so annotations inside the class body are not shadowed by
+#: ``DatasetsAPI.list``.
+DatasetList = list[Dataset]
+DatasetVersionList = list[DatasetVersion]
+
 
 class DatasetsAPI:
     """API operations for dataset references."""
 
     def __init__(self, http: SynthGraphHTTPClient) -> None:
         self._http = http
+
+    def get(self, dataset_id: str) -> Dataset:
+        """Retrieve a dataset's logical identity by ID."""
+        dataset_id = require_identifier(dataset_id, field="dataset_id")
+
+        data = self._http.get(Routes.dataset(dataset_id), operation="datasets.get")
+
+        return Dataset.model_validate(data)
+
+    def list(self) -> DatasetList:
+        """List every dataset the caller owns."""
+        data = self._http.get_list(Routes.datasets(), operation="datasets.list")
+
+        return [Dataset.model_validate(item) for item in data]
+
+    def get_version(self, dataset_version_id: str) -> DatasetVersion:
+        """Retrieve one immutable dataset version by ID."""
+        dataset_version_id = require_identifier(
+            dataset_version_id, field="dataset_version_id"
+        )
+
+        data = self._http.get(
+            Routes.dataset_version(dataset_version_id),
+            operation="datasets.get_version",
+        )
+
+        return DatasetVersion.model_validate(data)
+
+    def list_versions(self, dataset_id: str) -> DatasetVersionList:
+        """List the versions recorded for a dataset."""
+        dataset_id = require_identifier(dataset_id, field="dataset_id")
+
+        data = self._http.get_list(
+            Routes.dataset_versions(dataset_id),
+            operation="datasets.list_versions",
+        )
+
+        return [DatasetVersion.model_validate(item) for item in data]
 
     def create(
         self,
