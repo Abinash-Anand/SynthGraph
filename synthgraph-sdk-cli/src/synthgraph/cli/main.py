@@ -13,8 +13,10 @@ import typer
 
 from .. import __version__
 from .commands import (
+    assets,
     auth,
     compare,
+    datasets,
     docs,
     evaluations,
     experiments,
@@ -50,6 +52,8 @@ app.add_typer(experiments.app, name="experiments")
 app.add_typer(generations.app, name="generations")
 app.add_typer(training_runs.app, name="training-runs")
 app.add_typer(evaluations.app, name="evaluations")
+app.add_typer(assets.app, name="assets")
+app.add_typer(datasets.app, name="datasets")
 
 app.command("compare")(compare.compare)
 app.command("manifest")(manifest.manifest)

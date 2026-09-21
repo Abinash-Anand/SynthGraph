@@ -183,3 +183,55 @@ def evaluation_payload(**overrides: Any) -> dict[str, Any]:
     }
     payload.update(overrides)
     return payload
+
+
+def asset_payload(**overrides: Any) -> dict[str, Any]:
+    payload = {
+        "id": "a1",
+        "name": "rain_render",
+        "type": "video",
+        "description": None,
+        "metadata": {},
+        "versions": [],
+        "created_at": NOW,
+    }
+    payload.update(overrides)
+    return payload
+
+
+def asset_version_payload(**overrides: Any) -> dict[str, Any]:
+    payload = {
+        "id": "av1",
+        "asset_id": "a1",
+        "version": "1",
+        "uri": "s3://bucket/rain_render.mp4",
+        "created_at": NOW,
+    }
+    payload.update(overrides)
+    return payload
+
+
+def dataset_payload(**overrides: Any) -> dict[str, Any]:
+    payload = {
+        "id": "d1",
+        "name": "rain_v1",
+        "description": None,
+        "metadata": {},
+        "versions": [],
+        "created_at": NOW,
+    }
+    payload.update(overrides)
+    return payload
+
+
+def dataset_version_payload(**overrides: Any) -> dict[str, Any]:
+    payload = {
+        "id": "dv1",
+        "dataset_id": "d1",
+        "version": "1",
+        "uri": "s3://bucket/rain_v1",
+        "format": "image",
+        "created_at": NOW,
+    }
+    payload.update(overrides)
+    return payload

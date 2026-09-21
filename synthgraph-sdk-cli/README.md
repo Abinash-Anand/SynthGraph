@@ -187,6 +187,8 @@ synthgraph
 ├── generations    list | get
 ├── training-runs  list | get | metrics
 ├── evaluations    list | get
+├── assets         list | get | versions | get-version
+├── datasets       list | get | versions | get-version
 ├── compare
 ├── manifest
 └── docs
@@ -212,6 +214,14 @@ synthgraph training-runs metrics <training-run-id>
 synthgraph evaluations list --training-run <training-run-id>
 synthgraph evaluations get <evaluation-id>
 
+synthgraph assets list
+synthgraph assets get <asset-id>
+synthgraph assets versions <asset-id>
+
+synthgraph datasets list
+synthgraph datasets get <dataset-id>
+synthgraph datasets versions <dataset-id>
+
 synthgraph compare <generation-id-a> <generation-id-b>
 
 synthgraph manifest <generation-id> --output reproduction.json
@@ -221,8 +231,8 @@ synthgraph docs <generation-id> --output experiment.md
 Every command takes `--json` for scripting. `--help` works at every level.
 
 The CLI is a query and export surface. Creating projects, experiments,
-generations, training runs and evaluations belongs to the SDK, so there is only
-one write API to learn and maintain.
+generations, training runs, evaluations, assets and datasets belongs to the
+SDK, so there is only one write API to learn and maintain.
 
 There is no `synthgraph reproduce`. A manifest records what would be needed to
 reconstruct an experiment; running your tools stays your decision, in your
