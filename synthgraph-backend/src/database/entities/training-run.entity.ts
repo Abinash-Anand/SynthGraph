@@ -87,6 +87,14 @@ export class TrainingRun {
   // NULL, not '{}', is the honest default: a run this SDK version never
   // reported on is different from one it reported as having no
   // integrations attached, and the two must stay distinguishable.
+  //
+  // Indexed by migration 1788995000000, not by decorator here (this
+  // repository keeps `synchronize: false` and treats migrations as the
+  // sole source of schema truth) - a composite expression index on
+  // (experiment_id, capture_status ->> 'status') for the complete/partial
+  // filter, and a separate partial index on rows where this is NULL for
+  // the unknown filter, matching TypeOrmTrainingRunRepository.findByCaptureStatus()'s
+  // two distinct query shapes.
   @Column({ name: 'capture_status', type: 'jsonb', nullable: true })
   captureStatus: TrainingRunCaptureStatus | null;
 
