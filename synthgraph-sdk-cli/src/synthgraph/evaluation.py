@@ -44,7 +44,7 @@ class EvaluationsAPI:
             {
                 "name": name,
                 "metrics": require_mapping(metrics, field="metrics"),
-                "dataset_version_id": require_identifier(
+                "datasetVersionId": require_identifier(
                     dataset_version_id, field="dataset_version_id"
                 ),
                 "metadata": (

@@ -1,0 +1,5 @@
+export const ASSET_REPOSITORY = Symbol('ASSET_REPOSITORY');
+
+export const ASSET_VERSION_REPOSITORY = Symbol(
+  'ASSET_VERSION_REPOSITORY',
+);

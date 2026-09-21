@@ -141,9 +141,14 @@ def test_routes_are_absolute(route):
 
 
 def test_unverified_routes_are_declared():
-    """The spec requires unverified routes to be visible, not silently frozen."""
+    """The spec requires unverified routes to be visible, not silently frozen.
+
+    The set is allowed to be empty - it means every route the spec once left
+    open (e.g. the asset-reference route, CONTRACT.md 2.18) has since been
+    verified against the backend and moved to the verified section.
+    """
     from synthgraph.routes import UNVERIFIED_ROUTES, Routes
 
-    assert UNVERIFIED_ROUTES
+    assert isinstance(UNVERIFIED_ROUTES, frozenset)
     for name in UNVERIFIED_ROUTES:
         assert hasattr(Routes, name)

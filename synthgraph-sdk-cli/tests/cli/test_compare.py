@@ -25,7 +25,7 @@ def test_compare_posts_both_ids(run_cli, backend):
     result = run_cli("compare", "g1", "g2")
 
     assert result.exit_code == ExitCode.SUCCESS
-    assert backend.last().body == {"generation_ids": ["g1", "g2"]}
+    assert backend.last().body == {"generationIds": ["g1", "g2"]}
 
 
 def test_compare_renders_the_backend_differences(run_cli, backend):

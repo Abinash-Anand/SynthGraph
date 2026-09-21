@@ -130,9 +130,9 @@ def test_datasets_are_attached_after_create_and_run_is_refetched(client, backend
 
     attach_requests = [r for r in backend.requests if r.path == "/training-runs/t1/datasets"]
     assert [r.body for r in attach_requests] == [
-        {"dataset_version_id": "dv1", "role": "training"},
-        {"dataset_version_id": "dv2", "role": "training"},
-        {"dataset_version_id": "dv3", "role": "training"},
+        {"datasetVersionId": "dv1", "role": "training"},
+        {"datasetVersionId": "dv2", "role": "training"},
+        {"datasetVersionId": "dv3", "role": "training"},
     ]
     # No `datasets` on the create payload itself.
     create_request = next(r for r in backend.requests if r.path == "/experiments/e1/training-runs")
@@ -165,7 +165,7 @@ def test_add_dataset_sends_dataset_version_id_and_role(client, backend):
     client.training_runs.add_dataset(training_run_id="t1", dataset="dv9", role="validation")
 
     assert backend.last().path == "/training-runs/t1/datasets"
-    assert backend.last().body == {"dataset_version_id": "dv9", "role": "validation"}
+    assert backend.last().body == {"datasetVersionId": "dv9", "role": "validation"}
 
 
 def test_add_dataset_role_defaults_to_training(client, backend):
@@ -175,7 +175,7 @@ def test_add_dataset_role_defaults_to_training(client, backend):
 
     client.training_runs.add_dataset(training_run_id="t1", dataset="dv9")
 
-    assert backend.last().body == {"dataset_version_id": "dv9", "role": "training"}
+    assert backend.last().body == {"datasetVersionId": "dv9", "role": "training"}
 
 
 @pytest.mark.parametrize(

@@ -118,5 +118,5 @@ def test_evaluations_get(handles):
 
 def test_training_add_dataset_sends_one_reference(handles, backend):
     handles.training_runs.add_dataset(training_run_id="t1", dataset="dv1")
-    assert backend.last().body == {"dataset_version_id": "dv1", "role": "training"}
+    assert backend.last().body == {"datasetVersionId": "dv1", "role": "training"}
     assert backend.last().path == "/training-runs/t1/datasets"

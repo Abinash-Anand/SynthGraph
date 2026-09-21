@@ -9,7 +9,13 @@ import types
 
 import pytest
 
-from synthgraph import environment_metadata, git_metadata, resource_metadata
+from synthgraph import (
+    environment_metadata,
+    git_metadata,
+    installed_packages_metadata,
+    resource_metadata,
+)
+from synthgraph.environment import auto_capture
 
 
 def _git_available() -> bool:
@@ -43,6 +49,26 @@ def test_named_packages_are_looked_up():
 
 def test_environment_metadata_is_json_serializable():
     json.dumps(environment_metadata(include_packages=["httpx"]))
+
+
+def test_installed_packages_metadata_enumerates_everything():
+    packages = installed_packages_metadata()
+    # httpx is a hard dependency of this package, so it must always be present.
+    assert "httpx" in packages
+    assert isinstance(packages["httpx"], str) and packages["httpx"]
+    # A real dependency snapshot has more than a handful of entries.
+    assert len(packages) > 5
+
+
+def test_installed_packages_metadata_is_json_serializable():
+    json.dumps(installed_packages_metadata())
+
+
+def test_installed_packages_metadata_is_never_called_by_auto_capture():
+    """The full dependency inventory stays opt-in even though generation/
+    training-run creation now captures git/environment info by default."""
+    captured = auto_capture()
+    assert "packages" not in captured
 
 
 def test_git_metadata_is_empty_outside_a_repository(tmp_path):
