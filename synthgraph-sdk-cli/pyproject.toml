@@ -31,6 +31,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# environment.resource_metadata() reports CPU/memory usage when this is
+# installed, and always works without it (cpu_count and GPU stats, the
+# latter via nvidia-smi, need no dependency at all).
+resource = ["psutil>=5.9,<7.0"]
 dev = [
   "mypy>=1.11,<2.0",
   "pytest>=8.0,<10.0",

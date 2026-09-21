@@ -270,7 +270,7 @@ role}` (camelCase, matching `CreateGenerationAssetReferenceDto` /
 sends `assetVersionId` deliberately. At the time this was written,
 `datasets.py` sent snake_case `dataset_version_id` for the same kind of
 payload - §2.3's "the SDK sends snake_case" rule applied too literally to
-this one field - but that has since been fixed (§2.20) to also send the
+this one field - but that has since been fixed (§2.21) to also send the
 backend's real camelCase field name.
 
 ---
@@ -336,7 +336,22 @@ domain-randomization data, which W&B's generic metric logging does not
 model - W&B-style broader capture (training metrics over time, GPU/resource
 usage, media) is still open, tracked separately, not started.
 
-### 2.20 Reference-attach and comparison payloads use the backend's real camelCase field names
+### 2.20 `resource_metadata()` is opt-in, not part of `auto_capture()`
+
+Unlike `git_metadata()`/`environment_metadata()`, a CPU/memory/GPU snapshot
+has real cost (a blocking ~100ms `psutil` sample, a subprocess spawn for
+`nvidia-smi`) and is meaningful at a specific moment in a training loop, not
+once at generation/training-run creation - so `resource_metadata()` stays a
+function the caller calls explicitly (e.g. into `metadata=`), never wired
+into `auto_capture()`. `cpu_count` and GPU stats need no dependency
+(`nvidia-smi`, when present, is queried the same subprocess-based way
+`git_metadata()` queries `git`); CPU percent and memory come from the
+optional `psutil` extra (`pip install synthgraph-sdk[resource]`) and are
+simply absent without it - verified end-to-end against real hardware
+(`psutil`'s CPU/memory sampling and a real `nvidia-smi` GPU query) in this
+environment, not just mocked, before the mocked tests were written.
+
+### 2.21 Reference-attach and comparison payloads use the backend's real camelCase field names
 
 Found while reviewing the media/asset-reference feature (its attach-reference
 DTO correctly used camelCase from the start, which is what surfaced the
