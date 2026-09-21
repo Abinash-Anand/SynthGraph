@@ -281,8 +281,15 @@ class TrainingRunsAPI:
         """
         training_run_id = require_identifier(training_run_id, field="training_run_id")
 
+        if status not in ("complete", "partial", "unknown"):
+            raise SynthGraphValidationError(
+                "status must be 'complete', 'partial' or 'unknown', "
+                f"got {status!r}",
+                field="status",
+            )
+
         payload = {
-            "status": require_text(status, field="status"),
+            "status": status,
             "integrations": require_mapping(integrations, field="integrations"),
         }
 
