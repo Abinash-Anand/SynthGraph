@@ -11,7 +11,7 @@ export class GetExperimentService {
     private readonly projectRepository: TypeOrmProjectRepository,
   ) {}
 
-  async execute(
+  async executeForProject(
     projectId: string,
     experimentId: string,
     userId: string,
@@ -28,6 +28,22 @@ export class GetExperimentService {
     const experiment = await this.experimentRepository.findByIdForProject(
       experimentId,
       projectId,
+    );
+
+    if (!experiment) {
+      throw new NotFoundException('Experiment not found');
+    }
+
+    return experiment;
+  }
+
+  async executeForUser(
+    experimentId: string,
+    userId: string,
+  ): Promise<Experiment> {
+    const experiment = await this.experimentRepository.findByIdForUser(
+      experimentId,
+      userId,
     );
 
     if (!experiment) {

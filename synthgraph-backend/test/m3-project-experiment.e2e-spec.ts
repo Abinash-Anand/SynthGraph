@@ -27,6 +27,8 @@ describe('M3 Project → Experiment workflow (e2e)', () => {
   let projectA: Project;
   let projectB: Project;
 
+  let experimentA: Experiment;
+
   function createRawApiKey(): string {
     return `sg_${randomBytes(32).toString('hex')}`;
   }
@@ -211,6 +213,10 @@ describe('M3 Project → Experiment workflow (e2e)', () => {
       });
 
       expect(response.body.id).toEqual(expect.any(String));
+
+      experimentA = await experimentRepository.findOneByOrFail({
+        id: response.body.id,
+      });
     });
 
     it('lists experiments under the authenticated user project', async () => {
@@ -227,6 +233,32 @@ describe('M3 Project → Experiment workflow (e2e)', () => {
           }),
         ]),
       );
+    });
+
+    it('retrieves an experiment nested under its project', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/projects/${projectA.id}/experiments/${experimentA.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        id: experimentA.id,
+        projectId: projectA.id,
+        name: 'M3 Experiment A',
+      });
+    });
+
+    it('retrieves an experiment via the flat top-level route', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/experiments/${experimentA.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        id: experimentA.id,
+        projectId: projectA.id,
+        name: 'M3 Experiment A',
+      });
     });
   });
 
@@ -264,6 +296,13 @@ describe('M3 Project → Experiment workflow (e2e)', () => {
         })
         .expect(404);
     });
+
+    it('prevents user B from retrieving user A experiment via the flat route', async () => {
+      await request(app.getHttpServer())
+        .get(`/experiments/${experimentA.id}`)
+        .set('Authorization', `Bearer ${apiKeyB}`)
+        .expect(404);
+    });
   });
 
   describe('not found behavior', () => {
@@ -289,6 +328,13 @@ describe('M3 Project → Experiment workflow (e2e)', () => {
         .get(
           `/projects/${projectA.id}/experiments/00000000-0000-0000-0000-000000000000`,
         )
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(404);
+    });
+
+    it('returns 404 for a nonexistent experiment via the flat route', async () => {
+      await request(app.getHttpServer())
+        .get('/experiments/00000000-0000-0000-0000-000000000000')
         .set('Authorization', `Bearer ${apiKeyA}`)
         .expect(404);
     });
