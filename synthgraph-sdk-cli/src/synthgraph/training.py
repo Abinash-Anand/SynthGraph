@@ -173,7 +173,7 @@ class TrainingRunsAPI:
 
         data = self._http.post(
             Routes.training_run_datasets(training_run_id),
-            json={"dataset_version_id": dataset_version_id, "role": role},
+            json={"datasetVersionId": dataset_version_id, "role": role},
             operation="training_runs.add_dataset",
         )
 

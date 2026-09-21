@@ -27,7 +27,7 @@ def test_create_posts_under_the_training_run(client, backend):
     assert backend.last().path == "/training-runs/t1/evaluations"
     assert backend.last().body == {
         "metrics": {"mAP": 0.724, "precision": 0.78, "recall": 0.69},
-        "dataset_version_id": "dv9",
+        "datasetVersionId": "dv9",
     }
     assert result.metrics["mAP"] == 0.724
 
@@ -44,7 +44,7 @@ def test_evaluated_dataset_version_is_recorded(client, backend):
     assert backend.last().body == {
         "name": "holdout",
         "metrics": {"mAP": 0.7},
-        "dataset_version_id": "dv9",
+        "datasetVersionId": "dv9",
     }
 
 

@@ -175,7 +175,7 @@ def test_training_accepts_a_dataset_handle(experiment, backend):
 
     training = experiment.training(model="yolo", framework="pytorch", dataset="dv1")
     attach_request = next(r for r in backend.requests if r.path == "/training-runs/t1/datasets")
-    assert attach_request.body == {"dataset_version_id": "dv1", "role": "training"}
+    assert attach_request.body == {"datasetVersionId": "dv1", "role": "training"}
 
     evaluation = training.evaluation(metrics={"mAP": 0.724}, dataset_version_id="dv1")
     assert evaluation.metrics["mAP"] == 0.724

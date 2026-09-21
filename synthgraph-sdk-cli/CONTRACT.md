@@ -276,6 +276,33 @@ domain-randomization data, which W&B's generic metric logging does not
 model - W&B-style broader capture (training metrics over time, GPU/resource
 usage, media) is still open, tracked separately, not started.
 
+### 2.18 Reference-attach and comparison payloads use the backend's real camelCase field names
+
+Found while reviewing the media/asset-reference feature (its attach-reference
+DTO correctly used camelCase from the start, which is what surfaced the
+mismatch elsewhere): `sg.datasets.create()`'s
+attach step, `sg.training_runs.add_dataset()`, `sg.evaluations.create()`, and
+`sg.comparisons.compare()`/`client.compare()` were all sending snake_case keys
+(`dataset_version_id`, `generation_ids`) into request bodies whose backend DTOs
+declare plain camelCase TypeScript properties (`datasetVersionId`,
+`generationIds`) with no naming-strategy transform anywhere in the backend -
+confirmed by reading `main.ts`'s `ValidationPipe({ whitelist: true,
+forbidNonWhitelisted: true })` and every relevant DTO directly, not assumed.
+Under `forbidNonWhitelisted`, a snake_case body key the DTO doesn't recognize
+makes the whole request 400. This is unrelated to §2.3 ("the SDK sends
+snake_case and reads either case"), which is about the SDK's own response
+*parsing* tolerance (`models/base.py`'s alias generator) - it was never a
+license for request bodies to diverge from the backend's literal DTO field
+names. The `comparisons.compare()` instance of this predates every other fix
+in this file; the three others were introduced or made unconditionally
+reachable by §2.13/§2.14/§2.15. All four are now fixed to send the DTOs'
+actual field names. The SDK's own Python-facing parameter names
+(`dataset_version_id=`, `generation_ids`) are unchanged - only the JSON keys
+sent over the wire moved to camelCase for these four calls specifically; every
+other endpoint's payload fields (`name`, `metrics`, `parameters`, `role`,
+`step`, ...) are single words with no casing ambiguity, checked directly
+against every DTO in the backend rather than assumed to be fine.
+
 ---
 
 ## 5. Known defect in the inherited package metadata
