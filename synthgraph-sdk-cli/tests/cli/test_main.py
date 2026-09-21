@@ -20,6 +20,8 @@ COMMAND_GROUPS = (
     "generations",
     "training-runs",
     "evaluations",
+    "assets",
+    "datasets",
     "compare",
     "manifest",
     "docs",

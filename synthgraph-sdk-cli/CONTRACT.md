@@ -33,10 +33,10 @@ test.
 | Create dataset (step 1 of `sg.datasets.create()`, skipped when `dataset_id=` reuses an existing one) | — | — | POST | `/datasets` |
 | Create dataset version (step 2 of `sg.datasets.create()`) | — | — | POST | `/datasets/{datasetId}/versions` |
 | Record dataset (step 3 of `sg.datasets.create()`: attach the version to the generation) | `sg.datasets.create()` | — | POST | `/generations/{generationId}/datasets` |
-| Get dataset | `sg.datasets.get(id)` | — | GET | `/datasets/{datasetId}` |
-| List datasets | `sg.datasets.list()` | — | GET | `/datasets` |
-| Get dataset version | `sg.datasets.get_version(id)` | — | GET | `/dataset-versions/{datasetVersionId}` |
-| List dataset versions | `sg.datasets.list_versions(id)` | — | GET | `/datasets/{datasetId}/versions` |
+| Get dataset | `sg.datasets.get(id)` | `datasets get` | GET | `/datasets/{datasetId}` |
+| List datasets | `sg.datasets.list()` | `datasets list` | GET | `/datasets` |
+| Get dataset version | `sg.datasets.get_version(id)` | `datasets get-version` | GET | `/dataset-versions/{datasetVersionId}` |
+| List dataset versions | `sg.datasets.list_versions(id)` | `datasets versions` | GET | `/datasets/{datasetId}/versions` |
 | Reproduction manifest | `sg.reproduction.get(id)` | `manifest` | GET | `/generations/{generationId}/reproduction-manifest` |
 | Documentation | `sg.documentation.get(id)` | `docs` | GET | `/generations/{generationId}/documentation` |
 | Compare | `sg.comparisons.compare([...])` | `compare` | POST | `/generations/compare` |
@@ -54,10 +54,10 @@ test.
 | Create asset (step 1 of `sg.assets.create()`, skipped when `asset_id=` reuses an existing one) | — | — | POST | `/assets` |
 | Create asset version (step 2 of `sg.assets.create()`) | — | — | POST | `/assets/{assetId}/versions` |
 | Record asset (step 3 of `sg.assets.create()`: attach the version to the generation) | `sg.assets.create()` / `generation.asset()` | — | POST | `/generations/{generationId}/assets` |
-| Get asset | `sg.assets.get(id)` | — | GET | `/assets/{assetId}` |
-| List assets | `sg.assets.list()` | — | GET | `/assets` |
-| Get asset version | `sg.assets.get_version(id)` | — | GET | `/asset-versions/{assetVersionId}` |
-| List asset versions | `sg.assets.list_versions(id)` | — | GET | `/assets/{assetId}/versions` |
+| Get asset | `sg.assets.get(id)` | `assets get` | GET | `/assets/{assetId}` |
+| List assets | `sg.assets.list()` | `assets list` | GET | `/assets` |
+| Get asset version | `sg.assets.get_version(id)` | `assets get-version` | GET | `/asset-versions/{assetVersionId}` |
+| List asset versions | `sg.assets.list_versions(id)` | `assets versions` | GET | `/assets/{assetId}/versions` |
 
 Error mapping is deterministic for all of them:
 
@@ -1051,3 +1051,29 @@ Verification data cleaned up from Postgres afterward. New tests in
 `ruff` clean on every file this touched (two pre-existing, unrelated
 `UP017` datetime-alias suggestions in both files predate this change and
 are left alone).
+
+### 2.38 `synthgraph assets`/`synthgraph datasets` - closing the CLI gap 2.37 left open
+
+2.37 gave the SDK `get`/`list`/`get_version`/`list_versions` for assets and
+datasets but deliberately left the CLI for a later pass. This is that
+pass, same read-only reasoning as 2.34/2.35: no `create`, since assets and
+datasets are recorded inline via the SDK's `create()` flow, not typed at a
+shell prompt.
+
+**Decision:** `synthgraph assets list|get|versions|get-version` and the
+dataset equivalent. `versions`/`get-version` (rather than
+`list-versions`/`version`) matches `training-runs metrics`'s precedent of
+naming the sub-listing command after the noun, and disambiguates from the
+top-level `get` in the same group.
+
+**Verified live end-to-end**: created a real asset and dataset (each with
+a version) via `curl`, then ran the actual `synthgraph.exe` console
+script through all eight commands (`list`/`get`/`versions`/`get-version`
+× 2) against them. Verification data cleaned up from Postgres afterward.
+New test files `tests/cli/test_assets.py`/`tests/cli/test_datasets.py` (9
+tests each) plus `assets`/`datasets` added to `test_main.py`'s
+registered-groups list. `ruff` and `mypy` clean.
+
+CLI parity is now complete across every capture-side resource: auth,
+projects, experiments, generations, training-runs, evaluations, assets,
+datasets.
