@@ -47,7 +47,7 @@ def test_create_makes_three_calls_in_order(client, backend):
     assert backend.requests[0].body == {"name": "rain_v1"}
     assert backend.requests[1].body["uri"] == "s3://bucket/rain_v1"
     assert backend.requests[1].body["format"] == "image"
-    assert backend.requests[2].body == {"dataset_version_id": "dv1", "role": "output"}
+    assert backend.requests[2].body == {"datasetVersionId": "dv1", "role": "output"}
     assert version.id == "dv1"
 
 

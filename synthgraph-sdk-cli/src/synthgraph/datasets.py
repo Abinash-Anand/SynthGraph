@@ -84,7 +84,7 @@ class DatasetsAPI:
 
         self._http.post(
             Routes.generation_datasets(generation_id),
-            json={"dataset_version_id": dataset_version.id, "role": role or "output"},
+            json={"datasetVersionId": dataset_version.id, "role": role or "output"},
             operation="datasets.attach_to_generation",
         )
 

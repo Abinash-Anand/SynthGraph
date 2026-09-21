@@ -37,7 +37,7 @@ class ComparisonAPI:
 
         data = self._http.post(
             Routes.generations_compare(),
-            json={"generation_ids": normalized},
+            json={"generationIds": normalized},
             operation="generations.compare",
         )
 
