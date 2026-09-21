@@ -859,3 +859,40 @@ then independently through the real `SynthGraphClient`
 version). New e2e coverage: an empty array on creation, and a populated one
 on both `GET` and `list` after attaching. Backend suite: 103 e2e (2 new),
 clean build, lint unchanged.
+
+### 2.32 `client.experiments.get()` / `ExperimentHandle.refresh()` 404'd against the real backend
+
+Found while auditing whether the backend was up to date with everything the
+SDK had grown to expect. `Routes.experiment(experiment_id)` builds a bare
+`GET /experiments/{id}` - the same flat, top-level shape every other
+single-GET route uses (`training-runs`, `generations`, `assets`, `datasets`,
+`evaluation-results`). Experiments was the one outlier: the backend only ever
+exposed the resource nested under its project,
+`GET /projects/{projectId}/experiments/{experimentId}`. Confirmed live via
+`curl`: the bare route returned a plain Nest routing 404 ("Cannot GET"), the
+nested route returned the experiment. No test anywhere exercised a
+single-experiment `GET` at all, nested or flat, which is why this sat
+unnoticed - `m3-project-experiment.e2e-spec.ts` covered create and list only.
+
+Fixed on the backend, matching the SDK's existing (correct) expectation
+rather than degrading the SDK to the inconsistent nested shape.
+`ExperimentsController` moved from a class-level `projects/:projectId`
+prefix to per-route paths (the same style `TrainingRunsController` already
+uses to mix nested and flat routes in one controller), and gained a new
+`GET experiments/:experimentId` route. It reuses
+`ExperimentRepository.findByIdForUser()` - a method that already existed,
+correctly ownership-scoped via the `experiment -> project -> user` join, and
+was never called from anywhere. The nested route is unchanged and still
+works, so nothing that depended on it broke.
+
+**Verified live end-to-end**, not just via the test suite: created a real
+project and experiment through the running dev server, confirmed
+`GET /experiments/{id}` now returns the experiment (previously 404'd),
+confirmed a nonexistent ID still correctly 404s with the application's own
+"Experiment not found" (not the routing-level 404), and cleaned up the
+verification data from Postgres afterward. New e2e coverage in
+`m3-project-experiment.e2e-spec.ts`: successful GET via both the nested and
+flat routes, cross-user isolation on the flat route, and a 404 case for the
+flat route on top of the pre-existing nested-route ones - 4 new tests.
+Backend suite: 107 e2e (4 new), clean build, lint unchanged (pre-existing
+warnings elsewhere untouched).

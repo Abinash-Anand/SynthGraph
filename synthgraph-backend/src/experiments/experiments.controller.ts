@@ -18,7 +18,7 @@ import { CreateExperimentService } from './services/create-experiment.service.js
 import { GetExperimentService } from './services/get-experiment.service.js';
 import { ListExperimentsService } from './services/list-experiments.service.js';
 
-@Controller('projects/:projectId/experiments')
+@Controller()
 @UseGuards(ApiKeyGuard)
 export class ExperimentsController {
   constructor(
@@ -27,7 +27,7 @@ export class ExperimentsController {
     private readonly getExperimentService: GetExperimentService,
   ) {}
 
-  @Post()
+  @Post('projects/:projectId/experiments')
   async createExperiment(
     @Param('projectId') projectId: string,
     @Body() body: CreateExperimentDto,
@@ -41,7 +41,7 @@ export class ExperimentsController {
     );
   }
 
-  @Get()
+  @Get('projects/:projectId/experiments')
   async listExperiments(
     @Param('projectId') projectId: string,
     @Query() query: ListExperimentsQueryDto,
@@ -54,14 +54,25 @@ export class ExperimentsController {
     );
   }
 
-  @Get(':experimentId')
-  async getExperiment(
+  @Get('projects/:projectId/experiments/:experimentId')
+  async getExperimentForProject(
     @Param('projectId') projectId: string,
     @Param('experimentId') experimentId: string,
     @Req() request: AuthenticatedRequest,
   ) {
-    return this.getExperimentService.execute(
+    return this.getExperimentService.executeForProject(
       projectId,
+      experimentId,
+      request.user.id,
+    );
+  }
+
+  @Get('experiments/:experimentId')
+  async getExperiment(
+    @Param('experimentId') experimentId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.getExperimentService.executeForUser(
       experimentId,
       request.user.id,
     );
