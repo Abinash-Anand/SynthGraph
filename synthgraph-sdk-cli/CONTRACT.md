@@ -318,7 +318,7 @@ Deliberately **not** implemented, per the spec:
 - `synthgraph reproduce` (§59)
 - dataset or asset upload (§6)
 
-### 2.19 One framework integration exists, opt-in and unverified against a live install
+### 2.19 The Isaac Lab integration is source-verified, not live-verified
 
 `synthgraph.integrations.isaaclab.extract_event_config()` (added after §10's
 "automatic instrumentation, hooks, decorators" was written) turns an Isaac
@@ -326,15 +326,19 @@ Lab `EventManager`/`EventCfg`'s domain-randomization terms into a plain dict
 for `generation.create(parameters=...)`. It is a plain function the caller
 imports and calls explicitly - nothing under `synthgraph.integrations` is
 imported by the core package, and nothing monkey-patches or wraps Isaac Lab.
-It was built against Isaac Lab's documented `EventTermCfg` attribute shape
-(`func`, `mode`, `params`, `interval_range_s`) but has not been exercised
-against a real Isaac Lab installation (not installable in this environment);
-treat its output shape as provisional until verified against a live env.
-Framework integrations remain the chosen direction over W&B mirroring for
-now, because `Generation.parameters` already exists specifically to hold
-domain-randomization data, which W&B's generic metric logging does not
-model - W&B-style broader capture (training metrics over time, GPU/resource
-usage, media) is still open, tracked separately, not started.
+`isaaclab` is not on PyPI (it ships alongside Isaac Sim, a large
+GPU-simulation stack), so it cannot be pip-installed here and this has not
+been exercised against a live installation - but it has been checked
+directly against the real source on GitHub
+(`isaac-sim/IsaacLab`, `managers/manager_term_cfg.py` and `manager_base.py`),
+not just documentation: `EventTermCfg`'s `func`/`mode`/`interval_range_s`/
+inherited `params` are exactly as assumed, `ManagerBase.__init__` really
+does store `self.cfg`, and `ManagerBase` itself falls back to
+`cfg.__dict__.items()` to walk a non-dict cfg - the same approach this
+module's `_public_attributes()` uses. What remains genuinely unverified is
+only the live values a running environment produces, not the attribute
+shape. Treat this as "verified against the pinned source, not against a
+live run" rather than "unverified."
 
 ### 2.20 `resource_metadata()` is opt-in, not part of `auto_capture()`
 
@@ -378,9 +382,67 @@ other endpoint's payload fields (`name`, `metrics`, `parameters`, `role`,
 `step`, ...) are single words with no casing ambiguity, checked directly
 against every DTO in the backend rather than assumed to be fine.
 
----
+### 2.22 Three more framework integrations, each verified at a different, honestly-stated tier
 
-## 5. Known defect in the inherited package metadata
+`synthgraph.integrations` gained `skrl`, `rl_games`, `mujoco_playground` and
+`wandb` alongside the existing `isaaclab`/`stable_baselines3` ones. Each
+follows the same contract (a plain function the caller invokes explicitly
+with an object they already have; no import of the target framework at
+module load time; nothing runs automatically) - what differs is how each
+was verified, stated plainly rather than uniformly claiming "verified":
+
+* **`skrl.extract_training_config()`** - live-verified. `pip install skrl`
+  (its `torch` dependency was already present) let a real `PPO` agent be
+  fully constructed (real `Model`/`GaussianMixin`/`DeterministicMixin`
+  subclasses, a real `PPO_CFG`) and run through the extraction function -
+  this surfaced a real behavior no amount of reading source would have
+  shown: skrl's `cfg.expand()` turns scalar hyperparameters like
+  `learning_rate` into a per-model *list*, not a bare float. The extraction
+  reads `agent.cfg` generically (whatever fields are actually on it, minus
+  `experiment`), so it works the same way across every skrl algorithm, not
+  just the one tested.
+* **`rl_games.extract_training_config()`** - live-verified against real
+  data, not a live agent. rl_games agents need a heavyweight YAML/network-
+  builder harness this SDK won't stand up just to construct a throwaway
+  agent, so instead this was checked against `Denys88/rl_games`'s real
+  source (`self.config = params['config']` in `A2CBase.__init__`) and a
+  real shipped example config (`rl_games/configs/ppo_continuous.yaml`,
+  fetched and parsed) - including the unwrap `Runner.load()` itself does on
+  a raw `yaml.safe_load()` result's `"params"` key, and a real quirk this
+  surfaced: PyYAML parses unquoted `3e-4` as the *string* `"3e-4"`, not a
+  float, which the extraction function correctly passes through rather than
+  silently coercing.
+* **`mujoco_playground.extract_env_config()` /
+  `extract_domain_randomize_fn()`** - live-verified against a real
+  installed package (`pip install playground`), but split into two
+  functions because Playground's architecture is genuinely different from
+  Isaac Lab's: domain randomization is imperative code (a per-task
+  `domain_randomize(model, rng)` function with literal `jax.random.uniform`
+  ranges baked into its body, confirmed by reading four real `randomize.py`
+  files on GitHub), not a declarative config object with inspectable
+  attributes. `extract_env_config()` reads the real, structured
+  `ConfigDict` every task's `default_config()` returns (confirmed against
+  the real Go1 joystick task). `extract_domain_randomize_fn()` records the
+  randomization function's qualified name always, and its literal source
+  text via `inspect.getsource()` when available (confirmed working against
+  the real Go1 `randomize.py`) - the only way to see the actual numeric
+  ranges given this architecture, degrading to just the name rather than
+  raising when source isn't retrievable.
+* **`wandb.extract_run_config()` / `extract_run_metrics()`** - live-verified
+  (`pip install wandb`, `wandb.init(mode="offline", ...)` - no account or
+  network needed) against a real running `Run`. Deliberately the mirror-in
+  pattern, not the monkey-patch-`wandb.init()`/`wandb.log()` pattern
+  originally floated as an alternative strategy: intercepting calls in the
+  researcher's process without an explicit invocation at that point
+  contradicts every other integration in this package. `extract_run_metrics
+  ()` drops wandb's own bookkeeping keys (`_runtime`, `_step`,
+  `_timestamp`, confirmed present on a real run's `.summary`) rather than
+  passing them through as if the researcher had logged them.
+
+`isaaclab.extract_event_config()` (§2.19) remains the one exception without
+live verification, because `isaaclab` itself isn't pip-installable and its
+runtime dependency is a GPU-simulation stack this environment cannot run at
+all - source-verification was the strongest tier available for it.
 
 v0.1.0 declared `pydantic>=2.0,<3.0` while `models/generation.py` uses
 `Field(exclude_if=...)`, which requires pydantic 2.12+. On pydantic 2.0–2.11

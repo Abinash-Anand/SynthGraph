@@ -29,17 +29,25 @@ Usage::
         parameters={**randomization, "task": "Isaac-Cartpole-v0"},
     )
 
-**Verification caveat.** This targets the public ``EventManager``/
-``EventTermCfg`` attribute shape (``func``, ``mode``, ``params``,
-``interval_range_s``) as documented for Isaac Lab's manager-based
-environments. It has not been exercised against a live Isaac Lab
-installation in this environment - Isaac Lab is a large GPU-simulation
-framework this SDK does not depend on and cannot install here. The
-extraction is duck-typed (it only requires an object with a ``.cfg``
-attribute, or a cfg object whose fields have ``func``/``mode``) and skips
-anything it does not recognize rather than raising, but you should check the
-output against your own Isaac Lab version before relying on it for a real
-experiment's provenance.
+**Verification.** ``isaaclab`` is not on PyPI (it is installed from source
+alongside NVIDIA's Isaac Sim, a large GPU-simulation stack this environment
+cannot run), so this has not been exercised against a *live* Isaac Lab
+installation. It has, however, been checked directly against the real
+source on GitHub (``isaac-sim/IsaacLab``,
+``source/isaaclab/isaaclab/managers/``), not just documentation or training
+knowledge: ``EventTermCfg`` (in ``manager_term_cfg.py``) declares exactly
+``func``, ``mode``, ``interval_range_s`` on itself and inherits ``params``
+from ``ManagerTermBaseCfg``; ``ManagerBase.__init__`` (in
+``manager_base.py``) stores ``self.cfg = copy.deepcopy(cfg)``, confirming
+the ``.cfg`` attribute this module reads off an ``EventManager``; and
+``ManagerBase`` itself falls back to ``self.cfg.__dict__.items()`` to
+iterate a non-dict cfg's fields when logging its own info - the exact same
+approach ``_public_attributes()`` below uses. A ``params`` value can be a
+``SceneEntityCfg`` object rather than a plain JSON value (also confirmed in
+``ManagerTermBaseCfg``'s docstring); that case is already handled by the
+``unrepresentable_params`` fallback rather than assumed away. What remains
+unverified is only the live *values* a running environment produces, not
+the attribute shape.
 """
 
 from __future__ import annotations
