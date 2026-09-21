@@ -25,6 +25,17 @@ export type TrainingRunTrainer = {
   type?: string;
 };
 
+export type TrainingRunCaptureStatus = {
+  status: 'complete' | 'partial' | 'unknown';
+  integrations: Record<
+    string,
+    {
+      attached: boolean;
+      closed: boolean;
+    }
+  >;
+};
+
 @Entity({ name: 'training_runs' })
 export class TrainingRun {
   @PrimaryGeneratedColumn('uuid')
@@ -72,6 +83,12 @@ export class TrainingRun {
 
   @Column({ type: 'jsonb', default: () => "'{}'::jsonb" })
   metadata: Record<string, unknown>;
+
+  // NULL, not '{}', is the honest default: a run this SDK version never
+  // reported on is different from one it reported as having no
+  // integrations attached, and the two must stay distinguishable.
+  @Column({ name: 'capture_status', type: 'jsonb', nullable: true })
+  captureStatus: TrainingRunCaptureStatus | null;
 
   @CreateDateColumn({
     name: 'created_at',
