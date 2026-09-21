@@ -29,6 +29,7 @@ import contextlib
 from types import TracebackType
 from typing import TYPE_CHECKING, Any, Self
 
+from .environment import ResourceMonitor
 from .errors import SynthGraphError, SynthGraphValidationError
 from .models import (
     AssetVersion,
@@ -374,6 +375,21 @@ class TrainingHandle(_Handle):
     def metrics(self) -> list[TrainingRunMetric]:
         """List the metric points recorded for this training run, ordered by step."""
         return self._client.training_runs.metrics(training_run_id=self.id)
+
+    def monitor_resources(self, *, interval_seconds: float = 10.0) -> ResourceMonitor:
+        """Start a background thread that periodically logs CPU/GPU/memory
+        usage to this training run - see ``environment.ResourceMonitor`` for
+        the full design rationale. Use as a context manager so it stops
+        (and logs one final sample) automatically::
+
+            with training.monitor_resources():
+                run_the_actual_training_loop()
+
+        or call ``.stop()`` yourself if a ``with`` block doesn't fit your
+        control flow. Still opt-in, not automatic-by-default - nothing
+        samples anything until this is called.
+        """
+        return ResourceMonitor(self, interval_seconds=interval_seconds).start()
 
     def add_dataset(self, dataset: Any) -> TrainingHandle:
         """Attach another dataset version to this training run."""
