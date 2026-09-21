@@ -48,7 +48,22 @@ class IntegrationSession:
 
         Registering after ``close()`` has already run does not invoke
         *closer* retroactively - close it yourself in that case.
+
+        Warns if *name* is already registered - ``summary()`` reports one
+        outcome per name, so a second registration under the same name would
+        otherwise silently overwrite the first one's result with no sign
+        anything was lost, the exact failure mode this whole module exists
+        to prevent. Both closers still run; give each a distinct name to
+        keep both outcomes in the report.
         """
+        if any(existing_name == name for existing_name, _ in self._closers):
+            warnings.warn(
+                f"SynthGraph integration '{name}' is already registered with "
+                "this training run - only the most recently closed one will "
+                "appear in the capture-status report. Register with a "
+                "distinct name if both should be tracked.",
+                stacklevel=2,
+            )
         self._closers.append((name, closer))
 
     def close(self) -> bool:

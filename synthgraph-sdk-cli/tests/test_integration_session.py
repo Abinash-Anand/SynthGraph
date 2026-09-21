@@ -58,6 +58,33 @@ def test_register_after_close_does_not_retroactively_invoke():
     assert calls == []
 
 
+def test_register_warns_on_duplicate_name():
+    session = IntegrationSession()
+    session.register(lambda: None, name="resource_monitor")
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        session.register(lambda: None, name="resource_monitor")
+
+    assert any(
+        "resource_monitor' is already registered" in str(w.message) for w in caught
+    )
+
+
+def test_duplicate_name_registrations_both_still_run_on_close():
+    session = IntegrationSession()
+    calls: list[str] = []
+    session.register(lambda: calls.append("first"), name="x")
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        session.register(lambda: calls.append("second"), name="x")
+
+    session.close()
+
+    assert calls == ["first", "second"]
+
+
 def test_close_returns_true_the_first_time_and_false_after():
     session = IntegrationSession()
     session.register(lambda: None, name="x")
