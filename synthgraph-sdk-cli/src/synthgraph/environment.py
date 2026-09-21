@@ -323,6 +323,12 @@ class ResourceMonitor:
     the ``with`` block) when done - it joins the thread and logs one final
     sample first, so the last stretch of training isn't missing data the
     way it would be if the thread were simply abandoned.
+
+    If *training* is a real ``TrainingHandle`` (anything exposing an
+    ``_integration_session``), construction also registers ``stop()`` with
+    it, so forgetting the explicit call above no longer loses data either -
+    ``training.close()``, or leaving a ``with experiment.training(...) as
+    training:`` block, stops this monitor too. See ``integration_session.py``.
     """
 
     def __init__(self, training: _LogsMetrics, *, interval_seconds: float = 10.0) -> None:
@@ -331,6 +337,12 @@ class ResourceMonitor:
         self._shutdown = threading.Event()
         self._thread: threading.Thread | None = None
         self._step = 0
+
+        # Duck-typed, not imported: a plain _LogsMetrics (e.g. a test fake)
+        # has no session at all, and that's fine - see integration_session.py.
+        session = getattr(training, "_integration_session", None)
+        if session is not None:
+            session.register(self.stop, name="resource_monitor")
 
     def start(self) -> ResourceMonitor:
         """Start sampling in a background thread. No-op if already running."""

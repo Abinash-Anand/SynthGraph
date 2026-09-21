@@ -43,7 +43,7 @@ Usage::
     agent.writer = create_writer(training, wrapped=agent.writer)  # keep TensorBoard, add SynthGraph
     trainer = SequentialTrainer(cfg=trainer_cfg, env=env, agents=agent)
     trainer.train()
-    agent.writer.close()  # required: flushes the final pending batch (see below)
+    training.close()  # flushes agent.writer's final pending batch (see below)
 
 **Verification.** ``extract_training_config()`` was checked against a real,
 fully constructed skrl 2.1.0 PPO agent (``pip install skrl``, real
@@ -173,6 +173,15 @@ def create_writer(training: Any, *, wrapped: Any | None = None) -> Any:
     same risk exists there too but is much less likely to be noticed. This
     writer has no background flush, so the risk is real on every run, not
     just an edge case - always call ``.close()``.
+
+    **Or don't, and call ``training.close()`` instead.** When *training* is a
+    real ``TrainingHandle``, this writer registers its own ``close()`` with
+    ``training``'s ``IntegrationSession`` at construction time, so leaving a
+    ``with experiment.training(...) as training:`` block, or calling
+    ``training.close()`` directly, flushes the final batch the same way -
+    see ``integration_session.py``. The explicit call above still works and
+    is what a duck-typed ``training`` (one with no session, e.g. in a test)
+    needs, since only a real ``TrainingHandle`` has one to register with.
     """
 
     class SynthGraphWriter:
@@ -218,4 +227,16 @@ def create_writer(training: Any, *, wrapped: Any | None = None) -> Any:
                     stacklevel=2,
                 )
 
-    return SynthGraphWriter()
+    writer = SynthGraphWriter()
+
+    # Duck-typed, not imported: a plain training handle in a test has no
+    # session at all, and that's fine - see integration_session.py. When
+    # `training` is a real TrainingHandle, this closes the gotcha above
+    # automatically: training.close() (or leaving a `with` block) now
+    # flushes this writer too, so the explicit .close() call is a backstop,
+    # not the only thing standing between a researcher and lost data.
+    session = getattr(training, "_integration_session", None)
+    if session is not None:
+        session.register(writer.close, name="skrl_writer")
+
+    return writer
