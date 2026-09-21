@@ -17,13 +17,19 @@ from __future__ import annotations
 import platform
 import subprocess
 import sys
-from importlib.metadata import PackageNotFoundError
+from importlib.metadata import PackageNotFoundError, distributions
 from importlib.metadata import version as package_version
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
-__all__ = ["auto_capture", "environment_metadata", "git_metadata", "scrub_remote_url"]
+__all__ = [
+    "auto_capture",
+    "environment_metadata",
+    "git_metadata",
+    "installed_packages_metadata",
+    "scrub_remote_url",
+]
 
 _GIT_TIMEOUT_SECONDS = 5
 
@@ -144,6 +150,26 @@ def auto_capture() -> dict[str, Any]:
     merge, not a policy decision about precedence.
     """
     return {**environment_metadata(), **git_metadata()}
+
+
+def installed_packages_metadata() -> dict[str, str]:
+    """Collect every installed package's name and version.
+
+    Unlike ``environment_metadata()``'s ``include_packages``, which only
+    reports the packages the caller names, this enumerates every
+    distribution ``importlib.metadata`` can see - the full dependency
+    inventory that spec 32/38 deliberately keeps out of automatic capture.
+    It is never called by ``auto_capture()`` or by any ``create()`` method;
+    call it yourself and decide where the result goes (typically
+    ``metadata=`` on a generation or training run), the same as
+    ``git_metadata()``/``environment_metadata()`` before this existed.
+    """
+    packages: dict[str, str] = {}
+    for dist in distributions():
+        name = dist.metadata["Name"]
+        if name:
+            packages[name] = dist.version
+    return packages
 
 
 def _package_version(name: str) -> str | None:

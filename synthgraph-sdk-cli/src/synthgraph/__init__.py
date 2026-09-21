@@ -9,7 +9,7 @@ from __future__ import annotations
 from ._version import __version__
 from .client import SynthGraph, SynthGraphClient
 from .config import RetryPolicy, SynthGraphConfig
-from .environment import environment_metadata, git_metadata
+from .environment import environment_metadata, git_metadata, installed_packages_metadata
 from .errors import (
     SynthGraphAuthenticationError,
     SynthGraphAuthorizationError,
@@ -97,4 +97,5 @@ __all__ = [
     "__version__",
     "environment_metadata",
     "git_metadata",
+    "installed_packages_metadata",
 ]
