@@ -8,6 +8,8 @@ import { TrainingRun } from '../../database/entities/training-run.entity.js';
 
 import { TypeOrmExperimentRepository } from '../../experiments/repositories/typeorm-experiment.repository.js';
 
+import type { TrainingRunDatasetReferenceRepository } from '../repositories/training-run-dataset-reference.repository.js';
+import { TRAINING_RUN_DATASET_REFERENCE_REPOSITORY } from '../repositories/training-run-dataset-reference.tokens.js';
 import type { TrainingRunRepository } from '../repositories/training-run.repository.js';
 import { TRAINING_RUN_REPOSITORY } from '../repositories/training-run.tokens.js';
 
@@ -18,6 +20,9 @@ export class ListTrainingRunsService {
 
     @Inject(TRAINING_RUN_REPOSITORY)
     private readonly trainingRunRepository: TrainingRunRepository,
+
+    @Inject(TRAINING_RUN_DATASET_REFERENCE_REPOSITORY)
+    private readonly trainingRunDatasetReferenceRepository: TrainingRunDatasetReferenceRepository,
   ) {}
 
   async execute(
@@ -34,13 +39,29 @@ export class ListTrainingRunsService {
       throw new NotFoundException('Experiment not found');
     }
 
-    if (captureStatus !== undefined) {
-      return this.trainingRunRepository.findByCaptureStatus(
-        experiment.id,
-        captureStatus,
-      );
-    }
+    const trainingRuns =
+      captureStatus !== undefined
+        ? await this.trainingRunRepository.findByCaptureStatus(
+            experiment.id,
+            captureStatus,
+          )
+        : await this.trainingRunRepository.findAllForExperiment(
+            experiment.id,
+          );
 
-    return this.trainingRunRepository.findAllForExperiment(experiment.id);
+    await Promise.all(
+      trainingRuns.map(async (trainingRun) => {
+        const references =
+          await this.trainingRunDatasetReferenceRepository.findForTrainingRun(
+            trainingRun.id,
+            userId,
+          );
+        trainingRun.datasets = references.map(
+          (reference) => reference.datasetVersion,
+        );
+      }),
+    );
+
+    return trainingRuns;
   }
 }

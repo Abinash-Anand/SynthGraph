@@ -803,3 +803,59 @@ config, 101 via `test:e2e` alone) and lint unchanged. SDK suite: mypy
 clean, same 2 pre-existing unrelated failures, new test confirming
 `update_capture_status()` now rejects a bad status before any request is
 sent (`backend.requests == []`).
+
+### 2.30 `experiment.training()` defaults `name` to `model`, the asymmetry §2.23 flagged
+
+§2.23 noted `experiment.training()` had no equivalent of
+`experiment.generation()`'s `_default_generation_name()` - the backend
+requires `name`, so `experiment.training(model="yolo")` with no `name=`
+raised a real 400 from the real backend, confirmed by re-running the exact
+failing call from §2.23 against the live server before this fix (it now
+succeeds, and the created run's `name` is `"yolo"`, confirmed independently
+via `GET`).
+
+Fixed the same way `generation()` already handles it: only at the fluent
+`ExperimentHandle.training()` layer, not inside
+`TrainingRunsAPI.create()`/`client.training_runs.create()` itself, which
+keeps `name` optional-but-then-omitted exactly as before - matching
+`GenerationsAPI.create()` requiring `name` explicitly while only
+`ExperimentHandle.generation()` derives a default. `_default_training_name()`
+mirrors `_default_generation_name()`'s shape: falls back to a plain
+`"training_run"` string if `model` is missing or not a non-empty string
+(the same defensive fallback `generation()` has for a missing `generator`),
+though in practice `training_runs.create()`'s `model` parameter has no
+default of its own, so this only bites a caller who somehow bypasses that.
+
+### 2.31 `TrainingRun.datasets` was permanently empty against the real backend - now genuinely populated
+
+Discovered while reviewing PR #86: `GET`/`list` responses for a training run
+never included a `datasets` field at all (confirmed via `grep` across the
+whole `training-runs` module - zero references), yet the SDK's own test
+(`test_datasets_are_attached_after_create_and_run_is_refetched`) asserted
+against a *mocked* response that fabricated one. The SDK model and the
+`add_dataset()`/refetch flow were built assuming a backend capability that
+was never actually wired up - `TrainingRunDatasetReferenceRepository
+.findForTrainingRun()` already existed, correctly ownership-scoped, and was
+never called from anywhere.
+
+Fixed on the backend, not by narrowing the SDK's claim: `GetTrainingRunService`
+and `ListTrainingRunsService` now call `findForTrainingRun()` (extended with
+`.leftJoinAndSelect('reference.datasetVersion', ...)`, since the existing
+query only ever loaded the raw junction row) and populate a transient
+`datasets` field on the returned `TrainingRun` entities - not a real column,
+populated by the service layer, the same pattern `capture_status` uses for
+"computed by request time" data, except here every read path populates it
+with a real (possibly empty) list rather than distinguishing "never
+reported." `CreateTrainingRunService` sets `datasets = []` directly, no
+query needed - a reference can only be created by a separate, later request,
+so none can exist yet at creation time.
+
+**Verified end-to-end against the real backend and Postgres, not just the
+existing mocked SDK test**: created a real training run, attached a real
+dataset version, and confirmed both `GET /training-runs/{id}` and
+`GET /experiments/{id}/training-runs` return it - through raw `curl` first,
+then independently through the real `SynthGraphClient`
+(`client.training_runs.get(...).datasets[0].id` matched the attached
+version). New e2e coverage: an empty array on creation, and a populated one
+on both `GET` and `list` after attaching. Backend suite: 103 e2e (2 new),
+clean build, lint unchanged.

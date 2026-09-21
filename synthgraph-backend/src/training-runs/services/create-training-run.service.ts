@@ -54,6 +54,11 @@ export class CreateTrainingRunService {
       metadata: input.metadata ?? {},
     });
 
-    return this.trainingRunRepository.create(trainingRun);
+    const created = await this.trainingRunRepository.create(trainingRun);
+    // Accurate without a query: dataset references only ever get created by
+    // a *separate*, later POST /training-runs/{id}/datasets request, so at
+    // the moment a training run is created none can exist yet.
+    created.datasets = [];
+    return created;
   }
 }

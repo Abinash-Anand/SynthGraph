@@ -440,6 +440,52 @@ describe('M6 Training run (e2e)', () => {
     expect(reference).toBeNull();
   });
 
+  it('creation response has an empty datasets array before anything is attached', async () => {
+    const created = await request(app.getHttpServer())
+      .post(`/experiments/${experimentA.id}/training-runs`)
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .send({ name: 'No datasets yet', trainer: { name: 'yolo' }, parameters: {} })
+      .expect(201);
+
+    expect(created.body.datasets).toEqual([]);
+  });
+
+  it('GET and list reflect an attached dataset version, not an empty array', async () => {
+    const created = await request(app.getHttpServer())
+      .post(`/experiments/${experimentA.id}/training-runs`)
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .send({ name: 'Reflects attached dataset', trainer: { name: 'yolo' }, parameters: {} })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(`/training-runs/${created.body.id}/datasets`)
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .send({ datasetVersionId: datasetVersion.id, role: 'training' })
+      .expect(201);
+
+    const fetched = await request(app.getHttpServer())
+      .get(`/training-runs/${created.body.id}`)
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .expect(200);
+
+    expect(fetched.body.datasets).toHaveLength(1);
+    expect(fetched.body.datasets[0]).toMatchObject({
+      id: datasetVersion.id,
+      uri: 's3://researcher/training-v1',
+    });
+
+    const listed = await request(app.getHttpServer())
+      .get(`/experiments/${experimentA.id}/training-runs`)
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .expect(200);
+
+    const listedRun = (
+      listed.body as Array<{ id: string; datasets: Array<{ id: string }> }>
+    ).find((run) => run.id === created.body.id);
+    expect(listedRun?.datasets).toHaveLength(1);
+    expect(listedRun?.datasets[0].id).toBe(datasetVersion.id);
+  });
+
   it('logs and lists training metrics in step order', async () => {
     const created = await request(app.getHttpServer())
       .post(`/experiments/${experimentA.id}/training-runs`)

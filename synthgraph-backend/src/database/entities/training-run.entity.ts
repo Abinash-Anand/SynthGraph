@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import type { Relation } from 'typeorm';
 
+import { DatasetVersion } from './dataset-version.entity.js';
 import { Experiment } from './experiment.entity.js';
 
 export enum TrainingRunStatus {
@@ -109,4 +110,13 @@ export class TrainingRun {
     type: 'timestamptz',
   })
   updatedAt: Date;
+
+  // Not a column - populated by the service layer (GetTrainingRunService,
+  // ListTrainingRunsService, CreateTrainingRunService's post-attach refetch)
+  // via TrainingRunDatasetReferenceRepository.findForTrainingRun(), which
+  // existed but was never wired to anything before this. Every read path
+  // that returns a TrainingRun now populates this with the real (possibly
+  // empty) attached-dataset-version list; optional only because TypeScript
+  // requires a type for the field before any service has run.
+  datasets?: DatasetVersion[];
 }
