@@ -186,6 +186,7 @@ synthgraph
 ├── experiments    list | get | search
 ├── generations    list | get
 ├── training-runs  list | get | metrics
+├── evaluations    list | get
 ├── compare
 ├── manifest
 └── docs
@@ -207,6 +208,9 @@ synthgraph training-runs list --experiment <experiment-id>
 synthgraph training-runs list --experiment <experiment-id> --capture-status partial
 synthgraph training-runs get <training-run-id>
 synthgraph training-runs metrics <training-run-id>
+
+synthgraph evaluations list --training-run <training-run-id>
+synthgraph evaluations get <evaluation-id>
 
 synthgraph compare <generation-id-a> <generation-id-b>
 

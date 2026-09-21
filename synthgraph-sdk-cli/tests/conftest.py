@@ -170,3 +170,16 @@ def training_run_metric_payload(**overrides: Any) -> dict[str, Any]:
     }
     payload.update(overrides)
     return payload
+
+
+def evaluation_payload(**overrides: Any) -> dict[str, Any]:
+    payload = {
+        "id": "ev1",
+        "training_run_id": "t1",
+        "dataset_version_id": "dv1",
+        "name": "holdout_map",
+        "metrics": {"mAP": 0.87},
+        "created_at": NOW,
+    }
+    payload.update(overrides)
+    return payload

@@ -43,8 +43,8 @@ test.
 | Report training run capture status | `sg.training_runs.update_capture_status()` | — | PATCH | `/training-runs/{trainingRunId}/capture-status` |
 | Attach dataset to training run | `sg.training_runs.add_dataset()` | — | POST | `/training-runs/{trainingRunId}/datasets` |
 | Create evaluation | `sg.evaluations.create()` / `training.evaluation()` | — | POST | `/training-runs/{trainingRunId}/evaluations` |
-| Get evaluation | `sg.evaluations.get(id)` | — | GET | `/evaluation-results/{evaluationResultId}` |
-| List evaluations | `sg.evaluations.list()` / `training.evaluations()` | — | GET | `/training-runs/{trainingRunId}/evaluations` |
+| Get evaluation | `sg.evaluations.get(id)` | `evaluations get` | GET | `/evaluation-results/{evaluationResultId}` |
+| List evaluations | `sg.evaluations.list()` / `training.evaluations()` | `evaluations list` | GET | `/training-runs/{trainingRunId}/evaluations` |
 | Log training metric | `sg.training_runs.log_metric()` / `training.log_metric()` | — | POST | `/training-runs/{trainingRunId}/metrics` |
 | List training metrics | `sg.training_runs.metrics()` / `training.metrics()` | `training-runs metrics` | GET | `/training-runs/{trainingRunId}/metrics` |
 | Create asset (step 1 of `sg.assets.create()`, skipped when `asset_id=` reuses an existing one) | — | — | POST | `/assets` |
@@ -961,3 +961,26 @@ after reporting one via `curl`), `get` in both table and `--json` form, and
 Postgres afterward. New test file `tests/cli/test_training_runs.py` (16
 tests) plus `training-runs` added to `test_main.py`'s registered-groups
 list. `ruff` and `mypy` clean.
+
+### 2.35 `synthgraph evaluations` - the same CLI gap as 2.34, one resource over
+
+Same shape as 2.34: `EvaluationsAPI` (`get`/`list`) already existed in the
+SDK, `training.evaluations()` already existed on the fluent handle, and
+there was no CLI surface at all. Unlike `TrainingRun`, `EvaluationResult` is
+already a flat model (`training_run_id`, `dataset_version_id`, `name`,
+`metrics`), so this one had no equivalent of 2.33's read-mapping bug to
+find - confirmed by checking the model before writing the command, not
+after being burned again.
+
+**Decision:** `synthgraph evaluations list --training-run <id>` /
+`evaluations get <id>`, read-only, no `create`, matching 2.34's reasoning
+exactly (evaluations are recorded inline in training/eval code via the
+SDK, not typed at a shell prompt afterward).
+
+**Verified live end-to-end**: created a real project, experiment, training
+run, dataset version and evaluation result via `curl`, then ran the real
+`synthgraph.exe` console script through `evaluations list` and
+`evaluations get` (table and `--json`) against it. Verification data
+cleaned up from Postgres afterward. New test file
+`tests/cli/test_evaluations.py` (8 tests) plus `evaluations` added to
+`test_main.py`'s registered-groups list. `ruff` and `mypy` clean.
