@@ -42,6 +42,7 @@ describe('M6 Training run (e2e)', () => {
   let apiKeyB: string;
 
   let datasetVersion: DatasetVersion;
+  let datasetVersionB: DatasetVersion;
 
   function createRawApiKey(): string {
     return `sg_${randomBytes(32).toString('hex')}`;
@@ -166,6 +167,27 @@ describe('M6 Training run (e2e)', () => {
         metadata: {},
       }),
     );
+
+    const datasetB = await datasetRepository.save(
+      datasetRepository.create({
+        userId: userB.id,
+        name: 'User B Dataset',
+        description: null,
+        metadata: {},
+      }),
+    );
+
+    datasetVersionB = await datasetVersionRepository.save(
+      datasetVersionRepository.create({
+        datasetId: datasetB.id,
+        version: '1',
+        uri: 's3://researcher-b/training-v1',
+        format: 'image',
+        size: 100,
+        checksum: 'sha256:dataset-b',
+        metadata: {},
+      }),
+    );
   });
 
   afterAll(async () => {
@@ -195,7 +217,13 @@ describe('M6 Training run (e2e)', () => {
       experimentB.id,
     ]);
 
-    await datasetVersionRepository.delete(datasetVersion.id);
+    await datasetVersionRepository.delete([
+      datasetVersion.id,
+      datasetVersionB.id,
+    ]);
+    await datasetRepository.delete({
+      name: In(['Training Dataset', 'User B Dataset']),
+    });
 
     await projectRepository.delete([
       projectA.id,
@@ -385,6 +413,31 @@ describe('M6 Training run (e2e)', () => {
       role: 'training',
     });
     expect(reference).not.toBeNull();
+  });
+
+  it('does not allow attaching a dataset version owned by another user', async () => {
+    const created = await request(app.getHttpServer())
+      .post(`/experiments/${experimentA.id}/training-runs`)
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .send({ name: 'Cross-user dataset attempt', trainer: { name: 'yolo' }, parameters: {} })
+      .expect(201);
+
+    // created.body.id (training run) is owned by userA; datasetVersionB is
+    // owned by userB - CreateTrainingRunDatasetReferenceService checks both
+    // independently, so attaching userB's dataset to userA's training run
+    // must be rejected even though userA authenticated successfully and
+    // owns the training run itself.
+    await request(app.getHttpServer())
+      .post(`/training-runs/${created.body.id}/datasets`)
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .send({ datasetVersionId: datasetVersionB.id, role: 'training' })
+      .expect(404);
+
+    const reference = await trainingRunDatasetReferenceRepository.findOneBy({
+      trainingRunId: created.body.id,
+      datasetVersionId: datasetVersionB.id,
+    });
+    expect(reference).toBeNull();
   });
 
   it('logs and lists training metrics in step order', async () => {
