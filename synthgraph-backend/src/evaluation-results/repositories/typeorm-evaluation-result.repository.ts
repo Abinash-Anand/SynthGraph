@@ -37,4 +37,17 @@ export class TypeOrmEvaluationResultRepository
       })
       .getOne();
   }
+
+  async findAllForTrainingRun(
+    trainingRunId: string,
+  ): Promise<EvaluationResult[]> {
+    return this.repository.find({
+      where: {
+        trainingRunId,
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+  }
 }

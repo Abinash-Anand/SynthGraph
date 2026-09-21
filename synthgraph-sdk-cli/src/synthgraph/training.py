@@ -2,16 +2,13 @@
 
 SynthGraph records that training happened and what went into it. It does not
 start, wrap or supervise the researcher's training code.
-
-The routes used here are flagged UNVERIFIED in CONTRACT.md: the spec (63)
-requires them to be checked against the backend's training-run controller
-before v1.0.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
+from .environment import auto_capture
 from .errors import SynthGraphValidationError
 from .http import SynthGraphHTTPClient
 from .models import DatasetVersion, TrainingRun
@@ -51,32 +48,70 @@ class TrainingRunsAPI:
         description: str | None = None,
         status: str | None = None,
         metadata: dict[str, Any] | None = None,
+        capture_environment: bool = True,
     ) -> TrainingRun:
         """Record a training run against an experiment.
 
         ``datasets`` should reference the exact dataset versions the model was
         trained on, so lineage points at data that cannot change underneath the
-        record (spec 4, 21).
+        record (spec 4, 21). Each one is attached with its own request after
+        the training run itself is created, since the backend does not accept
+        dataset references on create.
+
+        ``model``, ``framework`` and ``framework_version`` are the SDK's
+        ergonomic names; on the wire they become the backend's nested
+        ``trainer`` object (``trainer.name``, ``trainer.type``,
+        ``trainer.version``) and ``config`` becomes ``parameters``.
+
+        Every training run is created ``pending`` - the backend does not
+        accept a status on create, so passing one is rejected here rather than
+        silently ignored.
+
+        ``TrainingRun`` has no dedicated environment/reproducibility field, so
+        when ``metadata`` does not already have an ``"environment"`` key,
+        ``environment_metadata()`` and ``git_metadata()`` are captured
+        automatically and stored under ``metadata["environment"]``. A caller
+        who already put something under that key always wins, and
+        ``capture_environment=False`` turns this off entirely.
         """
+        if status is not None:
+            raise SynthGraphValidationError(
+                "training runs cannot be created with a status; every run starts pending",
+                field="status",
+            )
+
         experiment_id = require_identifier(experiment_id, field="experiment_id")
 
-        payload = compact(
+        # Validated up front, before any network call, so a bad dataset
+        # reference never leaves a training run created without it.
+        references = normalize_dataset_references(datasets) or []
+
+        trainer = compact(
             {
-                "name": name,
-                "description": description,
-                "model": require_text(model, field="model"),
-                "framework": framework,
-                "framework_version": framework_version,
-                "config": (
-                    require_mapping(config, field="config") if config is not None else None
-                ),
-                "datasets": normalize_dataset_references(datasets),
-                "status": status,
-                "metadata": (
-                    require_mapping(metadata, field="metadata") if metadata is not None else None
-                ),
+                "name": require_text(model, field="model"),
+                "version": framework_version,
+                "type": framework,
             }
         )
+
+        payload: dict[str, Any] = {
+            "trainer": trainer,
+            "parameters": (
+                require_mapping(config, field="config") if config is not None else {}
+            ),
+        }
+        if name is not None:
+            payload["name"] = name
+        if description is not None:
+            payload["description"] = description
+
+        resolved_metadata = (
+            require_mapping(metadata, field="metadata") if metadata is not None else {}
+        )
+        if capture_environment and "environment" not in resolved_metadata:
+            resolved_metadata = {**resolved_metadata, "environment": auto_capture()}
+        if resolved_metadata:
+            payload["metadata"] = resolved_metadata
 
         data = self._http.post(
             Routes.experiment_training_runs(experiment_id),
@@ -84,7 +119,21 @@ class TrainingRunsAPI:
             operation="training_runs.create",
         )
 
-        return TrainingRun.model_validate(data)
+        created = TrainingRun.model_validate(data)
+
+        for reference in references:
+            self.add_dataset(
+                training_run_id=created.id,
+                dataset=_dataset_version_id_from_reference(reference),
+                role="training",
+            )
+
+        # Attaching a dataset changes what the training run looks like; the
+        # create response's `datasets` cannot reflect that yet, so re-fetch
+        # rather than return a response that is already stale.
+        if references:
+            return self.get(created.id)
+        return created
 
     def get(self, training_run_id: str) -> TrainingRun:
         """Retrieve a training run by ID."""
@@ -113,17 +162,47 @@ class TrainingRunsAPI:
         *,
         training_run_id: str,
         dataset: DatasetInput,
+        role: str = "training",
     ) -> TrainingRun:
         """Attach another dataset version to an existing training run."""
         training_run_id = require_identifier(training_run_id, field="training_run_id")
 
         references = normalize_dataset_references([dataset])
         assert references is not None  # a one-item list always normalizes
+        dataset_version_id = _dataset_version_id_from_reference(references[0])
 
         data = self._http.post(
             Routes.training_run_datasets(training_run_id),
-            json=references[0],
+            json={"dataset_version_id": dataset_version_id, "role": role},
             operation="training_runs.add_dataset",
+        )
+
+        return TrainingRun.model_validate(data)
+
+    def start(self, training_run_id: str) -> TrainingRun:
+        """Mark a training run as running."""
+        return self._update_status(training_run_id, "running")
+
+    def complete(self, training_run_id: str) -> TrainingRun:
+        """Mark a training run as completed."""
+        return self._update_status(training_run_id, "completed")
+
+    def fail(self, training_run_id: str) -> TrainingRun:
+        """Mark a training run as failed.
+
+        Failed runs are kept: a failed training run is still a scientific
+        record (spec 5).
+        """
+        return self._update_status(training_run_id, "failed")
+
+    def _update_status(self, training_run_id: str, status: str) -> TrainingRun:
+        """Update the lifecycle status of a training run."""
+        training_run_id = require_identifier(training_run_id, field="training_run_id")
+
+        data = self._http.patch(
+            Routes.training_run(training_run_id),
+            json={"status": status},
+            operation=f"training_runs.{status}",
         )
 
         return TrainingRun.model_validate(data)
@@ -155,3 +234,20 @@ def normalize_dataset_references(
                 field=field,
             )
     return normalized
+
+
+def _dataset_version_id_from_reference(reference: dict[str, Any]) -> Any:
+    """Pull the dataset-version id out of a normalized dataset reference.
+
+    ``normalize_dataset_references`` keys a bare ID or a ``DatasetVersion``
+    under ``"id"``. A mapping is passed through as given, so it must already
+    carry an ``"id"`` for this to have anything to attach.
+    """
+    dataset_version_id = reference.get("id")
+    if dataset_version_id is None:
+        raise SynthGraphValidationError(
+            "dataset reference has no id to attach; pass a dataset version ID, a "
+            "DatasetVersion, or a mapping with an 'id' key",
+            field="dataset",
+        )
+    return dataset_version_id

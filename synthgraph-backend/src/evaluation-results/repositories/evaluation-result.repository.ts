@@ -7,4 +7,8 @@ export interface EvaluationResultRepository {
     evaluationResultId: string,
     userId: string,
   ): Promise<EvaluationResult | null>;
+
+  findAllForTrainingRun(
+    trainingRunId: string,
+  ): Promise<EvaluationResult[]>;
 }

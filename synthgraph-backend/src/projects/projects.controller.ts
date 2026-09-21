@@ -10,6 +10,7 @@ import {
 
 import { ApiKeyGuard } from '../auth/guards/api-key.guard.js';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request.js';
+import { CreateProjectDto } from './dto/create-project.dto.js';
 import { CreateProjectService } from './services/create-project.service.js';
 import { GetProjectService } from './services/get-project.service.js';
 import { ListProjectsService } from './services/list-projects.service.js';
@@ -25,11 +26,7 @@ export class ProjectsController {
 
   @Post()
   async createProject(
-    @Body()
-    body: {
-      name: string;
-      description?: string;
-    },
+    @Body() body: CreateProjectDto,
     @Req() request: AuthenticatedRequest,
   ) {
     return this.createProjectService.execute(

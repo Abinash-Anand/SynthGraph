@@ -28,6 +28,8 @@ import { TypeOrmTrainingRunRepository } from './repositories/typeorm-training-ru
 import { CreateTrainingRunDatasetReferenceService } from './services/create-training-run-dataset-reference.service.js';
 import { CreateTrainingRunService } from './services/create-training-run.service.js';
 import { GetTrainingRunService } from './services/get-training-run.service.js';
+import { ListTrainingRunsService } from './services/list-training-runs.service.js';
+import { UpdateTrainingRunStatusService } from './services/update-training-run-status.service.js';
 
 @Module({
   imports: [
@@ -65,6 +67,8 @@ import { GetTrainingRunService } from './services/get-training-run.service.js';
 
     CreateTrainingRunService,
     GetTrainingRunService,
+    ListTrainingRunsService,
+    UpdateTrainingRunStatusService,
     CreateTrainingRunDatasetReferenceService,
   ],
 })

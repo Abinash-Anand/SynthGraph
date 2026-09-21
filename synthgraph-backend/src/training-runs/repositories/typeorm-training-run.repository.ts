@@ -2,7 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Repository } from 'typeorm';
 
-import { TrainingRun } from '../../database/entities/training-run.entity.js';
+import {
+  TrainingRun,
+  TrainingRunStatus,
+} from '../../database/entities/training-run.entity.js';
 import { TrainingRunRepository } from './training-run.repository.js';
 
 @Injectable()
@@ -42,5 +45,27 @@ export class TypeOrmTrainingRunRepository
         createdAt: 'DESC',
       },
     });
+  }
+
+  async transitionStatus(
+    trainingRunId: string,
+    currentStatus: TrainingRunStatus,
+    nextStatus: TrainingRunStatus,
+    startedAt: Date | null,
+    completedAt: Date | null,
+  ): Promise<boolean> {
+    const result = await this.repository.update(
+      {
+        id: trainingRunId,
+        status: currentStatus,
+      },
+      {
+        status: nextStatus,
+        startedAt,
+        completedAt,
+      },
+    );
+
+    return result.affected === 1;
   }
 }

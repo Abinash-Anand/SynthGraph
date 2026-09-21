@@ -30,6 +30,7 @@ export class CreateEvaluationResultService {
     datasetVersionId: string,
     metrics: Record<string, unknown>,
     metadata: Record<string, unknown>,
+    name?: string,
   ): Promise<EvaluationResult> {
     const trainingRun =
       await this.trainingRunRepository.findByIdForUser(
@@ -55,6 +56,7 @@ export class CreateEvaluationResultService {
 
     evaluationResult.trainingRunId = trainingRunId;
     evaluationResult.datasetVersionId = datasetVersionId;
+    evaluationResult.name = name ?? null;
     evaluationResult.metrics = metrics;
     evaluationResult.metadata = metadata;
 

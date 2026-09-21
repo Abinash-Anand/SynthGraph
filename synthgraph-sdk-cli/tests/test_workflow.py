@@ -89,7 +89,12 @@ def workflow_backend(backend):
     backend.route("PATCH", "/generations/g1", patch_generation)
     backend.route(
         "POST",
-        "/generations/g1/datasets",
+        "/datasets",
+        httpx.Response(201, json={"id": "d1", "name": "rain_dataset_v1"}),
+    )
+    backend.route(
+        "POST",
+        "/datasets/d1/versions",
         httpx.Response(
             201,
             json={
@@ -103,21 +108,52 @@ def workflow_backend(backend):
     )
     backend.route(
         "POST",
+        "/generations/g1/datasets",
+        httpx.Response(201, json={"dataset_version_id": "dv1", "role": "output"}),
+    )
+    backend.route(
+        "POST",
         "/experiments/e1/training-runs",
         httpx.Response(
             201,
             json={
                 "id": "t1",
                 "experiment_id": "e1",
-                "model": "yolo",
-                "framework": "pytorch",
-                "config": {"epochs": 50},
+                "trainer": {"name": "yolo", "type": "pytorch"},
+                "parameters": {"epochs": 50},
             },
         ),
     )
     backend.route(
         "POST",
-        "/training-runs/t1/evaluation-results",
+        "/training-runs/t1/datasets",
+        httpx.Response(
+            201,
+            json={
+                "id": "t1",
+                "experiment_id": "e1",
+                "trainer": {"name": "yolo", "type": "pytorch"},
+                "parameters": {"epochs": 50},
+            },
+        ),
+    )
+    backend.route(
+        "GET",
+        "/training-runs/t1",
+        httpx.Response(
+            200,
+            json={
+                "id": "t1",
+                "experiment_id": "e1",
+                "trainer": {"name": "yolo", "type": "pytorch"},
+                "parameters": {"epochs": 50},
+                "datasets": [{"id": "dv1"}],
+            },
+        ),
+    )
+    backend.route(
+        "POST",
+        "/training-runs/t1/evaluations",
         httpx.Response(
             201,
             json={
@@ -250,7 +286,7 @@ def test_workflow_visits_every_expected_route(workflow_backend):
         with experiment.generation(generator="blender", parameters={}) as generation:
             generation.dataset(name="d", uri="s3://lab/d")
         training = experiment.training(model="yolo", dataset="dv1")
-        training.evaluation(metrics={"mAP": 0.7})
+        training.evaluation(metrics={"mAP": 0.7}, dataset_version_id="dv1")
         generation.manifest()
         generation.documentation()
         sg.compare("g1", "g2")
@@ -262,9 +298,13 @@ def test_workflow_visits_every_expected_route(workflow_backend):
         ("POST", "/projects/p1/experiments"),
         ("POST", "/experiments/e1/generations"),
         ("PATCH", "/generations/g1"),
+        ("POST", "/datasets"),
+        ("POST", "/datasets/d1/versions"),
         ("POST", "/generations/g1/datasets"),
         ("POST", "/experiments/e1/training-runs"),
-        ("POST", "/training-runs/t1/evaluation-results"),
+        ("POST", "/training-runs/t1/datasets"),
+        ("GET", "/training-runs/t1"),
+        ("POST", "/training-runs/t1/evaluations"),
         ("GET", "/generations/g1/reproduction-manifest"),
         ("GET", "/generations/g1/documentation"),
         ("POST", "/generations/compare"),

@@ -76,11 +76,13 @@ class Routes:
     def generations_compare() -> str:
         return "/generations/compare"
 
-    # -- unverified (spec 63) ---------------------------------------------
+    @staticmethod
+    def datasets() -> str:
+        return "/datasets"
 
     @staticmethod
-    def generation_assets(generation_id: str) -> str:
-        return f"/generations/{encode_id(generation_id)}/assets"
+    def dataset_versions(dataset_id: str) -> str:
+        return f"/datasets/{encode_id(dataset_id)}/versions"
 
     @staticmethod
     def experiment_training_runs(experiment_id: str) -> str:
@@ -96,11 +98,17 @@ class Routes:
 
     @staticmethod
     def training_run_evaluations(training_run_id: str) -> str:
-        return f"/training-runs/{encode_id(training_run_id)}/evaluation-results"
+        return f"/training-runs/{encode_id(training_run_id)}/evaluations"
 
     @staticmethod
     def evaluation_result(evaluation_id: str) -> str:
         return f"/evaluation-results/{encode_id(evaluation_id)}"
+
+    # -- unverified (spec 63) ---------------------------------------------
+
+    @staticmethod
+    def generation_assets(generation_id: str) -> str:
+        return f"/generations/{encode_id(generation_id)}/assets"
 
 
 #: Route builders whose shape the spec has not frozen. Exposed so tests and
@@ -108,10 +116,5 @@ class Routes:
 UNVERIFIED_ROUTES = frozenset(
     {
         "generation_assets",
-        "experiment_training_runs",
-        "training_run",
-        "training_run_datasets",
-        "training_run_evaluations",
-        "evaluation_result",
     }
 )

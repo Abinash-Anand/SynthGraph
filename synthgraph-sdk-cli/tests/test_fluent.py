@@ -129,9 +129,17 @@ def test_terminal_generation_is_left_alone(experiment, backend):
 def test_generation_records_a_dataset(experiment, backend):
     _generation_routes(backend)
     backend.route(
+        "POST", "/datasets", httpx.Response(201, json={"id": "d1", "name": "rain_v1"})
+    )
+    backend.route(
+        "POST",
+        "/datasets/d1/versions",
+        httpx.Response(201, json={"id": "dv1", "dataset_id": "d1", "uri": "/data/rain_v1"}),
+    )
+    backend.route(
         "POST",
         "/generations/g1/datasets",
-        httpx.Response(201, json={"id": "dv1", "uri": "/data/rain_v1"}),
+        httpx.Response(201, json={"dataset_version_id": "dv1", "role": "output"}),
     )
 
     generation = experiment.generation(generator="blender", parameters={})
@@ -144,19 +152,76 @@ def test_training_accepts_a_dataset_handle(experiment, backend):
     backend.route(
         "POST",
         "/experiments/e1/training-runs",
-        httpx.Response(201, json={"id": "t1", "model": "yolo"}),
+        httpx.Response(201, json={"id": "t1", "trainer": {"name": "yolo"}}),
     )
     backend.route(
         "POST",
-        "/training-runs/t1/evaluation-results",
+        "/training-runs/t1/datasets",
+        httpx.Response(201, json={"id": "t1", "trainer": {"name": "yolo"}}),
+    )
+    backend.route(
+        "GET",
+        "/training-runs/t1",
+        httpx.Response(
+            201,
+            json={"id": "t1", "trainer": {"name": "yolo"}, "datasets": [{"id": "dv1"}]},
+        ),
+    )
+    backend.route(
+        "POST",
+        "/training-runs/t1/evaluations",
         httpx.Response(201, json={"id": "ev1", "metrics": {"mAP": 0.724}}),
     )
 
     training = experiment.training(model="yolo", framework="pytorch", dataset="dv1")
-    assert backend.requests[-1].body["datasets"] == [{"id": "dv1"}]
+    attach_request = next(r for r in backend.requests if r.path == "/training-runs/t1/datasets")
+    assert attach_request.body == {"dataset_version_id": "dv1", "role": "training"}
 
-    evaluation = training.evaluation(metrics={"mAP": 0.724})
+    evaluation = training.evaluation(metrics={"mAP": 0.724}, dataset_version_id="dv1")
     assert evaluation.metrics["mAP"] == 0.724
+
+
+def test_training_handle_lifecycle_reassigns_the_training_run(experiment, backend):
+    backend.route(
+        "POST",
+        "/experiments/e1/training-runs",
+        httpx.Response(201, json={"id": "t1", "status": "pending"}),
+    )
+    backend.route(
+        "PATCH",
+        "/training-runs/t1",
+        lambda request: httpx.Response(
+            200, json={"id": "t1", "status": json.loads(request.content)["status"]}
+        ),
+    )
+
+    training = experiment.training(model="yolo")
+
+    training.start()
+    assert training.training_run.status == "running"
+
+    training.complete()
+    assert training.training_run.status == "completed"
+
+
+def test_training_handle_fail(experiment, backend):
+    backend.route(
+        "POST",
+        "/experiments/e1/training-runs",
+        httpx.Response(201, json={"id": "t1", "status": "pending"}),
+    )
+    backend.route(
+        "PATCH",
+        "/training-runs/t1",
+        lambda request: httpx.Response(
+            200, json={"id": "t1", "status": json.loads(request.content)["status"]}
+        ),
+    )
+
+    training = experiment.training(model="yolo")
+    training.fail()
+
+    assert training.training_run.status == "failed"
 
 
 def test_training_rejects_dataset_and_datasets_together(experiment):

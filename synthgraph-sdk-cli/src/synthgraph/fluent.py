@@ -17,7 +17,7 @@ script reads the way the work actually happened::
 
         training = experiment.training(model="yolo", framework="pytorch",
                                        datasets=[dataset], config={"epochs": 50})
-        training.evaluation(metrics={"mAP": 0.724})
+        training.evaluation(metrics={"mAP": 0.724}, dataset_version_id=dataset.id)
 
 Every handle is a thin view over the same resource APIs. Nothing here talks
 HTTP, and nothing here decides anything the backend should decide.
@@ -304,15 +304,34 @@ class TrainingHandle(_Handle):
     def id(self) -> str:
         return self.training_run.id
 
+    def start(self) -> TrainingHandle:
+        """Mark this training run as running."""
+        self.training_run = self._client.training_runs.start(self.id)
+        return self
+
+    def complete(self) -> TrainingHandle:
+        """Mark this training run as completed."""
+        self.training_run = self._client.training_runs.complete(self.id)
+        return self
+
+    def fail(self) -> TrainingHandle:
+        """Mark this training run as failed."""
+        self.training_run = self._client.training_runs.fail(self.id)
+        return self
+
     def evaluation(
         self,
         *,
         metrics: dict[str, Any],
-        dataset_version_id: str | None = None,
+        dataset_version_id: str,
         name: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> EvaluationHandle:
-        """Record an evaluation of this training run."""
+        """Record an evaluation of this training run.
+
+        ``dataset_version_id`` names the exact dataset version the model was
+        evaluated against; the backend requires it (CONTRACT.md 2.15).
+        """
         result = self._client.evaluations.create(
             training_run_id=self.id,
             metrics=metrics,

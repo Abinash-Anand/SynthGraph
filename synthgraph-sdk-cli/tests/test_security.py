@@ -136,8 +136,14 @@ def test_dataset_bytes_are_never_uploaded(backend, tmp_path):
     backend.route(
         "POST", "/experiments/e1/generations", httpx.Response(201, json=generation_payload())
     )
+    backend.route("POST", "/datasets", httpx.Response(201, json={"id": "d1", "name": "out"}))
     backend.route(
-        "POST", "/generations/g1/datasets", httpx.Response(201, json={"id": "dv1"})
+        "POST", "/datasets/d1/versions", httpx.Response(201, json={"id": "dv1", "dataset_id": "d1"})
+    )
+    backend.route(
+        "POST",
+        "/generations/g1/datasets",
+        httpx.Response(201, json={"dataset_version_id": "dv1", "role": "output"}),
     )
 
     with SynthGraphClient(
