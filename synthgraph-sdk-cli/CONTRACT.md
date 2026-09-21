@@ -254,10 +254,27 @@ Deliberately **not** implemented, per the spec:
 
 - offline SQLite cache/sync (legacy design, §1 and §56)
 - tool integrations — Blender, Unity, W&B (v1.1, §10)
-- automatic instrumentation, hooks, decorators (v1.2, §10)
 - CLI write commands (§58)
 - `synthgraph reproduce` (§59)
 - dataset or asset upload (§6)
+
+### 2.17 One framework integration exists, opt-in and unverified against a live install
+
+`synthgraph.integrations.isaaclab.extract_event_config()` (added after §10's
+"automatic instrumentation, hooks, decorators" was written) turns an Isaac
+Lab `EventManager`/`EventCfg`'s domain-randomization terms into a plain dict
+for `generation.create(parameters=...)`. It is a plain function the caller
+imports and calls explicitly - nothing under `synthgraph.integrations` is
+imported by the core package, and nothing monkey-patches or wraps Isaac Lab.
+It was built against Isaac Lab's documented `EventTermCfg` attribute shape
+(`func`, `mode`, `params`, `interval_range_s`) but has not been exercised
+against a real Isaac Lab installation (not installable in this environment);
+treat its output shape as provisional until verified against a live env.
+Framework integrations remain the chosen direction over W&B mirroring for
+now, because `Generation.parameters` already exists specifically to hold
+domain-randomization data, which W&B's generic metric logging does not
+model - W&B-style broader capture (training metrics over time, GPU/resource
+usage, media) is still open, tracked separately, not started.
 
 ---
 
