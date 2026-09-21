@@ -542,6 +542,71 @@ final-batch, wrapped-writer-forwarding-continues-even-on-SynthGraph-failure,
 and a caught backend failure turning into a `warnings.warn()` rather than
 propagating - not fakes standing in for skrl's actual call pattern.
 
+### 2.25 Background resource sampling (`ResourceMonitor`), modeled on MLflow's real implementation, not W&B's
+
+The third and final piece of the "reduce friction without hooks" work (after
+§2.23, §2.24): `environment.ResourceMonitor` / `training.monitor_resources()`
+runs `resource_metadata()` on a background thread at a fixed interval,
+logging each sample via `log_metric()`, so continuous resource usage over a
+training run doesn't need a manual call at every point a sample is wanted.
+
+This is the one piece of the automatic-capture work that genuinely could
+not be built as "register a callback the framework already invokes" (§2.23,
+§2.24's reasoning) - there is no framework here at all, resource usage isn't
+tied to any training library's own extension points. A background thread is
+the only way to sample on a timer independent of whatever loop the
+researcher's code is running. It is still opt-in, not automatic-by-default:
+nothing samples anything until `.start()` (or the `with` form) is called
+explicitly, the same as every other capture mechanism in this SDK.
+
+**Researched before building, not designed from assumption**: read the real
+source of both competitors that already do this.
+- **Weights & Biases** runs its system monitor in a *separate compiled Go
+  process* (`wandb-core`, confirmed via `core/internal/monitor/monitor.go`
+  in `wandb/wandb` on GitHub - `defaultSamplingInterval = 15.0 *
+  time.Second`), communicating with the Python SDK over gRPC. Appropriate
+  for a project that already ships a compiled service; wrong fit for a
+  pure-Python SDK with no compiled component of its own.
+- **MLflow** (`mlflow/system_metrics/system_metrics_monitor.py`) is a
+  genuine `threading.Thread(daemon=True)`, default `sampling_interval=10`
+  seconds, using a `threading.Event().wait(interval)` for responsive
+  shutdown rather than `time.sleep()`, decoupling *sample* frequency from
+  *log* frequency (`samples_before_logging`, aggregated before publishing),
+  and `finish()` sets the shutdown event, joins the thread, then flushes.
+  This is the closer architectural analog for this SDK and what
+  `ResourceMonitor` is modeled on - `interval_seconds` defaults to MLflow's
+  10 seconds, not W&B's 15.
+
+**One deliberate deviation from MLflow**: MLflow's loop polls the run's own
+status and stops permanently if the run is no longer `RUNNING` or a publish
+call fails ("this is expected if the experiment/run is already terminated").
+`ResourceMonitor` does not adopt that - a failed sample or a failed
+`log_metric()` call logs a `warnings.warn()` and the thread keeps retrying
+on the next interval, never stopping itself. Tying a stop decision to
+training-run status would need an extra network call every tick just to
+check it; simpler and more resilient to just keep trying until `stop()` is
+called explicitly, since a transient network blip during an hours-long
+training run recovering on its own beats it going silent for the rest of
+the run.
+
+**A gotcha also present in MLflow's own design, solved the same way**: the
+final interval's worth of data would be lost if the thread were simply
+abandoned rather than explicitly stopped - `stop()` (or exiting the `with`
+block) joins the thread *and* logs one more sample immediately afterward,
+mirroring MLflow's `finish()` flushing before it returns.
+
+Verified at the same tier as the SB3 callback: a real local backend, a real
+project/experiment/training run created through the real SDK,
+`training.monitor_resources(interval_seconds=0.5)` wrapping a simulated
+2.5-second training loop, and 6 real metric points (real GPU/CPU data from
+this machine, the same `resource_metadata()` already verified against real
+hardware in §2.20) read back from Postgres afterward. Thread lifecycle
+behavior (periodic sampling, idempotent `start()`, safe repeated `stop()`,
+the final-sample guarantee, and that a failing backend call warns rather
+than killing the thread) has its own dedicated unit test suite
+(`test_resource_monitor.py`) using a fast interval and a fake handle, since
+those semantics don't need real hardware or a real backend to verify.
+
 v0.1.0 declared `pydantic>=2.0,<3.0` while `models/generation.py` uses
 `Field(exclude_if=...)`, which requires pydantic 2.12+. On pydantic 2.0–2.11
 that package would install and then fail. The floor is now `>=2.12`.

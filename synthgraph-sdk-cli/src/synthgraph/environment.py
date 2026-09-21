@@ -18,13 +18,18 @@ import os
 import platform
 import subprocess
 import sys
+import threading
+import warnings
 from importlib.metadata import PackageNotFoundError, distributions
 from importlib.metadata import version as package_version
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 from urllib.parse import urlsplit, urlunsplit
 
+from .errors import SynthGraphError
+
 __all__ = [
+    "ResourceMonitor",
     "auto_capture",
     "environment_metadata",
     "git_metadata",
@@ -276,3 +281,112 @@ def _package_version(name: str) -> str | None:
 def python_executable() -> str:
     """The interpreter running this code."""
     return sys.executable
+
+
+class _LogsMetrics(Protocol):
+    """Structural type for whatever ``ResourceMonitor`` logs to - a
+    ``fluent.TrainingHandle`` satisfies this without ``environment.py``
+    needing to import ``fluent`` (which imports the resource modules that
+    import this module - importing ``fluent`` here would be circular)."""
+
+    def log_metric(self, *, step: int, metrics: dict[str, Any]) -> Any: ...
+
+
+class ResourceMonitor:
+    """Periodically logs ``resource_metadata()`` to a training run in a
+    background thread, so CPU/GPU/memory usage over the course of training
+    doesn't need a manual call at every point you'd want a sample.
+
+    This is still opt-in, not automatic-by-default: you construct and
+    ``start()`` one (or use it as a context manager) explicitly, the same as
+    every other capture mechanism in this SDK - the difference from
+    ``resource_metadata()`` itself is that *one* explicit action (starting
+    the monitor) now produces many samples over time, instead of one call
+    producing one sample.
+
+    Modeled on how MLflow's ``SystemMetricsMonitor`` does this (a
+    ``threading.Thread(daemon=True)`` plus a ``threading.Event`` for
+    responsive shutdown via ``.wait(interval)`` rather than ``time.sleep()``)
+    - read directly from MLflow's source, not assumed - rather than
+    Weights & Biases' approach, which runs its system monitor in a separate
+    compiled process (``wandb-core``, written in Go) communicating over
+    gRPC; a background thread is the right fit for a pure-Python SDK with no
+    compiled service of its own, and MLflow's default 10-second sampling
+    interval (W&B's default is 15 seconds) is what this defaults to as well.
+
+    Unlike ``resource_metadata()``'s one-shot call, a background thread that
+    keeps running after a network hiccup needs a decision about whether to
+    keep trying or give up - this keeps trying (logs a warning per failed
+    sample, never stops the thread on one bad sample), because a training
+    run that runs for hours should not silently lose all resource reporting
+    for the rest of it over one transient failure. Call ``stop()`` (or exit
+    the ``with`` block) when done - it joins the thread and logs one final
+    sample first, so the last stretch of training isn't missing data the
+    way it would be if the thread were simply abandoned.
+    """
+
+    def __init__(self, training: _LogsMetrics, *, interval_seconds: float = 10.0) -> None:
+        self._training = training
+        self._interval_seconds = interval_seconds
+        self._shutdown = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._step = 0
+
+    def start(self) -> ResourceMonitor:
+        """Start sampling in a background thread. No-op if already running."""
+        if self._thread is not None:
+            return self
+
+        self._shutdown.clear()
+        self._thread = threading.Thread(
+            target=self._run,
+            daemon=True,
+            name="SynthGraphResourceMonitor",
+        )
+        self._thread.start()
+        return self
+
+    def stop(self, *, timeout: float | None = None) -> None:
+        """Stop sampling, log one final sample, and join the background thread.
+
+        Safe to call even if the monitor was never started, or already
+        stopped.
+        """
+        if self._thread is None:
+            return
+
+        self._shutdown.set()
+        self._thread.join(timeout=timeout)
+        self._thread = None
+        self._log_once()
+
+    def _run(self) -> None:
+        while not self._shutdown.is_set():
+            self._log_once()
+            self._shutdown.wait(self._interval_seconds)
+
+    def _log_once(self) -> None:
+        try:
+            metrics = resource_metadata()
+        except Exception as error:  # pragma: no cover - resource_metadata() never raises today
+            warnings.warn(
+                f"SynthGraph resource sampling failed, skipping this sample: {error}",
+                stacklevel=2,
+            )
+            return
+
+        step = self._step
+        self._step += 1
+        try:
+            self._training.log_metric(step=step, metrics=metrics)
+        except SynthGraphError as error:
+            warnings.warn(
+                f"SynthGraph resource metric logging failed at step {step}: {error}",
+                stacklevel=2,
+            )
+
+    def __enter__(self) -> ResourceMonitor:
+        return self.start()
+
+    def __exit__(self, *exc_info: object) -> None:
+        self.stop()
