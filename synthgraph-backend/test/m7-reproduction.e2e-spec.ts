@@ -1,4 +1,4 @@
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { createHash, randomBytes } from 'node:crypto';
 import request from 'supertest';
@@ -9,6 +9,7 @@ import { ApiKey } from '../src/database/entities/api-key.entity.js';
 import { Dataset } from '../src/database/entities/dataset.entity.js';
 import { DatasetVersion } from '../src/database/entities/dataset-version.entity.js';
 import { Experiment } from '../src/database/entities/experiment.entity.js';
+import { GenerationDatasetReference } from '../src/database/entities/generation-dataset-reference.entity.js';
 import {
   Generation,
   GenerationStatus,
@@ -27,6 +28,7 @@ describe('M7 Reproduction manifest (e2e)', () => {
   let generationRepository: Repository<Generation>;
   let datasetRepository: Repository<Dataset>;
   let datasetVersionRepository: Repository<DatasetVersion>;
+  let generationDatasetReferenceRepository: Repository<GenerationDatasetReference>;
 
   let userA: User;
   let userB: User;
@@ -60,6 +62,13 @@ describe('M7 Reproduction manifest (e2e)', () => {
       }).compile();
 
     app = moduleFixture.createNestApplication();
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
+    );
 
     await app.init();
 
@@ -73,6 +82,9 @@ describe('M7 Reproduction manifest (e2e)', () => {
     datasetRepository = dataSource.getRepository(Dataset);
     datasetVersionRepository =
       dataSource.getRepository(DatasetVersion);
+    generationDatasetReferenceRepository = dataSource.getRepository(
+      GenerationDatasetReference,
+    );
 
     userA = await userRepository.save(
       userRepository.create({
@@ -237,6 +249,13 @@ describe('M7 Reproduction manifest (e2e)', () => {
   });
 
   afterAll(async () => {
+    // generation_dataset_refs has an ON DELETE RESTRICT FK to generations,
+    // so the reference created in beforeAll (generationA <-> datasetVersion)
+    // must be deleted before the generation itself, not after.
+    await generationDatasetReferenceRepository.delete({
+      generationId: generationA.id,
+    });
+
     await generationRepository.delete([
       generationA.id,
       generationB.id,
