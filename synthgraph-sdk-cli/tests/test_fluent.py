@@ -261,6 +261,30 @@ def test_training_rejects_dataset_and_datasets_together(experiment):
         experiment.training(model="yolo", dataset="dv1", datasets=["dv2"])
 
 
+def test_training_is_named_after_its_model_by_default(experiment, backend):
+    backend.route(
+        "POST",
+        "/experiments/e1/training-runs",
+        httpx.Response(201, json={"id": "t1", "status": "pending"}),
+    )
+
+    experiment.training(model="yolo")
+
+    assert backend.last().body["name"] == "yolo"
+
+
+def test_training_explicit_name_is_not_overridden_by_model(experiment, backend):
+    backend.route(
+        "POST",
+        "/experiments/e1/training-runs",
+        httpx.Response(201, json={"id": "t1", "status": "pending"}),
+    )
+
+    experiment.training(model="yolo", name="Rain sweep run 3")
+
+    assert backend.last().body["name"] == "Rain sweep run 3"
+
+
 def test_training_handle_log_metric(experiment, backend):
     backend.route(
         "POST",

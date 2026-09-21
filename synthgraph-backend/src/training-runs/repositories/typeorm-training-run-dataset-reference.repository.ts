@@ -29,6 +29,7 @@ export class TypeOrmTrainingRunDatasetReferenceRepository
       .innerJoin('reference.trainingRun', 'trainingRun')
       .innerJoin('trainingRun.experiment', 'experiment')
       .innerJoin('experiment.project', 'project')
+      .leftJoinAndSelect('reference.datasetVersion', 'datasetVersion')
       .where('reference.training_run_id = :trainingRunId', {
         trainingRunId,
       })

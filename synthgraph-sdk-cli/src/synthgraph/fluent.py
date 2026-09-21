@@ -151,7 +151,16 @@ class ExperimentHandle(_Handle):
 
         This records provenance only. It does not start training - the
         researcher's own training code keeps running exactly as before.
+
+        ``name`` defaults to ``model`` when not given, the same shorthand
+        ``generation()`` already has via ``_default_generation_name()``
+        (CONTRACT.md 2.23 flagged the previous asymmetry - the backend
+        requires ``name``, and ``client.training_runs.create()`` used
+        directly still does, but the fluent shortcut no longer needs to be
+        told twice what the run is training).
         """
+        kwargs["name"] = kwargs.get("name") or _default_training_name(kwargs.get("model"))
+
         datasets = kwargs.pop("datasets", None)
         dataset = kwargs.pop("dataset", None)
         if dataset is not None:
@@ -520,6 +529,13 @@ def _default_generation_name(generator: Any) -> str:
     if isinstance(generator, str) and generator.strip():
         return generator.strip()
     return "generation"
+
+
+def _default_training_name(model: Any) -> str:
+    """Name a training run after its model when the caller did not name it."""
+    if isinstance(model, str) and model.strip():
+        return model.strip()
+    return "training_run"
 
 
 def _unwrap_datasets(datasets: Any) -> list[Any] | None:
