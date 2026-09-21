@@ -5,6 +5,7 @@ from __future__ import annotations
 from types import TracebackType
 from typing import Any, Self
 
+from .assets import AssetsAPI
 from .auth import AuthAPI
 from .comparison import ComparisonAPI
 from .config import SynthGraphConfig
@@ -64,6 +65,7 @@ class SynthGraphClient:
         self.experiments = ExperimentsAPI(self._http)
         self.generations = GenerationsAPI(self._http)
         self.datasets = DatasetsAPI(self._http)
+        self.assets = AssetsAPI(self._http)
         self.training_runs = TrainingRunsAPI(self._http)
         self.evaluations = EvaluationsAPI(self._http)
         self.reproduction = ReproductionAPI(self._http)

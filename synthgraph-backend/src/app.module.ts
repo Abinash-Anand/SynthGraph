@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { AssetsModule } from './assets/assets.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { ComparisonsModule } from './comparisons/comparisons.module.js';
 import configuration from './config/configuration.js';
@@ -38,6 +39,7 @@ import { ApiKeysModule } from './api-keys/api-keys.module.js';
     ExperimentsModule,
     GenerationsModule,
     DatasetsModule,
+    AssetsModule,
     TrainingRunsModule,
     EvaluationResultsModule,
     ReproductionModule,

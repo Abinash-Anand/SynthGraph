@@ -44,6 +44,9 @@ test.
 | Create evaluation | `sg.evaluations.create()` / `training.evaluation()` | — | POST | `/training-runs/{trainingRunId}/evaluations` |
 | Get evaluation | `sg.evaluations.get(id)` | — | GET | `/evaluation-results/{evaluationResultId}` |
 | List evaluations | `sg.evaluations.list()` / `training.evaluations()` | — | GET | `/training-runs/{trainingRunId}/evaluations` |
+| Create asset (step 1 of `sg.assets.create()`, skipped when `asset_id=` reuses an existing one) | — | — | POST | `/assets` |
+| Create asset version (step 2 of `sg.assets.create()`) | — | — | POST | `/assets/{assetId}/versions` |
+| Record asset (step 3 of `sg.assets.create()`: attach the version to the generation) | `sg.assets.create()` / `generation.asset()` | — | POST | `/generations/{generationId}/assets` |
 
 Error mapping is deterministic for all of them:
 
@@ -206,23 +209,57 @@ its flow (2.13) and only fires the attach request for its side effect,
 because that is what `generation.dataset(...)` has always handed back to
 callers.
 
+### 2.18 `sg.assets.create()` mirrors the dataset three-request flow, with `type` on the `Asset` and no `format` anywhere
+
+The backend now implements `Asset`/`AssetVersion`/`GenerationAssetReference`
+(mirroring `Dataset`/`DatasetVersion`/`GenerationDatasetReference` almost
+exactly), so the previously-unverified `POST /generations/{id}/assets` route
+is verified and moved to section 1; `UNVERIFIED_ROUTES` is now empty.
+`assets.create()` follows the identical three-step shape as `datasets.create()`
+(2.13):
+
+1. `POST /assets` to create a new `Asset` named after `name=` - skipped when
+   `asset_id=` reuses an existing logical asset.
+2. `POST /assets/{assetId}/versions` to create the immutable `AssetVersion`.
+   `version=` defaults to a UTC timestamp the same way `datasets.create()`
+   does.
+3. `POST /generations/{generationId}/assets` to attach the version to the
+   generation, with `role=` defaulting to `"output"`.
+
+Two field-shape differences from `Dataset`/`DatasetVersion`, both driven
+directly by the SDK's existing Pydantic models
+(`synthgraph/models/asset.py`), which were never changed to invent new
+fields:
+
+* **`type` lives on `Asset`, not `AssetVersion`.** `Asset.type` is a
+  free-form string (e.g. `"video"`, `"plot"`, `"checkpoint"`) the backend
+  never validates the meaning of - the same pattern as `Generator.type`.
+  `Dataset` has no equivalent field. `assets.create()`'s `type=` keyword goes
+  into the step-1 payload (`POST /assets`), not step 2.
+* **`AssetVersion` has no `format` field**, unlike `DatasetVersion`.
+  `assets.create()` has no `format=` parameter, and the step-2 payload
+  (`POST /assets/{assetId}/versions`) never sends one.
+
+The attach payload for both the asset and dataset routes carries the backend
+DTO's actual field name, `{assetVersionId, role}` / `{datasetVersionId,
+role}` (camelCase, matching `CreateGenerationAssetReferenceDto` /
+`CreateGenerationDatasetReferenceDto` in the backend source) - `assets.py`
+sends `assetVersionId` deliberately. Note this is **not** what `datasets.py`
+currently sends (it sends snake_case `dataset_version_id`, inherited from
+2.3's "the SDK sends snake_case" rule applied too literally to this one
+field); that pre-existing mismatch is tracked separately and left alone here
+to keep this change scoped to assets.
+
 ---
 
 ## 3. UNVERIFIED — routes that need checking against the backend
 
 Spec §63 explicitly refuses to freeze a route until the backend controller
-behind it has been inspected. Training-run, dataset and evaluation-result
-routes have now been read from the backend source and corrected (section 1);
-this section is left with only the one route inspection never covered.
+behind it has been inspected. Training-run, dataset, evaluation-result and
+asset-reference routes have now been read from the backend source and
+corrected (section 1); nothing is left unverified.
 
-| Operation | Assumed route | Assumed payload |
-|---|---|---|
-| Asset references | POST `/generations/{id}/assets` | not yet used by any SDK method |
-
-It follows the naming convention the verified routes use: a collection hangs
-off its parent. That is a reasonable inference, not a contract.
-
-Two smaller unknowns in the same category:
+Two smaller unknowns in a related category:
 
 * **Comparison response shape.** `POST /generations/compare` is a verified
   route, but the shape of what it returns is not. The CLI renders a
