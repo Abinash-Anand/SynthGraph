@@ -37,9 +37,10 @@ test.
 | Documentation | `sg.documentation.get(id)` | `docs` | GET | `/generations/{generationId}/documentation` |
 | Compare | `sg.comparisons.compare([...])` | `compare` | POST | `/generations/compare` |
 | Create training run | `sg.training_runs.create()` / `experiment.training()` | — | POST | `/experiments/{experimentId}/training-runs` |
-| List training runs | `sg.training_runs.list()` / `experiment.training_runs()` | — | GET | `/experiments/{experimentId}/training-runs` |
+| List/filter training runs | `sg.training_runs.list(capture_status=)` / `experiment.training_runs(capture_status=)` | — | GET | `/experiments/{experimentId}/training-runs?captureStatus=` |
 | Get training run | `sg.training_runs.get(id)` | — | GET | `/training-runs/{trainingRunId}` |
 | Training run lifecycle | `.start()` `.complete()` `.fail()` | — | PATCH | `/training-runs/{trainingRunId}` |
+| Report training run capture status | `sg.training_runs.update_capture_status()` | — | PATCH | `/training-runs/{trainingRunId}/capture-status` |
 | Attach dataset to training run | `sg.training_runs.add_dataset()` | — | POST | `/training-runs/{trainingRunId}/datasets` |
 | Create evaluation | `sg.evaluations.create()` / `training.evaluation()` | — | POST | `/training-runs/{trainingRunId}/evaluations` |
 | Get evaluation | `sg.evaluations.get(id)` | — | GET | `/evaluation-results/{evaluationResultId}` |
@@ -721,3 +722,47 @@ in Postgres - the full path (`ResourceMonitor` → `IntegrationSession.close()`
 → `.summary()` → `TrainingHandle.close()` → `update_capture_status()` → the
 new backend route → the new column) works end to end, not just at the unit
 level.
+
+### 2.28 `?captureStatus=` - the audit query this whole feature was for
+
+§2.25-2.27 built the pieces (in-process cleanup, a queryable column, the SDK
+reporting into it); this is the step that turns the column into an answer a
+lab can actually ask for: "which of our training runs have incomplete
+capture." `GET /experiments/{id}/training-runs?captureStatus=complete|
+partial|unknown` (`ListTrainingRunsQueryDto`, mirroring
+`ListGenerationsQueryDto`'s existing `?parameters=` filter pattern exactly)
+filters server-side rather than requiring every client to fetch every run
+and filter in memory.
+
+**`unknown` queries `capture_status IS NULL` directly** -
+`TypeOrmTrainingRunRepository.findByCaptureStatus()` special-cases it rather
+than treating `"unknown"` as a value that could ever actually be stored in
+the column, consistent with §2.27's decision that NULL *is* the "never
+reported" sentinel, not a fourth value alongside it. `complete`/`partial`
+query `capture_status ->> 'status' = :captureStatus`, the same raw-JSONB
+querybuilder pattern `TypeOrmGenerationRepository.findByParameters()`
+already used for `generation.parameters -> :key @> :value::jsonb` - alias
+tokens like `trainingRun.captureStatus` resolve through TypeORM's metadata
+even inside a raw operator fragment, confirmed by that existing code, not
+assumed.
+
+Kept as a query parameter on the existing per-experiment list endpoint
+rather than a new cross-experiment/whole-project endpoint - a lab-wide
+"every run with a gap" view is a real future want, but experiments are the
+existing natural scope boundary in this schema, and building a new
+project-wide listing endpoint is a bigger, separate change this step didn't
+need.
+
+**SDK**: `training_runs.list(capture_status=)` and
+`experiment.training_runs(capture_status=)` both take the filter, validated
+client-side against the same three values before it ever reaches the
+network (`SynthGraphValidationError` on anything else) - consistent with
+every other enum-shaped parameter in this SDK.
+
+**Verified end-to-end against the real backend and Postgres**: created three
+training runs in one experiment - one untouched (stays `unknown`), one with
+a cleanly-closing integration (`complete`), one with a closer that raised
+(`partial`) - and confirmed each of the three `?captureStatus=` values
+through the real SDK returned exactly and only its matching run's id, not
+mocked. Backend suites (93 unit, 87 e2e) and the SDK suite (mypy clean, same
+2 pre-existing unrelated failures) pass unchanged.

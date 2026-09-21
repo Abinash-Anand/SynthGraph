@@ -309,6 +309,21 @@ def test_training_handle_metrics_lists_points_for_this_run(experiment, backend):
     assert [point.step for point in points] == [100, 200]
 
 
+def test_experiment_training_runs_lists_and_filters_by_capture_status(experiment, backend):
+    backend.route(
+        "GET",
+        "/experiments/e1/training-runs",
+        httpx.Response(200, json=[{"id": "t1", "status": "pending"}]),
+    )
+
+    runs = experiment.training_runs()
+    assert [run.id for run in runs] == ["t1"]
+    assert backend.last().query == {}
+
+    experiment.training_runs(capture_status="partial")
+    assert backend.last().query == {"captureStatus": "partial"}
+
+
 def test_experiment_context_manager_has_no_side_effects(experiment, backend):
     before = len(backend.requests)
     with experiment as same:

@@ -16,6 +16,11 @@ export interface TrainingRunRepository {
     experimentId: string,
   ): Promise<TrainingRun[]>;
 
+  findByCaptureStatus(
+    experimentId: string,
+    captureStatus: 'complete' | 'partial' | 'unknown',
+  ): Promise<TrainingRun[]>;
+
   transitionStatus(
     trainingRunId: string,
     currentStatus: TrainingRunStatus,

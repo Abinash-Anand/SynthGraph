@@ -23,6 +23,7 @@ export class ListTrainingRunsService {
   async execute(
     experimentId: string,
     userId: string,
+    captureStatus?: 'complete' | 'partial' | 'unknown',
   ): Promise<TrainingRun[]> {
     const experiment = await this.experimentRepository.findByIdForUser(
       experimentId,
@@ -31,6 +32,13 @@ export class ListTrainingRunsService {
 
     if (!experiment) {
       throw new NotFoundException('Experiment not found');
+    }
+
+    if (captureStatus !== undefined) {
+      return this.trainingRunRepository.findByCaptureStatus(
+        experiment.id,
+        captureStatus,
+      );
     }
 
     return this.trainingRunRepository.findAllForExperiment(experiment.id);

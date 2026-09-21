@@ -162,6 +162,28 @@ def test_list_and_get(client, backend):
 
     assert [run.id for run in client.training_runs.list(experiment_id="e1")] == ["t1"]
     assert client.training_runs.get("t1").id == "t1"
+    assert backend.last().query == {}
+
+
+def test_list_sends_no_capture_status_query_param_by_default(client, backend):
+    backend.route("GET", "/experiments/e1/training-runs", httpx.Response(200, json=[]))
+
+    client.training_runs.list(experiment_id="e1")
+
+    assert backend.last().query == {}
+
+
+def test_list_filters_by_capture_status(client, backend):
+    backend.route("GET", "/experiments/e1/training-runs", httpx.Response(200, json=[TRAINING_RUN]))
+
+    client.training_runs.list(experiment_id="e1", capture_status="partial")
+
+    assert backend.last().query == {"captureStatus": "partial"}
+
+
+def test_list_rejects_an_invalid_capture_status(client, backend):
+    with pytest.raises(SynthGraphValidationError):
+        client.training_runs.list(experiment_id="e1", capture_status="bogus")
 
 
 def test_add_dataset_sends_dataset_version_id_and_role(client, backend):

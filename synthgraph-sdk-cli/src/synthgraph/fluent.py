@@ -169,9 +169,17 @@ class ExperimentHandle(_Handle):
         )
         return TrainingHandle(self._client, training_run)
 
-    def training_runs(self) -> list[TrainingRun]:
-        """List the training runs recorded for this experiment."""
-        return self._client.training_runs.list(experiment_id=self.id)
+    def training_runs(self, *, capture_status: str | None = None) -> list[TrainingRun]:
+        """List the training runs recorded for this experiment.
+
+        ``capture_status="partial"`` (or ``"unknown"``) is the audit query
+        this whole feature exists for - which runs in this experiment don't
+        have a clean, fully-reported capture. See
+        ``TrainingRunsAPI.list()``.
+        """
+        return self._client.training_runs.list(
+            experiment_id=self.id, capture_status=capture_status
+        )
 
     def refresh(self) -> ExperimentHandle:
         """Re-read this experiment from the backend."""
