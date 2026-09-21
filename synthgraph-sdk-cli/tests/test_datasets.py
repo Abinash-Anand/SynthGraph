@@ -160,3 +160,43 @@ def test_local_directory_is_referenced_not_walked(client, backend, tmp_path):
     body = backend.requests[1].body
     assert body["uri"] == str(dataset_dir)
     assert "frame_0.png" not in str(body)
+
+
+def test_get_retrieves_a_dataset_by_id(client, backend):
+    backend.route("GET", "/datasets/d1", httpx.Response(200, json=DATASET))
+
+    dataset = client.datasets.get("d1")
+
+    assert backend.last().path == "/datasets/d1"
+    assert dataset.id == "d1"
+    assert dataset.name == "rain_v1"
+
+
+def test_list_lists_every_dataset(client, backend):
+    backend.route("GET", "/datasets", httpx.Response(200, json=[DATASET]))
+
+    datasets = client.datasets.list()
+
+    assert backend.last().path == "/datasets"
+    assert [dataset.id for dataset in datasets] == ["d1"]
+
+
+def test_get_version_retrieves_a_dataset_version_by_id(client, backend):
+    backend.route("GET", "/dataset-versions/dv1", httpx.Response(200, json=DATASET_VERSION))
+
+    version = client.datasets.get_version("dv1")
+
+    assert backend.last().path == "/dataset-versions/dv1"
+    assert version.id == "dv1"
+    assert version.dataset_id == "d1"
+
+
+def test_list_versions_lists_versions_for_a_dataset(client, backend):
+    backend.route(
+        "GET", "/datasets/d1/versions", httpx.Response(200, json=[DATASET_VERSION])
+    )
+
+    versions = client.datasets.list_versions("d1")
+
+    assert backend.last().path == "/datasets/d1/versions"
+    assert [version.id for version in versions] == ["dv1"]

@@ -81,16 +81,32 @@ class Routes:
         return "/datasets"
 
     @staticmethod
+    def dataset(dataset_id: str) -> str:
+        return f"/datasets/{encode_id(dataset_id)}"
+
+    @staticmethod
     def dataset_versions(dataset_id: str) -> str:
         return f"/datasets/{encode_id(dataset_id)}/versions"
+
+    @staticmethod
+    def dataset_version(dataset_version_id: str) -> str:
+        return f"/dataset-versions/{encode_id(dataset_version_id)}"
 
     @staticmethod
     def assets() -> str:
         return "/assets"
 
     @staticmethod
+    def asset(asset_id: str) -> str:
+        return f"/assets/{encode_id(asset_id)}"
+
+    @staticmethod
     def asset_versions(asset_id: str) -> str:
         return f"/assets/{encode_id(asset_id)}/versions"
+
+    @staticmethod
+    def asset_version(asset_version_id: str) -> str:
+        return f"/asset-versions/{encode_id(asset_version_id)}"
 
     @staticmethod
     def generation_assets(generation_id: str) -> str:

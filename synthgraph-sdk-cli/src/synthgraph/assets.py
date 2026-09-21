@@ -16,12 +16,53 @@ from .models import Asset, AssetVersion
 from .routes import Routes
 from .serialization import compact, require_identifier, require_mapping, require_text
 
+#: Aliases so annotations inside the class body are not shadowed by
+#: ``AssetsAPI.list``.
+AssetList = list[Asset]
+AssetVersionList = list[AssetVersion]
+
 
 class AssetsAPI:
     """API operations for asset references."""
 
     def __init__(self, http: SynthGraphHTTPClient) -> None:
         self._http = http
+
+    def get(self, asset_id: str) -> Asset:
+        """Retrieve an asset's logical identity by ID."""
+        asset_id = require_identifier(asset_id, field="asset_id")
+
+        data = self._http.get(Routes.asset(asset_id), operation="assets.get")
+
+        return Asset.model_validate(data)
+
+    def list(self) -> AssetList:
+        """List every asset the caller owns."""
+        data = self._http.get_list(Routes.assets(), operation="assets.list")
+
+        return [Asset.model_validate(item) for item in data]
+
+    def get_version(self, asset_version_id: str) -> AssetVersion:
+        """Retrieve one immutable asset version by ID."""
+        asset_version_id = require_identifier(asset_version_id, field="asset_version_id")
+
+        data = self._http.get(
+            Routes.asset_version(asset_version_id),
+            operation="assets.get_version",
+        )
+
+        return AssetVersion.model_validate(data)
+
+    def list_versions(self, asset_id: str) -> AssetVersionList:
+        """List the versions recorded for an asset."""
+        asset_id = require_identifier(asset_id, field="asset_id")
+
+        data = self._http.get_list(
+            Routes.asset_versions(asset_id),
+            operation="assets.list_versions",
+        )
+
+        return [AssetVersion.model_validate(item) for item in data]
 
     def create(
         self,
