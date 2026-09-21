@@ -142,3 +142,31 @@ def generation_payload(**overrides: Any) -> dict[str, Any]:
     }
     payload.update(overrides)
     return payload
+
+
+def training_run_payload(**overrides: Any) -> dict[str, Any]:
+    payload = {
+        "id": "t1",
+        "experiment_id": "e1",
+        "name": "yolo_run_1",
+        "trainer": {"name": "yolo", "type": "pytorch", "version": "2.1"},
+        "parameters": {"epochs": 50},
+        "capture_status": None,
+        "datasets": [],
+        "status": "pending",
+        "created_at": NOW,
+    }
+    payload.update(overrides)
+    return payload
+
+
+def training_run_metric_payload(**overrides: Any) -> dict[str, Any]:
+    payload = {
+        "id": "m1",
+        "training_run_id": "t1",
+        "step": 100,
+        "metrics": {"loss": 0.42},
+        "created_at": NOW,
+    }
+    payload.update(overrides)
+    return payload

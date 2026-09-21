@@ -165,6 +165,30 @@ def test_list_and_get(client, backend):
     assert backend.last().query == {}
 
 
+def test_get_reads_trainer_and_parameters_back_onto_flat_fields(client, backend):
+    backend.route(
+        "GET",
+        "/training-runs/t1",
+        httpx.Response(
+            200,
+            json={
+                "id": "t1",
+                "experiment_id": "e1",
+                "trainer": {"name": "yolo", "type": "pytorch", "version": "2.1"},
+                "parameters": {"epochs": 50},
+                "status": "pending",
+            },
+        ),
+    )
+
+    run = client.training_runs.get("t1")
+
+    assert run.model == "yolo"
+    assert run.framework == "pytorch"
+    assert run.framework_version == "2.1"
+    assert run.config == {"epochs": 50}
+
+
 def test_list_sends_no_capture_status_query_param_by_default(client, backend):
     backend.route("GET", "/experiments/e1/training-runs", httpx.Response(200, json=[]))
 

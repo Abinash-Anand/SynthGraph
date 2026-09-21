@@ -12,7 +12,16 @@ import sys
 import typer
 
 from .. import __version__
-from .commands import auth, compare, docs, experiments, generations, manifest, projects
+from .commands import (
+    auth,
+    compare,
+    docs,
+    experiments,
+    generations,
+    manifest,
+    projects,
+    training_runs,
+)
 from .context import CLIContext
 from .errors import ExitCode, describe_error
 
@@ -38,6 +47,7 @@ app.add_typer(auth.app, name="auth")
 app.add_typer(projects.app, name="projects")
 app.add_typer(experiments.app, name="experiments")
 app.add_typer(generations.app, name="generations")
+app.add_typer(training_runs.app, name="training-runs")
 
 app.command("compare")(compare.compare)
 app.command("manifest")(manifest.manifest)

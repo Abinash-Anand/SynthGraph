@@ -13,7 +13,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from .base import SynthGraphModel
 from .dataset import DatasetVersion
@@ -33,6 +33,32 @@ class TrainingRun(SynthGraphModel):
 
     config: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _lift_trainer_and_parameters(cls, data: Any) -> Any:
+        """Read back the wire's nested ``trainer``/``parameters`` onto the
+        ergonomic flat fields ``training_runs.create()`` already accepts them
+        as (CONTRACT.md 2.14) - without this, every ``TrainingRun`` parsed
+        from a real backend response has ``model``/``framework``/
+        ``framework_version``/``config`` permanently empty, since the wire
+        never carries those flat names.
+        """
+        if not isinstance(data, dict):
+            return data
+
+        data = dict(data)
+        trainer = data.get("trainer")
+        if isinstance(trainer, dict):
+            data.setdefault("model", trainer.get("name"))
+            data.setdefault("framework", trainer.get("type"))
+            data.setdefault("framework_version", trainer.get("version"))
+
+        parameters = data.get("parameters")
+        if isinstance(parameters, dict):
+            data.setdefault("config", parameters)
+
+        return data
 
     # None means this SDK version never reported on it - not the same thing
     # as a report that found nothing attached. See integration_session.py

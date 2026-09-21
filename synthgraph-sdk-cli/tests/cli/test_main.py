@@ -18,6 +18,7 @@ COMMAND_GROUPS = (
     "projects",
     "experiments",
     "generations",
+    "training-runs",
     "compare",
     "manifest",
     "docs",

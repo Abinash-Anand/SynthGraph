@@ -37,8 +37,8 @@ test.
 | Documentation | `sg.documentation.get(id)` | `docs` | GET | `/generations/{generationId}/documentation` |
 | Compare | `sg.comparisons.compare([...])` | `compare` | POST | `/generations/compare` |
 | Create training run | `sg.training_runs.create()` / `experiment.training()` | — | POST | `/experiments/{experimentId}/training-runs` |
-| List/filter training runs | `sg.training_runs.list(capture_status=)` / `experiment.training_runs(capture_status=)` | — | GET | `/experiments/{experimentId}/training-runs?captureStatus=` |
-| Get training run | `sg.training_runs.get(id)` | — | GET | `/training-runs/{trainingRunId}` |
+| List/filter training runs | `sg.training_runs.list(capture_status=)` / `experiment.training_runs(capture_status=)` | `training-runs list` | GET | `/experiments/{experimentId}/training-runs?captureStatus=` |
+| Get training run | `sg.training_runs.get(id)` | `training-runs get` | GET | `/training-runs/{trainingRunId}` |
 | Training run lifecycle | `.start()` `.complete()` `.fail()` | — | PATCH | `/training-runs/{trainingRunId}` |
 | Report training run capture status | `sg.training_runs.update_capture_status()` | — | PATCH | `/training-runs/{trainingRunId}/capture-status` |
 | Attach dataset to training run | `sg.training_runs.add_dataset()` | — | POST | `/training-runs/{trainingRunId}/datasets` |
@@ -46,7 +46,7 @@ test.
 | Get evaluation | `sg.evaluations.get(id)` | — | GET | `/evaluation-results/{evaluationResultId}` |
 | List evaluations | `sg.evaluations.list()` / `training.evaluations()` | — | GET | `/training-runs/{trainingRunId}/evaluations` |
 | Log training metric | `sg.training_runs.log_metric()` / `training.log_metric()` | — | POST | `/training-runs/{trainingRunId}/metrics` |
-| List training metrics | `sg.training_runs.metrics()` / `training.metrics()` | — | GET | `/training-runs/{trainingRunId}/metrics` |
+| List training metrics | `sg.training_runs.metrics()` / `training.metrics()` | `training-runs metrics` | GET | `/training-runs/{trainingRunId}/metrics` |
 | Create asset (step 1 of `sg.assets.create()`, skipped when `asset_id=` reuses an existing one) | — | — | POST | `/assets` |
 | Create asset version (step 2 of `sg.assets.create()`) | — | — | POST | `/assets/{assetId}/versions` |
 | Record asset (step 3 of `sg.assets.create()`: attach the version to the generation) | `sg.assets.create()` / `generation.asset()` | — | POST | `/generations/{generationId}/assets` |
@@ -896,3 +896,68 @@ flat routes, cross-user isolation on the flat route, and a 404 case for the
 flat route on top of the pre-existing nested-route ones - 4 new tests.
 Backend suite: 107 e2e (4 new), clean build, lint unchanged (pre-existing
 warnings elsewhere untouched).
+
+### 2.33 `TrainingRun.model`/`.framework`/`.framework_version`/`.config` were permanently empty on read
+
+Found while building CLI training-run support (`synthgraph training-runs
+get`/`list`) - the natural next step needed these fields to actually display
+something. §2.14 documents the write side: `training_runs.create()` maps
+`model=`/`framework=`/`framework_version=`/`config=` onto the wire's
+`trainer`/`parameters` shape. Nothing mapped the other direction. The
+`TrainingRun` model declared flat `model`/`framework`/`framework_version`/
+`config` fields, but the wire never sends those names - only nested
+`trainer: {name, type, version}` and `parameters: {...}` - so every
+`TrainingRun` parsed from a real `GET` response had all four fields
+permanently `None`/`{}`, silently. No test caught it: the existing
+`TRAINING_RUN` test fixture already had `trainer`/`parameters` populated, but
+nothing ever asserted `run.model` or `run.config` against it.
+
+**Verified live before fixing**: created a real training run via `curl`
+with `trainer: {"name":"yolo","type":"pytorch","version":"2.1"}`, then
+fetched it through the real `SynthGraphClient` - `run.model`, `.framework`,
+`.framework_version` were all `None` and `.config` was `{}` despite the
+data being right there in the response body.
+
+Fixed with a `model_validator(mode="before")` on `TrainingRun` that lifts
+`trainer.name` -> `model`, `trainer.type` -> `framework`, `trainer.version`
+-> `framework_version`, and `parameters` -> `config` before field
+validation runs, using `setdefault` so an explicit flat value (should the
+wire ever send one) is never overwritten. Re-verified live afterward with
+the same training run: all four fields now populate correctly. New unit
+test (`test_get_reads_trainer_and_parameters_back_onto_flat_fields`)
+locks this in independently of the create-side fixture. Full suite: all
+training/fluent tests pass; `mypy` clean.
+
+### 2.34 `synthgraph training-runs` - the CLI had zero training-run support
+
+The CLI's own stated purpose is to "inspect and export provenance after the
+fact" (main.py's help text), and every other resource capture had a matching
+read-side command group (`experiments`, `generations`) except training
+runs - the whole capture-completeness audit this project exists around
+(2.27, 2.28) had no CLI surface at all, only `sg.training_runs.list
+(capture_status=)` in Python.
+
+**Decision:** new `synthgraph training-runs` group, matching the read-only
+scope every other group already has - no `create`/`start`/`complete`/
+`log-metric` commands, since those belong inline in training code via the
+SDK, not typed at a shell prompt after the fact. Three commands:
+
+* `list --experiment <id> [--capture-status complete|partial|unknown]` -
+  the audit query itself, exposed directly. A `None` `capture_status` (2.27's
+  "never reported" sentinel) renders as `never reported` in the table
+  rather than blank, so it reads as a distinct state, not missing data.
+* `get <id>` - full field list including `capture_status`, `datasets`, and
+  the `model`/`framework`/`framework_version`/`config` fields fixed by 2.33
+  (this command is exactly why 2.33 got caught: it was the first thing to
+  actually render them).
+* `metrics <id>` - the per-step metric points, ordered by step.
+
+**Verified live end-to-end**, not just against the mock backend: created a
+real training run via `curl`, then ran the actual `synthgraph.exe` console
+script against it through every command above - `list` (including the
+`never reported` label and a live `--capture-status` filter round-trip
+after reporting one via `curl`), `get` in both table and `--json` form, and
+`metrics` after logging a real point. Verification data cleaned up from
+Postgres afterward. New test file `tests/cli/test_training_runs.py` (16
+tests) plus `training-runs` added to `test_main.py`'s registered-groups
+list. `ruff` and `mypy` clean.

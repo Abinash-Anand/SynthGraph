@@ -182,9 +182,10 @@ unless the backend said so.
 ```
 synthgraph
 ├── auth whoami
-├── projects      list | get
-├── experiments   list | get | search
-├── generations   list | get
+├── projects       list | get
+├── experiments    list | get | search
+├── generations    list | get
+├── training-runs  list | get | metrics
 ├── compare
 ├── manifest
 └── docs
@@ -201,6 +202,11 @@ synthgraph generations list --experiment <experiment-id>
 synthgraph generations list --experiment <experiment-id> \
     --parameters '{"weather":"rain","occlusion":0.3}'
 synthgraph generations get <generation-id>
+
+synthgraph training-runs list --experiment <experiment-id>
+synthgraph training-runs list --experiment <experiment-id> --capture-status partial
+synthgraph training-runs get <training-run-id>
+synthgraph training-runs metrics <training-run-id>
 
 synthgraph compare <generation-id-a> <generation-id-b>
 
