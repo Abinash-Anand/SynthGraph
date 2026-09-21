@@ -49,6 +49,7 @@ from .models import (
     Reproducibility,
     ReproductionManifest,
     TrainingRun,
+    TrainingRunMetric,
     User,
 )
 from .projects import ProjectsAPI
@@ -93,6 +94,7 @@ __all__ = [
     "SynthGraphValidationError",
     "TrainingHandle",
     "TrainingRun",
+    "TrainingRunMetric",
     "User",
     "__version__",
     "environment_metadata",

@@ -10,7 +10,7 @@ from .generation import GenerationRun, GenerationStatus, Generator, Reproducibil
 from .project import Project
 from .reference import AssetReference, DataReference, DatasetReference
 from .reproduction import ReproductionManifest
-from .training import TrainingRun
+from .training import TrainingRun, TrainingRunMetric
 from .user import User
 
 __all__ = [
@@ -32,5 +32,6 @@ __all__ = [
     "ReproductionManifest",
     "SynthGraphModel",
     "TrainingRun",
+    "TrainingRunMetric",
     "User",
 ]

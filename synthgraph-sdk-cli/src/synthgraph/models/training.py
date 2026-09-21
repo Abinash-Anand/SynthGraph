@@ -41,3 +41,19 @@ class TrainingRun(SynthGraphModel):
     completed_at: datetime | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+class TrainingRunMetric(SynthGraphModel):
+    """A single metric observation recorded at a step during training.
+
+    Unlike :class:`~synthgraph.models.evaluation.EvaluationResult` (one final
+    score against an exact dataset version), this tracks how a metric evolves
+    *over the course of* training - one row per (training run, step). Metrics
+    stay a flexible mapping; the SDK does not know what "loss" or "mAP" means.
+    """
+
+    id: str = Field(min_length=1)
+    training_run_id: str | None = None
+    step: int | None = None
+    metrics: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime | None = None

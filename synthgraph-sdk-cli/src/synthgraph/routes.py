@@ -116,6 +116,10 @@ class Routes:
     def evaluation_result(evaluation_id: str) -> str:
         return f"/evaluation-results/{encode_id(evaluation_id)}"
 
+    @staticmethod
+    def training_run_metrics(training_run_id: str) -> str:
+        return f"/training-runs/{encode_id(training_run_id)}/metrics"
+
     # -- unverified (spec 63) ---------------------------------------------
     #
     # (empty - the last entry, generation_assets, was verified and moved to
