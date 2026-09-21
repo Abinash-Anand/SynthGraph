@@ -147,12 +147,35 @@ class TrainingRunsAPI:
 
         return TrainingRun.model_validate(data)
 
-    def list(self, *, experiment_id: str) -> TrainingRunList:
-        """List training runs belonging to an experiment."""
+    def list(
+        self,
+        *,
+        experiment_id: str,
+        capture_status: str | None = None,
+    ) -> TrainingRunList:
+        """List training runs belonging to an experiment.
+
+        ``capture_status`` filters to runs whose reported capture-completeness
+        matches - ``"complete"``, ``"partial"``, or ``"unknown"`` (a run this
+        SDK version never reported on at all; see ``integration_session.py``
+        and CONTRACT.md 2.27/2.28). Filtering happens on the backend, the
+        same as ``generations.list(parameters=)``.
+        """
         experiment_id = require_identifier(experiment_id, field="experiment_id")
+
+        params: dict[str, Any] = {}
+        if capture_status is not None:
+            if capture_status not in ("complete", "partial", "unknown"):
+                raise SynthGraphValidationError(
+                    "capture_status must be 'complete', 'partial' or 'unknown', "
+                    f"got {capture_status!r}",
+                    field="capture_status",
+                )
+            params["captureStatus"] = capture_status
 
         data = self._http.get_list(
             Routes.experiment_training_runs(experiment_id),
+            params=params,
             operation="training_runs.list",
         )
 

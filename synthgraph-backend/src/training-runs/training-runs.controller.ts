@@ -6,6 +6,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -16,6 +17,7 @@ import { TrainingRunStatus } from '../database/entities/training-run.entity.js';
 
 import { CreateTrainingRunDto } from './dto/create-training-run.dto.js';
 import { CreateTrainingRunDatasetReferenceDto } from './dto/create-training-run-dataset-reference.dto.js';
+import { ListTrainingRunsQueryDto } from './dto/list-training-runs-query.dto.js';
 import { UpdateTrainingRunCaptureStatusDto } from './dto/update-training-run-capture-status.dto.js';
 import { UpdateTrainingRunStatusDto } from './dto/update-training-run-status.dto.js';
 
@@ -62,11 +64,13 @@ export class TrainingRunsController {
   async listTrainingRuns(
     @Param('experimentId', new ParseUUIDPipe({ version: '4' }))
     experimentId: string,
+    @Query() query: ListTrainingRunsQueryDto,
     @Req() request: AuthenticatedRequest,
   ) {
     return this.listTrainingRunsService.execute(
       experimentId,
       request.user.id,
+      query.captureStatus,
     );
   }
 
