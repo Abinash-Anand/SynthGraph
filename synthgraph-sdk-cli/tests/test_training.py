@@ -340,3 +340,11 @@ def test_update_capture_status_reads_back_the_returned_value(client, backend):
         "status": "partial",
         "integrations": {"skrl_writer": {"attached": True, "closed": False}},
     }
+
+
+def test_update_capture_status_rejects_an_invalid_status(client, backend):
+    with pytest.raises(SynthGraphValidationError):
+        client.training_runs.update_capture_status(
+            training_run_id="t1", status="bogus", integrations={}
+        )
+    assert backend.requests == []

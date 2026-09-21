@@ -766,3 +766,40 @@ a cleanly-closing integration (`complete`), one with a closer that raised
 through the real SDK returned exactly and only its matching run's id, not
 mocked. Backend suites (93 unit, 87 e2e) and the SDK suite (mypy clean, same
 2 pre-existing unrelated failures) pass unchanged.
+
+### 2.29 Two low-severity items from reviewing 2.26-2.28, fixed together
+
+Neither blocked anything - both were flagged as informational/cosmetic
+during a review pass and left for a follow-up rather than fixed inline.
+
+**No index supported `?captureStatus=` at scale.** Every query was already
+scoped by the indexed `experiment_id` first, so this was never wrong, only
+eventually slow on an experiment with a very large number of runs.
+`TypeOrmTrainingRunRepository.findByCaptureStatus()` issues two genuinely
+different query shapes, not one - `complete`/`partial` filter on
+`capture_status ->> 'status' = :value`, `unknown` filters on
+`capture_status IS NULL` directly, not a derived expression - so migration
+`1788995000000` adds two indexes, not one: a composite expression index on
+`(experiment_id, capture_status ->> 'status')` for the first shape, and a
+partial index on `experiment_id` `WHERE capture_status IS NULL` for the
+second. Deliberately not one composite index serving both by querying
+`capture_status ->> 'status' IS NULL` for `unknown` instead - that would
+subtly loosen the sentinel semantics §2.27 depends on (NULL means "never
+reported"; a hypothetical malformed non-null object missing a `status` key
+would also match the expression, even though nothing in this codebase can
+ever write one). `EXPLAIN` against the real database with `enable_seqscan =
+off` confirms the planner picks each index for its matching query shape.
+
+**`update_capture_status(status=)` had no client-side validation**, unlike
+`list(capture_status=)`'s check against the same three values - inconsistent,
+though never unsafe, since the backend's `@IsIn(['complete','partial',
+'unknown'])` DTO validator already rejected anything else. Fixed by adding
+the identical check `list()` already had, before the request is built.
+
+Verified: migration runs and reverts cleanly against the real database
+(confirmed both indexes present via `\d training_runs`, both gone after
+revert); backend suite (107 unit + e2e combined via `npm test`'s shared
+config, 101 via `test:e2e` alone) and lint unchanged. SDK suite: mypy
+clean, same 2 pre-existing unrelated failures, new test confirming
+`update_capture_status()` now rejects a bad status before any request is
+sent (`backend.requests == []`).
