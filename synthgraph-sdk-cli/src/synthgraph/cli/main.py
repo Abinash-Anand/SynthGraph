@@ -16,6 +16,7 @@ from .commands import (
     auth,
     compare,
     docs,
+    evaluations,
     experiments,
     generations,
     manifest,
@@ -48,6 +49,7 @@ app.add_typer(projects.app, name="projects")
 app.add_typer(experiments.app, name="experiments")
 app.add_typer(generations.app, name="generations")
 app.add_typer(training_runs.app, name="training-runs")
+app.add_typer(evaluations.app, name="evaluations")
 
 app.command("compare")(compare.compare)
 app.command("manifest")(manifest.manifest)
