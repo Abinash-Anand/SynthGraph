@@ -182,3 +182,41 @@ def test_local_file_is_referenced_not_read(client, backend, tmp_path):
     body = backend.requests[1].body
     assert body["uri"] == str(video)
     assert "payload-bytes" not in str(body)
+
+
+def test_get_retrieves_an_asset_by_id(client, backend):
+    backend.route("GET", "/assets/a1", httpx.Response(200, json=ASSET))
+
+    asset = client.assets.get("a1")
+
+    assert backend.last().path == "/assets/a1"
+    assert asset.id == "a1"
+    assert asset.name == "rain_render"
+
+
+def test_list_lists_every_asset(client, backend):
+    backend.route("GET", "/assets", httpx.Response(200, json=[ASSET]))
+
+    assets = client.assets.list()
+
+    assert backend.last().path == "/assets"
+    assert [asset.id for asset in assets] == ["a1"]
+
+
+def test_get_version_retrieves_an_asset_version_by_id(client, backend):
+    backend.route("GET", "/asset-versions/av1", httpx.Response(200, json=ASSET_VERSION))
+
+    version = client.assets.get_version("av1")
+
+    assert backend.last().path == "/asset-versions/av1"
+    assert version.id == "av1"
+    assert version.asset_id == "a1"
+
+
+def test_list_versions_lists_versions_for_an_asset(client, backend):
+    backend.route("GET", "/assets/a1/versions", httpx.Response(200, json=[ASSET_VERSION]))
+
+    versions = client.assets.list_versions("a1")
+
+    assert backend.last().path == "/assets/a1/versions"
+    assert [version.id for version in versions] == ["av1"]

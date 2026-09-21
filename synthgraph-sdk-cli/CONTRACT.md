@@ -33,6 +33,10 @@ test.
 | Create dataset (step 1 of `sg.datasets.create()`, skipped when `dataset_id=` reuses an existing one) | — | — | POST | `/datasets` |
 | Create dataset version (step 2 of `sg.datasets.create()`) | — | — | POST | `/datasets/{datasetId}/versions` |
 | Record dataset (step 3 of `sg.datasets.create()`: attach the version to the generation) | `sg.datasets.create()` | — | POST | `/generations/{generationId}/datasets` |
+| Get dataset | `sg.datasets.get(id)` | — | GET | `/datasets/{datasetId}` |
+| List datasets | `sg.datasets.list()` | — | GET | `/datasets` |
+| Get dataset version | `sg.datasets.get_version(id)` | — | GET | `/dataset-versions/{datasetVersionId}` |
+| List dataset versions | `sg.datasets.list_versions(id)` | — | GET | `/datasets/{datasetId}/versions` |
 | Reproduction manifest | `sg.reproduction.get(id)` | `manifest` | GET | `/generations/{generationId}/reproduction-manifest` |
 | Documentation | `sg.documentation.get(id)` | `docs` | GET | `/generations/{generationId}/documentation` |
 | Compare | `sg.comparisons.compare([...])` | `compare` | POST | `/generations/compare` |
@@ -50,6 +54,10 @@ test.
 | Create asset (step 1 of `sg.assets.create()`, skipped when `asset_id=` reuses an existing one) | — | — | POST | `/assets` |
 | Create asset version (step 2 of `sg.assets.create()`) | — | — | POST | `/assets/{assetId}/versions` |
 | Record asset (step 3 of `sg.assets.create()`: attach the version to the generation) | `sg.assets.create()` / `generation.asset()` | — | POST | `/generations/{generationId}/assets` |
+| Get asset | `sg.assets.get(id)` | — | GET | `/assets/{assetId}` |
+| List assets | `sg.assets.list()` | — | GET | `/assets` |
+| Get asset version | `sg.assets.get_version(id)` | — | GET | `/asset-versions/{assetVersionId}` |
+| List asset versions | `sg.assets.list_versions(id)` | — | GET | `/assets/{assetId}/versions` |
 
 Error mapping is deterministic for all of them:
 
@@ -1012,3 +1020,34 @@ behavior to assert the new 404, and added two more for listing versions
 under a nonexistent parent (previously untested for the list route
 specifically, only for get/create). Backend suite: 152 e2e (2 new), clean
 build, lint unchanged.
+
+### 2.37 `sg.assets`/`sg.datasets` gain `get`/`list`/`get_version`/`list_versions`
+
+Found during the same backend audit that produced 2.32/2.33: the backend
+has always had working, ownership-scoped single-GET and list routes for
+assets and datasets (`GET /assets`, `GET /assets/{id}`,
+`GET /assets/{id}/versions`, `GET /asset-versions/{id}`, and the dataset
+equivalents) - confirmed live via `curl` at the time - but the SDK only
+ever called the `POST` routes, from inside `create()`'s three-step flow.
+There was no way to look an asset or dataset back up by ID once
+`create()` returned, short of dropping to raw HTTP.
+
+**Decision:** add the four missing read methods to both `AssetsAPI` and
+`DatasetsAPI`, matching the shape `TrainingRunsAPI`/`EvaluationsAPI`
+already use (`get`, `list`, plus version-level `get_version`/
+`list_versions` here since assets/datasets have two levels of identity
+where training runs/evaluations only have one). Two new route builders
+needed adding per resource (`Routes.asset()`/`.asset_version()`,
+`Routes.dataset()`/`.dataset_version()`) - the plural list routes already
+existed for `create()`'s `POST`, reused here for `GET`. No CLI surface yet;
+that's a natural follow-up but wasn't asked for alongside this.
+
+**Verified live end-to-end**: created a real asset and dataset (each with
+a version) via `curl`, then called all eight new methods
+(`get`/`list`/`get_version`/`list_versions` × 2) through the real
+`SynthGraphClient` and confirmed each returned the right record.
+Verification data cleaned up from Postgres afterward. New tests in
+`tests/test_assets.py`/`tests/test_datasets.py` (4 each). `mypy` and
+`ruff` clean on every file this touched (two pre-existing, unrelated
+`UP017` datetime-alias suggestions in both files predate this change and
+are left alone).
