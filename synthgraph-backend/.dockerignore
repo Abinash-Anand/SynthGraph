@@ -1,0 +1,14 @@
+node_modules
+dist
+coverage
+test
+.git
+.vscode
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.env
+.env.*
+*.md
+tsconfig.build.tsbuildinfo
+npm-debug.log*
