@@ -1,7 +1,7 @@
 "use client";
 
 import * as echarts from "echarts/core";
-import { LineChart } from "echarts/charts";
+import { BarChart, LineChart, ScatterChart } from "echarts/charts";
 import {
   GridComponent,
   LegendComponent,
@@ -13,6 +13,8 @@ import { useEffect, useRef } from "react";
 
 echarts.use([
   LineChart,
+  BarChart,
+  ScatterChart,
   GridComponent,
   LegendComponent,
   TitleComponent,

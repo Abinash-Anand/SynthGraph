@@ -1,9 +1,16 @@
 "use client";
 
+import dynamic from "next/dynamic";
+import type { EChartsCoreOption } from "echarts/core";
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { SelectField } from "@/components/ui/Field";
 import type { EfficiencyLeaderboard } from "../types/report";
+
+const EChart = dynamic(() => import("@/shared/charts/EChart").then((m) => m.EChart), {
+  ssr: false,
+  loading: () => <div className="h-[280px] animate-pulse rounded-lg bg-surface-2" />,
+});
 
 function formatDuration(seconds: number): string {
   const hours = seconds / 3600;
@@ -51,6 +58,56 @@ export function EfficiencyLeaderboardView({ leaderboard }: { leaderboard: Effici
       .sort((a, b) => (b.perHour ?? -Infinity) - (a.perHour ?? -Infinity));
   }, [leaderboard.runs, activeMetricKey]);
 
+  const scatterOption = useMemo<EChartsCoreOption>(() => {
+    const points = rows
+      .filter((r) => r.bestValue !== null)
+      .map((r) => ({
+        value: [r.run.durationSeconds / 3600, r.bestValue],
+        name: r.run.name,
+      }));
+    return {
+      backgroundColor: "transparent",
+      textStyle: { fontFamily: "var(--font-sans)" },
+      grid: { left: 56, right: 24, top: 20, bottom: 40 },
+      tooltip: {
+        trigger: "item",
+        backgroundColor: "#18181b",
+        borderColor: "#27272a",
+        textStyle: { color: "#f4f4f5", fontSize: 12 },
+        formatter: (params: unknown) => {
+          const p = params as { name: string; value: [number, number] };
+          return `${p.name}<br/>${p.value[0].toFixed(2)}h · ${activeMetricKey} ${p.value[1].toFixed(4)}`;
+        },
+      },
+      xAxis: {
+        type: "value",
+        name: "duration (hours)",
+        nameLocation: "middle",
+        nameGap: 28,
+        nameTextStyle: { color: "#71717a", fontSize: 11 },
+        axisLine: { lineStyle: { color: "#27272a" } },
+        splitLine: { lineStyle: { color: "#1f1f23" } },
+        axisLabel: { color: "#71717a", fontSize: 11 },
+      },
+      yAxis: {
+        type: "value",
+        name: activeMetricKey,
+        nameTextStyle: { color: "#71717a", fontSize: 11 },
+        axisLine: { show: false },
+        splitLine: { lineStyle: { color: "#1f1f23" } },
+        axisLabel: { color: "#71717a", fontSize: 11 },
+      },
+      series: [
+        {
+          type: "scatter",
+          symbolSize: 12,
+          itemStyle: { color: "#8b5cf6" },
+          data: points,
+        },
+      ],
+    };
+  }, [rows, activeMetricKey]);
+
   if (leaderboard.runs.length === 0) {
     return (
       <p className="text-[13.5px] text-ink-faint">
@@ -75,6 +132,8 @@ export function EfficiencyLeaderboardView({ leaderboard }: { leaderboard: Effici
           No numeric evaluation metrics recorded yet — showing duration only.
         </p>
       )}
+
+      {activeMetricKey ? <EChart option={scatterOption} height={280} /> : null}
 
       <div className="flex flex-col gap-2">
         {rows.map(({ run, bestValue, perHour }) => (
