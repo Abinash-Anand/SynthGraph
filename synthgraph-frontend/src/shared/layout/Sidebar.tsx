@@ -25,6 +25,8 @@ const TOOLS_ITEMS: NavItem[] = [{ label: "Compare", href: "/dashboard/compare" }
 const REPORTS_ITEMS: NavItem[] = [
   { label: "Capture Completeness", href: "/dashboard/reports/capture-completeness" },
   { label: "Efficiency Leaderboard", href: "/dashboard/reports/efficiency-leaderboard" },
+  { label: "Best Runs", href: "/dashboard/reports/best-runs" },
+  { label: "Training Run Search", href: "/dashboard/reports/training-run-search" },
 ];
 
 const SETTINGS_ITEMS: NavItem[] = [{ label: "API Keys", href: "/dashboard/settings/api-keys" }];

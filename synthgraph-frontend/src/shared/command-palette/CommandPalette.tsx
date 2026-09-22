@@ -28,6 +28,13 @@ const COMMANDS: CommandEntry[] = [
     href: "/dashboard/reports/efficiency-leaderboard",
     group: "Reports",
   },
+  { id: "best-runs", label: "Best Runs report", href: "/dashboard/reports/best-runs", group: "Reports" },
+  {
+    id: "training-run-search",
+    label: "Training Run Search",
+    href: "/dashboard/reports/training-run-search",
+    group: "Reports",
+  },
   { id: "compare", label: "Compare generations", href: "/dashboard/compare", group: "Tools" },
   { id: "api-keys", label: "API Keys", href: "/dashboard/settings/api-keys", group: "Settings" },
 ];

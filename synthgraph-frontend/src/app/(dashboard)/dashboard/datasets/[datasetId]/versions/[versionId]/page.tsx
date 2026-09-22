@@ -4,6 +4,8 @@ import type { Metadata } from "next";
 import { CodeBlock } from "@/components/ui/CodeBlock";
 import { getSession, requireSession } from "@/features/auth/server/session";
 import { getDatasetVersion } from "@/features/datasets/server/datasets-api";
+import { DatasetImpactView } from "@/features/reports/components/DatasetImpactView";
+import { getDatasetImpact } from "@/features/reports/server/reports-api";
 import { NotFoundError } from "@/shared/http/errors";
 import { formatDateTime } from "@/shared/lib/format";
 
@@ -37,6 +39,8 @@ export default async function DatasetVersionDetailPage({ params }: { params: Pro
   if (version.datasetId !== datasetId) {
     notFound();
   }
+
+  const impact = await getDatasetImpact(session.apiKey, versionId);
 
   return (
     <div className="flex flex-col gap-8">
@@ -81,6 +85,11 @@ export default async function DatasetVersionDetailPage({ params }: { params: Pro
           <CodeBlock language="json" code={JSON.stringify(version.metadata, null, 2)} />
         </div>
       ) : null}
+
+      <div>
+        <h2 className="mono-label mb-3">Impact</h2>
+        <DatasetImpactView report={impact} />
+      </div>
     </div>
   );
 }

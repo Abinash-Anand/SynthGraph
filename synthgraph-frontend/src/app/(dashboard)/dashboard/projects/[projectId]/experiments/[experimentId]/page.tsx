@@ -5,7 +5,11 @@ import { ExperimentWorkspace } from "@/features/experiments/components/Experimen
 import { getExperimentForProject } from "@/features/experiments/server/experiments-api";
 import { listGenerations } from "@/features/generations/server/generations-api";
 import { getReproductionManifest } from "@/features/reproduction/server/reproduction-api";
-import { getParameterCorrelationReport } from "@/features/reports/server/reports-api";
+import {
+  getParameterCorrelationReport,
+  getTrainingRunDrift,
+  getTrainingRunHealth,
+} from "@/features/reports/server/reports-api";
 import { listEvaluationResults } from "@/features/evaluation-results/server/evaluation-results-api";
 import { listTrainingRunMetrics } from "@/features/training-runs/server/training-run-metrics-api";
 import { listTrainingRunsForExperiment } from "@/features/training-runs/server/training-runs-api";
@@ -54,6 +58,8 @@ export default async function ExperimentDetailPage({ params }: { params: Promise
       run,
       metrics: await listTrainingRunMetrics(session.apiKey, run.id),
       evaluations: await listEvaluationResults(session.apiKey, run.id),
+      health: await getTrainingRunHealth(session.apiKey, run.id),
+      drift: await getTrainingRunDrift(session.apiKey, run.id),
     })),
   );
 

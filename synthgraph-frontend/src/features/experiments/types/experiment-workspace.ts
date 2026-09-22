@@ -1,6 +1,10 @@
 import type { Generation } from "@/features/generations/types/generation";
 import type { ReproductionManifest } from "@/features/reproduction/types/reproduction-manifest";
 import type { EvaluationResult } from "@/features/evaluation-results/types/evaluation-result";
+import type {
+  TrainingRunDriftReport,
+  TrainingRunHealthReport,
+} from "@/features/reports/types/report";
 import type { TrainingRunMetric } from "@/features/training-runs/types/training-run-metric";
 import type { TrainingRun } from "@/features/training-runs/types/training-run";
 
@@ -16,6 +20,8 @@ export type EnrichedTrainingRun = {
   run: TrainingRun;
   metrics: TrainingRunMetric[];
   evaluations: EvaluationResult[];
+  health: TrainingRunHealthReport;
+  drift: TrainingRunDriftReport;
 };
 
 export type EnrichedGeneration = {
