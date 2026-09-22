@@ -211,24 +211,63 @@ def test_list_rejects_an_invalid_capture_status(client, backend):
 
 
 def test_add_dataset_sends_dataset_version_id_and_role(client, backend):
+    # The attach endpoint returns the new reference row, not a TrainingRun -
+    # add_dataset() re-fetches afterward (see training.py), so both routes
+    # need a response.
     backend.route(
-        "POST", "/training-runs/t1/datasets", httpx.Response(200, json=TRAINING_RUN)
+        "POST",
+        "/training-runs/t1/datasets",
+        httpx.Response(
+            201,
+            json={"trainingRunId": "t1", "datasetVersionId": "dv9", "role": "validation"},
+        ),
     )
+    backend.route("GET", "/training-runs/t1", httpx.Response(200, json=TRAINING_RUN))
 
-    client.training_runs.add_dataset(training_run_id="t1", dataset="dv9", role="validation")
+    run = client.training_runs.add_dataset(training_run_id="t1", dataset="dv9", role="validation")
 
-    assert backend.last().path == "/training-runs/t1/datasets"
-    assert backend.last().body == {"datasetVersionId": "dv9", "role": "validation"}
+    attach_request = backend.requests[-2]
+    assert attach_request.path == "/training-runs/t1/datasets"
+    assert attach_request.body == {"datasetVersionId": "dv9", "role": "validation"}
+    assert run.id == "t1"
 
 
 def test_add_dataset_role_defaults_to_training(client, backend):
     backend.route(
-        "POST", "/training-runs/t1/datasets", httpx.Response(200, json=TRAINING_RUN)
+        "POST",
+        "/training-runs/t1/datasets",
+        httpx.Response(
+            201,
+            json={"trainingRunId": "t1", "datasetVersionId": "dv9", "role": "training"},
+        ),
     )
+    backend.route("GET", "/training-runs/t1", httpx.Response(200, json=TRAINING_RUN))
 
     client.training_runs.add_dataset(training_run_id="t1", dataset="dv9")
 
-    assert backend.last().body == {"datasetVersionId": "dv9", "role": "training"}
+    attach_request = backend.requests[-2]
+    assert attach_request.body == {"datasetVersionId": "dv9", "role": "training"}
+
+
+def test_add_dataset_returns_the_refetched_training_run(client, backend):
+    """Regression test: add_dataset() used to parse the attach endpoint's
+    own response (the reference row) as a TrainingRun and crash with a
+    Pydantic validation error, since that row has no `id` field."""
+    backend.route(
+        "POST",
+        "/training-runs/t1/datasets",
+        httpx.Response(
+            201,
+            json={"trainingRunId": "t1", "datasetVersionId": "dv9", "role": "training"},
+        ),
+    )
+    backend.route("GET", "/training-runs/t1", httpx.Response(200, json=TRAINING_RUN))
+
+    run = client.training_runs.add_dataset(training_run_id="t1", dataset="dv9")
+
+    assert backend.last().method == "GET"
+    assert backend.last().path == "/training-runs/t1"
+    assert run.id == "t1"
 
 
 @pytest.mark.parametrize(

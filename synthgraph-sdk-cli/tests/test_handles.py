@@ -117,6 +117,10 @@ def test_evaluations_get(handles):
 
 
 def test_training_add_dataset_sends_one_reference(handles, backend):
+    # add_dataset() re-fetches the training run after attaching (the attach
+    # endpoint itself returns the reference row, not a TrainingRun), so the
+    # attach request is the second-to-last, not the last.
     handles.training_runs.add_dataset(training_run_id="t1", dataset="dv1")
-    assert backend.last().body == {"datasetVersionId": "dv1", "role": "training"}
-    assert backend.last().path == "/training-runs/t1/datasets"
+    attach_request = backend.requests[-2]
+    assert attach_request.body == {"datasetVersionId": "dv1", "role": "training"}
+    assert attach_request.path == "/training-runs/t1/datasets"
