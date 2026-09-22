@@ -1,11 +1,12 @@
 # SynthGraph Python SDK + CLI
 
-Provenance and lineage capture for synthetic-data research.
+Provenance and lineage capture for synthetic-data and RL research.
 
 SynthGraph records the metadata *around* your research — what generated a
 dataset, with which parameters, which data trained which model, and what that
 model scored — so experiments stay traceable and reproducible. You keep working
-in Blender, Unity, PyTorch, notebooks and scripts exactly as you do now.
+in Blender, Unity, Isaac Lab, PyTorch, notebooks and scripts exactly as you do
+now.
 
 Two interfaces, one system:
 
@@ -18,25 +19,40 @@ The backend is the system of record. Both are clients.
 
 ## What this is not
 
-It does not generate synthetic data, train models, or run Blender, Unity or
-PyTorch. It does not upload your datasets: a dataset reference is a URI and
-some metadata, and your hundred-gigabyte render stays exactly where you put it.
+It does not generate synthetic data, train models, or run Blender, Unity,
+Isaac Lab or PyTorch. It does not upload your datasets: a dataset reference is
+a URI and some metadata, and your hundred-gigabyte render stays exactly where
+you put it.
 
 ## Install
 
 ```bash
-pip install -e ".[dev]"
+pip install synthgraph-sdk
 ```
 
-Requires Python 3.11+.
+Requires Python 3.11+. For local resource-metric capture (CPU/memory
+percentages, on top of the CPU-count and GPU stats that need no extra
+dependency), add the `resource` extra:
+
+```bash
+pip install "synthgraph-sdk[resource]"
+```
+
+Framework integrations (below) assume you already have the corresponding
+library installed — `synthgraph-sdk` never pulls in stable-baselines3, skrl,
+rl_games, Isaac Lab, MuJoCo Playground or wandb on your behalf.
 
 ## Configure
 
 ```bash
 export SYNTHGRAPH_API_KEY="..."
-export SYNTHGRAPH_API_URL="http://localhost:3000"   # or your hosted backend
-export SYNTHGRAPH_PROJECT_ID="..."                  # optional default project
+export SYNTHGRAPH_API_URL="https://synthgraph.onrender.com"  # or your own backend
+export SYNTHGRAPH_PROJECT_ID="..."                           # optional default project
 ```
+
+`SYNTHGRAPH_API_URL` also accepts the alias `SYNTHGRAPH_BASE_URL`. Two other
+optional knobs: `SYNTHGRAPH_TIMEOUT` (request timeout in seconds, default 30)
+and `SYNTHGRAPH_MAX_ATTEMPTS` (retry attempts for safe requests, default 3).
 
 Configuration resolves in this order: explicit arguments, then environment,
 then defaults. The API key is never logged, never serialized into a model or a
@@ -98,6 +114,64 @@ generation.complete()
 
 Failed generations stay in the record. A failed experiment is still a result.
 
+### Training runs: metrics and resource capture
+
+`TrainingHandle` tracks more than the run itself — step metrics and, if you
+want it, a background sample of CPU/memory/GPU usage:
+
+```python
+with experiment.training(model="yolo", framework="pytorch", config={...}) as training:
+    training.monitor_resources(interval_seconds=10.0)   # background sampling
+
+    for step, loss in enumerate(train_loop()):
+        training.log_metric(step=step, metrics={"loss": loss})
+
+    training.evaluation(metrics={"mAP": 0.724}, dataset_version_id=dataset.id)
+# leaving the `with` block tears every attached monitor/writer down together
+```
+
+Every attachment made through `monitor_resources()` or a framework
+integration's writer/callback is registered on the same `TrainingHandle` and
+closed together, either explicitly via `training.close()` or on exit from the
+`with` block. On close, the SDK reports how completely resource usage was
+captured (`capture_status`: `complete`, `partial`, or `unknown`) so
+`synthgraph training-runs list --capture-status partial` can find runs with
+incomplete telemetry later — it warns rather than raises if that report fails.
+
+### Framework integrations
+
+`synthgraph.integrations` turns objects you already have — an agent, a model,
+a config dict — into the `parameters=`/`config=` dictionaries the SDK expects,
+and in two cases (stable-baselines3, skrl) into a callback/writer that logs
+metrics automatically. Nothing here is imported by core `synthgraph`, nothing
+is monkey-patched, and nothing runs unless you call it:
+
+```python
+from stable_baselines3 import PPO
+from synthgraph.integrations.stable_baselines3 import create_callback, extract_training_config
+
+model = PPO("MlpPolicy", "CartPole-v1", learning_rate=3e-4)
+training = experiment.training(
+    model=type(model).__name__,
+    framework="stable-baselines3",
+    config=extract_training_config(model),
+)
+model.learn(total_timesteps=100_000, callback=create_callback(training))
+```
+
+| Module | What it extracts | Auto-logs metrics? |
+|---|---|---|
+| `integrations.stable_baselines3` | algorithm/policy/device/hyperparameters | yes — `create_callback()` |
+| `integrations.skrl` | algorithm/device/spaces/hyperparameters | yes — `create_writer()` |
+| `integrations.rl_games` | algorithm/model/network/hyperparameters | no |
+| `integrations.isaaclab` | domain-randomization event-term config | no |
+| `integrations.mujoco_playground` | env config, domain-randomize source | no |
+| `integrations.wandb` | an existing `wandb.Run`'s config and summary | no |
+
+Import the module you need directly (`from synthgraph.integrations.wandb import
+extract_run_config`) — importing one never requires the others, and importing
+none of them costs nothing at startup.
+
 ### Resource API
 
 The fluent handles are a convenience over plain resource methods, which are
@@ -118,7 +192,13 @@ sg.generations.get(generation_id)
 sg.generations.start(id) / .complete(id) / .fail(id)
 
 sg.datasets.create(generation_id=..., name=..., uri=...)
+sg.assets.create(generation_id=..., name=..., uri=..., type=...)
+
 sg.training_runs.create(experiment_id=..., model=..., framework=...)
+sg.training_runs.add_dataset(training_run_id, dataset_version_id)
+sg.training_runs.log_metric(training_run_id, step=..., metrics={...})
+sg.training_runs.metrics(training_run_id)
+
 sg.evaluations.create(training_run_id=..., metrics={...})
 
 sg.reproduction.get(generation_id)     # reproduction manifest
@@ -135,7 +215,7 @@ filter locally.
 Opt in explicitly — nothing is collected automatically:
 
 ```python
-from synthgraph import environment_metadata, git_metadata
+from synthgraph import environment_metadata, git_metadata, resource_metadata
 
 experiment.generation(
     generator="blender",
@@ -143,14 +223,18 @@ experiment.generation(
     code_version=git_metadata().get("commit"),
     environment=environment_metadata(include_packages=["torch", "numpy"]),
 )
+
+resource_metadata()   # a point-in-time CPU/memory/GPU snapshot, ~100ms, never automatic
 ```
 
 `git_metadata()` returns commit, branch, remote and dirty-tree state, with any
 credentials stripped from the remote URL. It returns `{}` outside a Git
 repository rather than raising. `environment_metadata()` collects a small fixed
-set of runtime facts, plus versions of packages you name. Neither reads
-repository contents, enumerates your environment, or touches environment
-variables.
+set of runtime facts, plus versions of packages you name. `resource_metadata()`
+and `installed_packages_metadata()` are both opt-in only — the latter reports
+your full dependency inventory and is never called for you. None of these read
+repository contents, enumerate your environment, or touch environment
+variables beyond what's named above.
 
 ### Errors
 
@@ -305,6 +389,6 @@ pytest -m integration
 
 ## Contract status
 
-This package is **0.2.0**, not 1.0. Several wire-contract items are still open,
-and some routes have not been verified against the backend implementation.
-See [CONTRACT.md](CONTRACT.md) before depending on them.
+This package is pre-1.0. Several wire-contract items are still open, and some
+routes have not been verified against the backend implementation. See
+[CONTRACT.md](CONTRACT.md) before depending on them.
