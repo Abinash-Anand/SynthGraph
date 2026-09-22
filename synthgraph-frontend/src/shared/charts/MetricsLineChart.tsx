@@ -1,0 +1,90 @@
+"use client";
+
+import type { EChartsCoreOption } from "echarts/core";
+import { useMemo } from "react";
+import type { TrainingRunMetric } from "@/features/training-runs/types/training-run-metric";
+import { EChart } from "./EChart";
+
+// Cycles through the app's existing design tokens rather than inventing new
+// chart colors (same reasoning as the hand-rolled MetricsChart it replaces).
+const SERIES_COLORS = [
+  "#37c9de", // cyan
+  "#8b5cf6", // research accent
+  "#46b97e", // ok
+  "#d9a441", // warn
+  "#5b8dfb", // blue
+  "#d9584c", // bad
+];
+
+export function MetricsLineChart({ metrics }: { metrics: TrainingRunMetric[] }) {
+  const option = useMemo<EChartsCoreOption>(() => buildOption(metrics), [metrics]);
+
+  if (metrics.length === 0) {
+    return <p className="text-[13.5px] text-research-ink-muted">No step metrics recorded.</p>;
+  }
+
+  return <EChart option={option} height={320} />;
+}
+
+function buildOption(metrics: TrainingRunMetric[]): EChartsCoreOption {
+  const sorted = [...metrics].sort((a, b) => a.step - b.step);
+  const steps = Array.from(new Set(sorted.map((m) => m.step))).sort((a, b) => a - b);
+
+  const metricKeys = new Set<string>();
+  for (const row of sorted) {
+    for (const [key, value] of Object.entries(row.metrics)) {
+      if (typeof value === "number") metricKeys.add(key);
+    }
+  }
+
+  const valueByStepAndKey = new Map<number, Record<string, number>>();
+  for (const row of sorted) {
+    valueByStepAndKey.set(row.step, row.metrics as Record<string, number>);
+  }
+
+  const series = Array.from(metricKeys).map((key, index) => ({
+    name: key,
+    type: "line" as const,
+    showSymbol: false,
+    lineStyle: { width: 2, color: SERIES_COLORS[index % SERIES_COLORS.length] },
+    itemStyle: { color: SERIES_COLORS[index % SERIES_COLORS.length] },
+    data: steps.map((step) => valueByStepAndKey.get(step)?.[key] ?? null),
+    connectNulls: true,
+  }));
+
+  return {
+    backgroundColor: "transparent",
+    textStyle: { fontFamily: "var(--font-sans)" },
+    grid: { left: 48, right: 16, top: 36, bottom: 32 },
+    legend: {
+      top: 0,
+      textStyle: { color: "#a1a1aa", fontSize: 11 },
+      icon: "roundRect",
+      itemWidth: 10,
+      itemHeight: 10,
+    },
+    tooltip: {
+      trigger: "axis",
+      backgroundColor: "#18181b",
+      borderColor: "#27272a",
+      textStyle: { color: "#f4f4f5", fontSize: 12 },
+    },
+    xAxis: {
+      type: "category",
+      name: "step",
+      nameLocation: "middle",
+      nameGap: 24,
+      nameTextStyle: { color: "#71717a", fontSize: 11 },
+      data: steps,
+      axisLine: { lineStyle: { color: "#27272a" } },
+      axisLabel: { color: "#71717a", fontSize: 11 },
+    },
+    yAxis: {
+      type: "value",
+      axisLine: { show: false },
+      splitLine: { lineStyle: { color: "#1f1f23" } },
+      axisLabel: { color: "#71717a", fontSize: 11 },
+    },
+    series,
+  };
+}
