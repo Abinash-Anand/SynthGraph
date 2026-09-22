@@ -3,10 +3,29 @@ import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 
 import { EvaluationResult } from '../../database/entities/evaluation-result.entity.js';
+import { TrainingRunMetric } from '../../database/entities/training-run-metric.entity.js';
 import {
   TrainingRun,
   TrainingRunStatus,
 } from '../../database/entities/training-run.entity.js';
+
+export type NumericFilterField = 'parameters' | 'metrics';
+export type NumericFilterOperator = 'gt' | 'gte' | 'lt' | 'lte' | 'eq';
+
+const NUMERIC_FILTER_SQL_OPERATORS: Record<NumericFilterOperator, string> = {
+  gt: '>',
+  gte: '>=',
+  lt: '<',
+  lte: '<=',
+  eq: '=',
+};
+
+export type NumericFilterMatchRow = {
+  id: string;
+  name: string;
+  experimentId: string;
+  matchedValue: string;
+};
 
 export type CaptureStatusCountRow = {
   status: string;
@@ -32,6 +51,8 @@ export class ReportsRepository {
     private readonly trainingRunRepository: Repository<TrainingRun>,
     @InjectRepository(EvaluationResult)
     private readonly evaluationResultRepository: Repository<EvaluationResult>,
+    @InjectRepository(TrainingRunMetric)
+    private readonly trainingRunMetricRepository: Repository<TrainingRunMetric>,
     @InjectDataSource()
     private readonly dataSource: DataSource,
   ) {}
@@ -140,5 +161,61 @@ export class ReportsRepository {
         trainingRunIds,
       })
       .getMany();
+  }
+
+  // Last `limit` rows by step - the health-signal window. Ordering here
+  // matches findAllForTrainingRun's own ASC-by-step convention so a caller
+  // can just take the tail for "most recent N points".
+  async findRecentMetricsForTrainingRun(
+    trainingRunId: string,
+    limit: number,
+  ): Promise<TrainingRunMetric[]> {
+    const rows = await this.trainingRunMetricRepository
+      .createQueryBuilder('metric')
+      .where('metric.trainingRunId = :trainingRunId', { trainingRunId })
+      .orderBy('metric.step', 'DESC')
+      .addOrderBy('metric.createdAt', 'DESC')
+      .limit(limit)
+      .getMany();
+
+    return rows.reverse();
+  }
+
+  // `field` and `operator` are both restricted to fixed enums by the DTO
+  // one layer up (never raw user strings), and are mapped through
+  // NUMERIC_FILTER_SQL_OPERATORS / a column whitelist here rather than
+  // interpolated directly - only `key` and `value` are ever bound as real
+  // query parameters. The regex guard excludes non-numeric JSONB values
+  // before casting, since `(col ->> key)::numeric` throws on a bad cast
+  // (parameters/metrics are arbitrary, SDK-populated JSONB).
+  async findTrainingRunsByNumericFilter(
+    userId: string,
+    field: NumericFilterField,
+    key: string,
+    operator: NumericFilterOperator,
+    value: number,
+    projectId?: string,
+  ): Promise<NumericFilterMatchRow[]> {
+    const column = field === 'parameters' ? 'trainingRun.parameters' : 'trainingRun.metrics';
+    const sqlOperator = NUMERIC_FILTER_SQL_OPERATORS[operator];
+
+    const query = this.trainingRunRepository
+      .createQueryBuilder('trainingRun')
+      .innerJoin('trainingRun.experiment', 'experiment')
+      .innerJoin('experiment.project', 'project')
+      .select('trainingRun.id', 'id')
+      .addSelect('trainingRun.name', 'name')
+      .addSelect('trainingRun.experimentId', 'experimentId')
+      .addSelect(`${column} ->> :filterKey`, 'matchedValue')
+      .where('project.userId = :userId', { userId })
+      .andWhere(`${column} ->> :filterKey ~ '^-?[0-9]+(\\.[0-9]+)?$'`)
+      .andWhere(`(${column} ->> :filterKey)::numeric ${sqlOperator} :filterValue`)
+      .setParameters({ filterKey: key, filterValue: value });
+
+    if (projectId) {
+      query.andWhere('project.id = :projectId', { projectId });
+    }
+
+    return query.getRawMany<NumericFilterMatchRow>();
   }
 }
