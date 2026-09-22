@@ -14,7 +14,7 @@ export default async function DatasetsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-[22px] font-medium tracking-[-0.01em] text-ink">Datasets</h1>
+        <h1 className="text-[22px] font-medium tracking-[-0.01em] text-research-ink">Datasets</h1>
         <ButtonLink href="/dashboard/datasets/new" size="sm">
           New dataset
         </ButtonLink>

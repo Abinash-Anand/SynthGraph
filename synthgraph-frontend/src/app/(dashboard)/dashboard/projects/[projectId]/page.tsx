@@ -47,22 +47,24 @@ export default async function ProjectDetailPage({ params }: { params: Promise<Pa
       <div>
         <Link
           href="/dashboard/projects"
-          className="mono-label text-ink-faint transition-colors hover:text-ink"
+          className="mono-label text-research-ink-muted transition-colors hover:text-research-ink"
         >
           ← Projects
         </Link>
-        <h1 className="mt-2 text-[22px] font-medium tracking-[-0.01em] text-ink">{project.name}</h1>
+        <h1 className="mt-2 text-[22px] font-medium tracking-[-0.01em] text-research-ink">
+          {project.name}
+        </h1>
         {project.description ? (
-          <p className="mt-1 text-[14px] text-ink-muted">{project.description}</p>
+          <p className="mt-1 text-[14px] text-research-ink-muted">{project.description}</p>
         ) : null}
-        <p className="mt-2 font-mono text-[11px] text-ink-faint">
+        <p className="mt-2 font-mono text-[11px] text-research-ink-muted">
           Created {formatDate(project.createdAt)}
         </p>
       </div>
 
       <div>
         <div className="mb-3 flex items-center justify-between gap-4">
-          <h2 className="mono-label">Experiments</h2>
+          <h2 className="mono-label text-research-ink-muted">Experiments</h2>
           <ButtonLink href={`/dashboard/projects/${projectId}/experiments/new`} size="sm">
             New experiment
           </ButtonLink>

@@ -14,7 +14,7 @@ export default async function ProjectsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-[22px] font-medium tracking-[-0.01em] text-ink">Projects</h1>
+        <h1 className="text-[22px] font-medium tracking-[-0.01em] text-research-ink">Projects</h1>
         <ButtonLink href="/dashboard/projects/new" size="sm">
           New project
         </ButtonLink>
