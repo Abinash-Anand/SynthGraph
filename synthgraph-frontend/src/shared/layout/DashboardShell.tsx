@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { Logo } from "@/components/navigation/Logo";
 import { cn } from "@/lib/utils";
+import { CommandPalette } from "@/shared/command-palette/CommandPalette";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 
@@ -18,6 +19,7 @@ export function DashboardShell({ email, children }: { email: string; children: R
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[240px_1fr]">
+      <CommandPalette />
       {mobileOpen ? (
         <button
           type="button"
