@@ -195,13 +195,16 @@ class TrainingRunsAPI:
         assert references is not None  # a one-item list always normalizes
         dataset_version_id = _dataset_version_id_from_reference(references[0])
 
-        data = self._http.post(
+        self._http.post(
             Routes.training_run_datasets(training_run_id),
             json={"datasetVersionId": dataset_version_id, "role": role},
             operation="training_runs.add_dataset",
         )
 
-        return TrainingRun.model_validate(data)
+        # The attach endpoint returns the new reference row (trainingRunId,
+        # datasetVersionId, role), not a TrainingRun -- same gap create()
+        # already works around by re-fetching after attaching datasets.
+        return self.get(training_run_id)
 
     def start(self, training_run_id: str) -> TrainingRun:
         """Mark a training run as running."""
