@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { cn } from "@/lib/utils";
 
 /**
@@ -23,6 +25,27 @@ export function ResearchWorkspace({
   inspectorTitle?: string;
 }) {
   const [mobileInspectorOpen, setMobileInspectorOpen] = useState(false);
+  const reducedMotion = useReducedMotion();
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const duration = reducedMotion ? 0 : 0.25;
+
+  // Same pattern as MobileMenu.tsx: lock page scroll behind the overlay,
+  // close on Escape, move focus into the panel per basic dialog practice.
+  useEffect(() => {
+    if (!mobileInspectorOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    closeButtonRef.current?.focus();
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileInspectorOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [mobileInspectorOpen]);
 
   return (
     <div className="flex items-start gap-6 xl:gap-8">
@@ -51,34 +74,49 @@ export function ResearchWorkspace({
             {inspectorTitle}
           </button>
 
-          {mobileInspectorOpen ? (
-            <div className="fixed inset-0 z-40 xl:hidden">
-              <button
-                type="button"
-                aria-label="Close inspector"
-                onClick={() => setMobileInspectorOpen(false)}
-                className="absolute inset-0 bg-research-bg/70"
-              />
-              <div
-                role="dialog"
-                aria-label={inspectorTitle}
-                className="absolute inset-y-0 right-0 flex w-full max-w-[380px] flex-col border-l border-research-border bg-research-panel"
+          <AnimatePresence>
+            {mobileInspectorOpen ? (
+              <motion.div
+                key="inspector-backdrop"
+                className="fixed inset-0 z-40 xl:hidden"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: duration * 0.7 }}
               >
-                <div className="flex items-center justify-between border-b border-research-border px-4 py-3">
-                  <p className="mono-label text-research-ink-secondary">{inspectorTitle}</p>
-                  <button
-                    type="button"
-                    onClick={() => setMobileInspectorOpen(false)}
-                    aria-label="Close"
-                    className="grid size-7 place-items-center rounded-md text-research-ink-muted hover:text-research-ink"
-                  >
-                    <CloseIcon />
-                  </button>
-                </div>
-                <div className="flex-1 overflow-y-auto">{inspector}</div>
-              </div>
-            </div>
-          ) : null}
+                <button
+                  type="button"
+                  aria-label="Close inspector"
+                  onClick={() => setMobileInspectorOpen(false)}
+                  className="absolute inset-0 bg-research-bg/70"
+                />
+                <motion.div
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={inspectorTitle}
+                  className="absolute inset-y-0 right-0 flex w-full max-w-[380px] flex-col border-l border-research-border bg-research-panel"
+                  initial={reducedMotion ? false : { x: "100%" }}
+                  animate={{ x: 0 }}
+                  exit={{ x: "100%" }}
+                  transition={{ duration, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  <div className="flex items-center justify-between border-b border-research-border px-4 py-3">
+                    <p className="mono-label text-research-ink-secondary">{inspectorTitle}</p>
+                    <button
+                      ref={closeButtonRef}
+                      type="button"
+                      onClick={() => setMobileInspectorOpen(false)}
+                      aria-label="Close"
+                      className="grid size-7 place-items-center rounded-md text-research-ink-muted hover:text-research-ink"
+                    >
+                      <CloseIcon />
+                    </button>
+                  </div>
+                  <div className="flex-1 overflow-y-auto">{inspector}</div>
+                </motion.div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
         </>
       ) : null}
     </div>

@@ -184,7 +184,21 @@ export function ExperimentWorkspace({
         }}
       />
       <Tabs tabs={TABS} />
-      <ResearchWorkspace canvas={canvas} inspector={inspector} inspectorTitle={inspectorTitle} />
+      <ResearchWorkspace
+        canvas={
+          <div key={activeTab} className="research-fade-in">
+            {canvas}
+          </div>
+        }
+        inspector={
+          inspector ? (
+            <div key={serializeSelectedEntity(selected) ?? "none"} className="research-fade-in">
+              {inspector}
+            </div>
+          ) : null
+        }
+        inspectorTitle={inspectorTitle}
+      />
     </div>
   );
 }

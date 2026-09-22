@@ -80,8 +80,22 @@ function LineageNodeRenderer({ data }: NodeProps) {
 
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-pressed={selected}
+      aria-label={`${kind.replace("-", " ")}: ${label}${sublabel ? `, ${sublabel}` : ""}`}
+      // React Flow's own click handling is wired at the <ReactFlow>
+      // level (onNodeClick), not per-node - dispatching a real click via
+      // .click() on Enter/Space runs through that same pipeline rather
+      // than needing onNodeSelect threaded into every node's closure.
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          event.currentTarget.click();
+        }
+      }}
       className={cn(
-        "rounded-lg border bg-research-surface px-3 py-2.5 transition-opacity duration-200",
+        "cursor-pointer rounded-lg border bg-research-surface px-3 py-2.5 transition-opacity duration-200",
         muted ? "opacity-30" : "opacity-100",
       )}
       style={{
