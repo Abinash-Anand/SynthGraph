@@ -1,10 +1,18 @@
+import Link from "next/link";
 import { buildComparisonRows } from "@/features/comparisons/lib/parameter-diff";
-import type { Generation } from "@/features/generations/types/generation";
+import type { ComparedGeneration } from "@/features/comparisons/types/comparison";
 import { cn } from "@/lib/utils";
 
-// Headers aren't hyperlinked: a Generation only carries `experiment_id`,
-// and there's no confirmed route to resolve `projectId` from that alone.
-export function ComparisonTable({ generations }: { generations: Generation[] }) {
+export function ComparisonTable({
+  generations,
+  projectIdByExperimentId,
+}: {
+  generations: ComparedGeneration[];
+  /** Resolved server-side (this shape only carries experimentId, not
+   * projectId) via the flat GET /experiments/:id route — missing entries
+   * (a lookup that failed) fall back to plain text instead of a link. */
+  projectIdByExperimentId: Record<string, string>;
+}) {
   const rows = buildComparisonRows(generations);
 
   return (
@@ -12,12 +20,26 @@ export function ComparisonTable({ generations }: { generations: Generation[] }) 
       <table className="w-full border-collapse text-[13px]">
         <thead>
           <tr className="border-b border-line bg-surface/60">
-            <th className="px-3 py-2 text-left font-mono text-[11px] text-ink-faint">field</th>
-            {generations.map((generation) => (
-              <th key={generation.id} className="px-3 py-2 text-left text-ink">
-                {generation.name}
-              </th>
-            ))}
+            <th scope="col" className="px-3 py-2 text-left font-mono text-[11px] text-ink-faint">
+              field
+            </th>
+            {generations.map((generation) => {
+              const projectId = projectIdByExperimentId[generation.experimentId];
+              return (
+                <th key={generation.id} scope="col" className="px-3 py-2 text-left text-ink">
+                  {projectId ? (
+                    <Link
+                      href={`/dashboard/projects/${projectId}/experiments/${generation.experimentId}/generations/${generation.id}`}
+                      className="underline underline-offset-2 hover:text-cyan"
+                    >
+                      {generation.name}
+                    </Link>
+                  ) : (
+                    generation.name
+                  )}
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>

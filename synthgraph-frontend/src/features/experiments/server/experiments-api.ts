@@ -35,3 +35,14 @@ export const getExperimentForProject = cache(
     return backendFetch(`/projects/${projectId}/experiments/${experimentId}`, { token: apiKey });
   },
 );
+
+/**
+ * Flat lookup — used when only an experimentId is in hand (e.g. resolving
+ * a Generation's `experiment_id` back to its `projectId` for a link, since
+ * Generation itself doesn't carry projectId). cache()'d since the same
+ * experiment is often looked up more than once per request (e.g. several
+ * compared generations sharing one experiment).
+ */
+export const getExperiment = cache((apiKey: string, experimentId: string): Promise<Experiment> => {
+  return backendFetch(`/experiments/${experimentId}`, { token: apiKey });
+});

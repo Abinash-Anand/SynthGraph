@@ -1,4 +1,4 @@
-import type { Generation } from "@/features/generations/types/generation";
+import type { ComparedGeneration } from "@/features/comparisons/types/comparison";
 
 export type ComparisonRow = {
   label: string;
@@ -10,10 +10,10 @@ export type ComparisonRow = {
 
 /** Fixed rows first, then the union of `parameters.*` keys across all
  * compared generations (missing key on one → "—"). */
-export function buildComparisonRows(generations: Generation[]): ComparisonRow[] {
+export function buildComparisonRows(generations: ComparedGeneration[]): ComparisonRow[] {
   const rows: ComparisonRow[] = [];
 
-  const addRow = (label: string, getValue: (generation: Generation) => unknown) => {
+  const addRow = (label: string, getValue: (generation: ComparedGeneration) => unknown) => {
     const raw = generations.map(getValue);
     const baseline = JSON.stringify(raw[0]);
     rows.push({
@@ -26,9 +26,9 @@ export function buildComparisonRows(generations: Generation[]): ComparisonRow[] 
   addRow("ID", (g) => g.id);
   addRow("Status", (g) => g.status);
   addRow("Generator", (g) => `${g.generator.name}${g.generator.version ? ` @ ${g.generator.version}` : ""}`);
-  addRow("Started", (g) => g.started_at);
-  addRow("Completed", (g) => g.completed_at);
-  addRow("Created", (g) => g.created_at);
+  addRow("Started", (g) => g.startedAt);
+  addRow("Completed", (g) => g.completedAt);
+  addRow("Created", (g) => g.createdAt);
 
   const parameterKeys = Array.from(
     new Set(generations.flatMap((g) => Object.keys(g.parameters))),

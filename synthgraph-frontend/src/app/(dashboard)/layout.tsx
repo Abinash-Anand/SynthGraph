@@ -1,9 +1,7 @@
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { getSession } from "@/features/auth/server/session";
-import { Logo } from "@/components/navigation/Logo";
-import { Sidebar } from "@/shared/layout/Sidebar";
-import { Topbar } from "@/shared/layout/Topbar";
+import { DashboardShell } from "@/shared/layout/DashboardShell";
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const session = await getSession();
@@ -15,23 +13,5 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     redirect("/api/auth/clear-session?next=/login");
   }
 
-  return (
-    <div className="grid min-h-screen grid-cols-[240px_1fr]">
-      <aside className="flex flex-col border-r border-line">
-        <div className="flex h-14 items-center border-b border-line px-5">
-          <Logo />
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          <Sidebar />
-        </div>
-      </aside>
-
-      <div className="flex flex-col">
-        <Topbar email={session.user.email} />
-        <main id="main" className="flex-1 p-8">
-          {children}
-        </main>
-      </div>
-    </div>
-  );
+  return <DashboardShell email={session.user.email}>{children}</DashboardShell>;
 }

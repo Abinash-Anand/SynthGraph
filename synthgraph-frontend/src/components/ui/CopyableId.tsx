@@ -20,6 +20,7 @@ export function CopyableId({ id, className }: { id: string; className?: string }
     <button
       type="button"
       onClick={onCopy}
+      aria-label={copied ? "Copied ID to clipboard" : `Copy ID ${id}`}
       className={cn(
         "inline-flex items-center gap-2 rounded-md border border-line px-2.5 py-1",
         "font-mono text-[11px] text-ink-faint transition-colors duration-200 hover:border-cyan/40 hover:text-ink",

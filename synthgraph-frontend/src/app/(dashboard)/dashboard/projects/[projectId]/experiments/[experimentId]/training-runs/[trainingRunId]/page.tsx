@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { CodeBlock } from "@/components/ui/CodeBlock";
 import { getSession, requireSession } from "@/features/auth/server/session";
+import type { DatasetVersion } from "@/features/datasets/types/dataset";
 import { EvaluationResultRow } from "@/features/evaluation-results/components/EvaluationResultRow";
 import { listEvaluationResults } from "@/features/evaluation-results/server/evaluation-results-api";
 import { CaptureStatusBadge } from "@/features/training-runs/components/CaptureStatusBadge";
@@ -17,6 +18,7 @@ import { getTrainingRun } from "@/features/training-runs/server/training-runs-ap
 import { NotFoundError } from "@/shared/http/errors";
 import { formatDateTime } from "@/shared/lib/format";
 import { EmptyState } from "@/shared/ui/EmptyState";
+import { LineageDiagram, type LineageNode } from "@/shared/ui/LineageDiagram";
 
 type PageParams = { projectId: string; experimentId: string; trainingRunId: string };
 
@@ -96,6 +98,40 @@ export default async function TrainingRunDetailPage({ params }: { params: Promis
         <CaptureStatusControl trainingRunId={trainingRunId} current={trainingRun.captureStatus} />
       </div>
 
+      <Section title="Lineage">
+        <LineageDiagram
+          columns={[
+            {
+              title: `Datasets used (${trainingRun.datasets?.length ?? 0})`,
+              emptyLabel: "None",
+              nodes: (trainingRun.datasets ?? []).map(toDatasetLineageNode),
+            },
+            {
+              title: "This training run",
+              emptyLabel: "—",
+              nodes: [
+                {
+                  key: trainingRun.id,
+                  label: trainingRun.name,
+                  sublabel: trainingRun.trainer.name,
+                  colorVar: "--color-node-training",
+                },
+              ],
+            },
+            {
+              title: `Evaluations (${evaluations.length})`,
+              emptyLabel: "None",
+              nodes: evaluations.map((evaluation) => ({
+                key: evaluation.id,
+                label: evaluation.name ?? evaluation.id,
+                colorVar: "--color-node-evaluation",
+                href: `/dashboard/projects/${projectId}/experiments/${experimentId}/training-runs/${trainingRunId}/evaluations/${evaluation.id}`,
+              })),
+            },
+          ]}
+        />
+      </Section>
+
       <Section title="Trainer">
         <CodeBlock language="json" code={JSON.stringify(trainingRun.trainer, null, 2)} />
       </Section>
@@ -125,9 +161,13 @@ export default async function TrainingRunDetailPage({ params }: { params: Promis
         <Section title={`Datasets (${trainingRun.datasets.length})`}>
           <ul className="flex flex-col gap-2">
             {trainingRun.datasets.map((version) => (
-              <li key={version.id} className="rounded-md border border-line bg-surface/40 p-3">
-                <p className="text-[13.5px] text-ink">{version.version}</p>
-                <p className="mt-0.5 truncate font-mono text-[11px] text-ink-faint">{version.uri}</p>
+              <li key={version.id}>
+                <Link href={`/dashboard/datasets/${version.datasetId}/versions/${version.id}`}>
+                  <div className="rounded-md border border-line bg-surface/40 p-3 transition-colors duration-200 hover:bg-surface-2/60">
+                    <p className="text-[13.5px] text-ink">{version.version}</p>
+                    <p className="mt-0.5 truncate font-mono text-[11px] text-ink-faint">{version.uri}</p>
+                  </div>
+                </Link>
               </li>
             ))}
           </ul>
@@ -156,6 +196,16 @@ export default async function TrainingRunDetailPage({ params }: { params: Promis
       </Section>
     </div>
   );
+}
+
+function toDatasetLineageNode(version: DatasetVersion): LineageNode {
+  return {
+    key: version.id,
+    label: version.version,
+    sublabel: version.uri,
+    colorVar: "--color-node-dataset",
+    href: `/dashboard/datasets/${version.datasetId}/versions/${version.id}`,
+  };
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {

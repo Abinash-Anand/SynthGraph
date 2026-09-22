@@ -11,9 +11,15 @@ export function MetricsTable({ metrics }: { metrics: TrainingRunMetric[] }) {
       <table className="w-full border-collapse text-[13px]">
         <thead>
           <tr className="border-b border-line bg-surface/60">
-            <th className="px-3 py-2 text-left font-mono text-[11px] text-ink-faint">step</th>
+            <th scope="col" className="px-3 py-2 text-left font-mono text-[11px] text-ink-faint">
+              step
+            </th>
             {keys.map((key) => (
-              <th key={key} className="px-3 py-2 text-left font-mono text-[11px] text-ink-faint">
+              <th
+                key={key}
+                scope="col"
+                className="px-3 py-2 text-left font-mono text-[11px] text-ink-faint"
+              >
                 {key}
               </th>
             ))}

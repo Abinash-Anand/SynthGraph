@@ -11,6 +11,7 @@ import { getGeneration } from "@/features/generations/server/generations-api";
 import type { GenerationDataReference } from "@/features/generations/types/generation";
 import { NotFoundError } from "@/shared/http/errors";
 import { formatDateTime } from "@/shared/lib/format";
+import { LineageDiagram, type LineageNode } from "@/shared/ui/LineageDiagram";
 
 type PageParams = { projectId: string; experimentId: string; generationId: string };
 
@@ -101,6 +102,35 @@ export default async function GenerationDetailPage({ params }: { params: Promise
         </div>
       </div>
 
+      <Section title="Lineage">
+        <LineageDiagram
+          columns={[
+            {
+              title: `Inputs (${generation.inputs.length})`,
+              emptyLabel: "None",
+              nodes: generation.inputs.map(toLineageNode),
+            },
+            {
+              title: "This generation",
+              emptyLabel: "—",
+              nodes: [
+                {
+                  key: generation.id,
+                  label: generation.name,
+                  sublabel: generation.generator.name,
+                  colorVar: "--color-node-generation",
+                },
+              ],
+            },
+            {
+              title: `Outputs (${generation.outputs.length})`,
+              emptyLabel: "None",
+              nodes: generation.outputs.map(toLineageNode),
+            },
+          ]}
+        />
+      </Section>
+
       <Section title="Generator">
         <CodeBlock language="json" code={JSON.stringify(generation.generator, null, 2)} />
       </Section>
@@ -138,6 +168,21 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
       {children}
     </div>
   );
+}
+
+// These are generic data references stored directly on the generation, not
+// guaranteed to be real linkable Dataset/Asset entities (only the
+// reproduction manifest's `datasetReferences` are) — so no href, and the
+// dataset/asset color is a best-effort guess from the free-text `type`
+// field, not an authoritative distinction.
+function toLineageNode(reference: GenerationDataReference): LineageNode {
+  const isAsset = reference.type?.toLowerCase().includes("asset") ?? false;
+  return {
+    key: reference.id,
+    label: reference.name ?? reference.id,
+    sublabel: reference.uri,
+    colorVar: isAsset ? "--color-node-asset" : "--color-node-dataset",
+  };
 }
 
 function DataReferenceList({ references }: { references: GenerationDataReference[] }) {
