@@ -42,6 +42,35 @@
   --color-node-training: #d9a441;
   --color-node-evaluation: #46b97e;
 
+  /* ---------------------------------------------------------------- *
+   * Research-workspace palette (docs/design.md) — additive, namespaced
+   * "research-*" rather than overwriting the tokens above. The dashboard
+   * redesign (Phase 4) adopts these incrementally, route by route; the
+   * marketing site and unmigrated dashboard screens keep using the
+   * existing void/surface/ink/cyan tokens untouched until each screen is
+   * actually rebuilt. --color-node-* above stays shared by both palettes
+   * (reused for lineage-graph node styling in the new workspace too).
+   * ---------------------------------------------------------------- */
+  --color-research-bg: #09090b;
+  --color-research-surface: #111113;
+  --color-research-panel: #131316;
+  --color-research-elevated: #18181b;
+  --color-research-subtle: #1f1f23;
+  --color-research-border: #27272a;
+
+  --color-research-ink: #f4f4f5;
+  --color-research-ink-secondary: #a1a1aa;
+  --color-research-ink-muted: #71717a;
+
+  --color-research-accent: #8b5cf6;
+  --color-research-accent-hover: #a78bfa;
+  --color-research-accent-subtle: #6d28d9;
+
+  --color-research-success: #22c55e;
+  --color-research-warning: #f59e0b;
+  --color-research-error: #ef4444;
+  --color-research-info: #38bdf8;
+
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, sans-serif;
   --font-mono: var(--font-mono-face), ui-monospace, "SF Mono", "JetBrains Mono",

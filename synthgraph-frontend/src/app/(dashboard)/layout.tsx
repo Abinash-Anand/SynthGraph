@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { getSession } from "@/features/auth/server/session";
 import { DashboardShell } from "@/shared/layout/DashboardShell";
+import { QueryProvider } from "@/shared/query/QueryProvider";
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const session = await getSession();
@@ -13,5 +14,9 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     redirect("/api/auth/clear-session?next=/login");
   }
 
-  return <DashboardShell email={session.user.email}>{children}</DashboardShell>;
+  return (
+    <QueryProvider>
+      <DashboardShell email={session.user.email}>{children}</DashboardShell>
+    </QueryProvider>
+  );
 }
