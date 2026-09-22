@@ -5,6 +5,7 @@ from __future__ import annotations
 import typer
 
 from ..context import CLIContext
+from ..interactive import resolve_asset, resolve_asset_version
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -44,10 +45,12 @@ def list_assets(
 @app.command("get")
 def get_asset(
     ctx: typer.Context,
-    asset_id: str = typer.Argument(..., help="Asset ID."),
+    asset_id: str | None = typer.Argument(None, help="Asset ID."),
     json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a field list."),
 ) -> None:
     """Show one asset's logical identity.
+
+    Omitting the ID in an interactive terminal prompts you to pick one.
 
     Example:
 
@@ -55,6 +58,7 @@ def get_asset(
     """
     cli: CLIContext = ctx.obj
     out = cli.output(json_output)
+    asset_id = resolve_asset(ctx, asset_id)
 
     asset = cli.client().assets.get(asset_id)
 
@@ -77,10 +81,12 @@ def get_asset(
 @app.command("versions")
 def list_asset_versions(
     ctx: typer.Context,
-    asset_id: str = typer.Argument(..., help="Asset ID."),
+    asset_id: str | None = typer.Argument(None, help="Asset ID."),
     json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a table."),
 ) -> None:
     """List the versions recorded for an asset.
+
+    Omitting the ID in an interactive terminal prompts you to pick one.
 
     Example:
 
@@ -88,6 +94,7 @@ def list_asset_versions(
     """
     cli: CLIContext = ctx.obj
     out = cli.output(json_output)
+    asset_id = resolve_asset(ctx, asset_id)
 
     versions = cli.client().assets.list_versions(asset_id)
     rows = [version.to_dict() for version in versions]
@@ -98,10 +105,13 @@ def list_asset_versions(
 @app.command("get-version")
 def get_asset_version(
     ctx: typer.Context,
-    asset_version_id: str = typer.Argument(..., help="Asset version ID."),
+    asset_version_id: str | None = typer.Argument(None, help="Asset version ID."),
     json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a field list."),
 ) -> None:
     """Show one immutable asset version.
+
+    Omitting the ID in an interactive terminal prompts you to pick an
+    asset, then a version of it.
 
     Example:
 
@@ -109,6 +119,7 @@ def get_asset_version(
     """
     cli: CLIContext = ctx.obj
     out = cli.output(json_output)
+    asset_version_id = resolve_asset_version(ctx, asset_version_id)
 
     version = cli.client().assets.get_version(asset_version_id)
 

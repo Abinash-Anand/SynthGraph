@@ -5,6 +5,7 @@ from __future__ import annotations
 import typer
 
 from ..context import CLIContext
+from ..interactive import resolve_evaluation, resolve_training_run
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -22,12 +23,15 @@ _COLUMNS = [
 @app.command("list")
 def list_evaluations(
     ctx: typer.Context,
-    training_run: str = typer.Option(
-        ..., "--training-run", "-t", help="Training run ID."
+    training_run: str | None = typer.Option(
+        None, "--training-run", "-t", help="Training run ID."
     ),
     json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a table."),
 ) -> None:
     """List the evaluation results recorded for a training run.
+
+    Omitting ``--training-run`` in an interactive terminal prompts you to
+    pick one.
 
     Example:
 
@@ -35,6 +39,7 @@ def list_evaluations(
     """
     cli: CLIContext = ctx.obj
     out = cli.output(json_output)
+    training_run = resolve_training_run(ctx, training_run)
 
     evaluations = cli.client().evaluations.list(training_run_id=training_run)
 
@@ -58,10 +63,13 @@ def list_evaluations(
 @app.command("get")
 def get_evaluation(
     ctx: typer.Context,
-    evaluation_id: str = typer.Argument(..., help="Evaluation result ID."),
+    evaluation_id: str | None = typer.Argument(None, help="Evaluation result ID."),
     json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a field list."),
 ) -> None:
     """Show one evaluation result.
+
+    Omitting the ID in an interactive terminal prompts you to pick a
+    project, then an experiment, then a training run, then an evaluation.
 
     Example:
 
@@ -69,6 +77,7 @@ def get_evaluation(
     """
     cli: CLIContext = ctx.obj
     out = cli.output(json_output)
+    evaluation_id = resolve_evaluation(ctx, evaluation_id)
 
     evaluation = cli.client().evaluations.get(evaluation_id)
 

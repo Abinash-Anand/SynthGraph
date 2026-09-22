@@ -5,6 +5,7 @@ from __future__ import annotations
 import typer
 
 from ..context import CLIContext
+from ..interactive import resolve_dataset, resolve_dataset_version
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -45,10 +46,12 @@ def list_datasets(
 @app.command("get")
 def get_dataset(
     ctx: typer.Context,
-    dataset_id: str = typer.Argument(..., help="Dataset ID."),
+    dataset_id: str | None = typer.Argument(None, help="Dataset ID."),
     json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a field list."),
 ) -> None:
     """Show one dataset's logical identity.
+
+    Omitting the ID in an interactive terminal prompts you to pick one.
 
     Example:
 
@@ -56,6 +59,7 @@ def get_dataset(
     """
     cli: CLIContext = ctx.obj
     out = cli.output(json_output)
+    dataset_id = resolve_dataset(ctx, dataset_id)
 
     dataset = cli.client().datasets.get(dataset_id)
 
@@ -77,10 +81,12 @@ def get_dataset(
 @app.command("versions")
 def list_dataset_versions(
     ctx: typer.Context,
-    dataset_id: str = typer.Argument(..., help="Dataset ID."),
+    dataset_id: str | None = typer.Argument(None, help="Dataset ID."),
     json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a table."),
 ) -> None:
     """List the versions recorded for a dataset.
+
+    Omitting the ID in an interactive terminal prompts you to pick one.
 
     Example:
 
@@ -88,6 +94,7 @@ def list_dataset_versions(
     """
     cli: CLIContext = ctx.obj
     out = cli.output(json_output)
+    dataset_id = resolve_dataset(ctx, dataset_id)
 
     versions = cli.client().datasets.list_versions(dataset_id)
     rows = [version.to_dict() for version in versions]
@@ -98,10 +105,13 @@ def list_dataset_versions(
 @app.command("get-version")
 def get_dataset_version(
     ctx: typer.Context,
-    dataset_version_id: str = typer.Argument(..., help="Dataset version ID."),
+    dataset_version_id: str | None = typer.Argument(None, help="Dataset version ID."),
     json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a field list."),
 ) -> None:
     """Show one immutable dataset version.
+
+    Omitting the ID in an interactive terminal prompts you to pick a
+    dataset, then a version of it.
 
     Example:
 
@@ -109,6 +119,7 @@ def get_dataset_version(
     """
     cli: CLIContext = ctx.obj
     out = cli.output(json_output)
+    dataset_version_id = resolve_dataset_version(ctx, dataset_version_id)
 
     version = cli.client().datasets.get_version(dataset_version_id)
 

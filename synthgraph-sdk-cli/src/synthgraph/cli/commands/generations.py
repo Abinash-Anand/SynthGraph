@@ -9,6 +9,7 @@ import typer
 
 from ...errors import SynthGraphValidationError
 from ..context import CLIContext
+from ..interactive import resolve_experiment, resolve_generation
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -19,7 +20,7 @@ app = typer.Typer(
 @app.command("list")
 def list_generations(
     ctx: typer.Context,
-    experiment: str = typer.Option(..., "--experiment", "-e", help="Experiment ID."),
+    experiment: str | None = typer.Option(None, "--experiment", "-e", help="Experiment ID."),
     parameters: str | None = typer.Option(
         None,
         "--parameters",
@@ -29,7 +30,8 @@ def list_generations(
 ) -> None:
     """List the generation runs in an experiment.
 
-    Filtering is performed by the backend.
+    Filtering is performed by the backend. Omitting ``--experiment`` in an
+    interactive terminal prompts you to pick one.
 
     Examples:
 
@@ -40,6 +42,7 @@ def list_generations(
     """
     cli: CLIContext = ctx.obj
     out = cli.output(json_output)
+    experiment = resolve_experiment(ctx, experiment)
 
     generations = cli.client().generations.list(
         experiment_id=experiment,
@@ -79,10 +82,13 @@ def list_generations(
 @app.command("get")
 def get_generation(
     ctx: typer.Context,
-    generation_id: str = typer.Argument(..., help="Generation ID."),
+    generation_id: str | None = typer.Argument(None, help="Generation ID."),
     json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a field list."),
 ) -> None:
     """Show one generation run, including its parameters and provenance.
+
+    Omitting the ID in an interactive terminal prompts you to pick a
+    project, then an experiment, then a generation within it.
 
     Example:
 
@@ -90,6 +96,7 @@ def get_generation(
     """
     cli: CLIContext = ctx.obj
     out = cli.output(json_output)
+    generation_id = resolve_generation(ctx, generation_id)
 
     generation = cli.client().generations.get(generation_id)
 

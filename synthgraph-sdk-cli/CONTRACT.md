@@ -1077,3 +1077,79 @@ registered-groups list. `ruff` and `mypy` clean.
 CLI parity is now complete across every capture-side resource: auth,
 projects, experiments, generations, training-runs, evaluations, assets,
 datasets.
+
+### 2.39 The CLI resolves an omitted ID instead of just failing on it
+
+Every lookup command required already knowing the exact ID to type -
+`--project <uuid>`, a bare `<generation-id>`, and so on. Requested directly:
+make the CLI "smart" - automatic, with suggestions, nothing manual. Four
+distinct things turned out to be bundled under that one ask, with different
+costs:
+
+* **Shell tab-completion** - Typer/Click ship this already; it was
+  explicitly turned off (`add_completion=False`). Flipped on. One line.
+  Completes command and option *names*, not resource IDs - the backend
+  has no route shaped for "complete a partial UUID."
+* **"Did you mean...?" on typos** - already built into Click 8.x for both
+  top-level and nested subcommands (confirmed live: `trainig-runs` ->
+  "Did you mean 'training-runs'?"). No code needed; this was assumed
+  missing and wasn't.
+* **Remembered context** - a new `cli/state.py` persists the last-used ID
+  of each kind (project, experiment, training run, ...) to
+  `~/.synthgraph/cli-state.json`. Read-only convenience: never consulted
+  for anything that reaches the backend, only for filling in what a
+  lookup command runs against when nothing else is given. Corrupt or
+  unreadable state is treated as empty, not raised - losing a remembered
+  ID is never worse than asking again.
+* **Interactive drill-down pickers** - the expensive one. A new
+  `cli/interactive.py` adds one `resolve_*` function per resource
+  (`resolve_project`, `resolve_experiment`, `resolve_generation`,
+  `resolve_training_run`, `resolve_evaluation`, `resolve_asset(_version)`,
+  `resolve_dataset(_version)`). Each: returns an explicit value as-is
+  (remembering it for next time); otherwise, if a real terminal is
+  attached, lists the caller's actual resources and prompts a numbered
+  pick, defaulting to whatever's remembered; otherwise raises the same
+  `SynthGraphConfigurationError` (-> `ExitCode.USAGE`) a missing required
+  argument always raised. Several resources have no "list everything"
+  backend route (`experiments.list()` needs a `project_id`,
+  `training_runs.list()` needs an `experiment_id`, ...), so a resolver
+  missing its parent scope calls the parent's own resolver first -
+  `training-runs get` with nothing given picks a project, then an
+  experiment, then finally lists training runs. Every `Argument`/`Option`
+  this touches moved from Typer-required (`...`) to optional (`None`),
+  since Click's own required-parameter check happens during parsing,
+  before a command body - and therefore this resolution logic - ever
+  runs.
+
+**Interactivity gate:** `is_interactive()` checks `sys.stdin.isatty()`
+only. Under pytest (stdin captured) and in any real script or pipe, this
+is `False`, so every existing "missing required argument" test kept
+passing unmodified - the resolver takes the non-interactive branch and
+raises the identical usage error a required Typer argument used to raise
+at the parser level. New interactive-path tests
+(`tests/cli/test_interactive.py`) drive the actual resolver logic by
+monkeypatching `is_interactive()` and `typer.prompt` rather than a real
+TTY, which this environment cannot provide - confirmed live instead
+against the running dev server through the real console script (a
+genuinely TTY-reporting shell), where the picker listed real projects,
+correctly marked and defaulted to the remembered one, and correctly fell
+back to the usage error the moment stdin was piped instead of attached to
+a terminal.
+
+**A real isolation bug found and fixed while building this**: the first
+manual `pytest` run of the interactive-resolver code wrote real (fake,
+but real-looking) IDs into the *developer's actual*
+`~/.synthgraph/cli-state.json`, because nothing pointed the test suite at
+an isolated state file. Fixed with an autouse `isolated_cli_state` fixture
+in `tests/cli/conftest.py` that redirects `SYNTHGRAPH_CLI_STATE_PATH` to a
+`tmp_path` for every CLI test - and `state_path()` was written from the
+start to honor that env var override for exactly this reason.
+
+New tests: `tests/cli/test_interactive.py` (7 tests: non-interactive usage
+error with the new wording, interactive pick, remembered-as-default,
+empty-list error, two- and three-level drill-down, invalid-selection
+error). All affected command files
+(`experiments`/`generations`/`training_runs`/`evaluations`/`assets`/`datasets`)
+updated to call the matching resolver. `mypy` and `ruff` clean; full suite
+green apart from the two pre-existing, unrelated Windows path-separator
+failures.

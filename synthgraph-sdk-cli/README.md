@@ -230,6 +230,36 @@ synthgraph docs <generation-id> --output experiment.md
 
 Every command takes `--json` for scripting. `--help` works at every level.
 
+### You don't have to already know the ID
+
+Every lookup argument above (`--project`, `--experiment`, `--training-run`,
+a bare `<id>`) is optional in an interactive terminal. Leave it out and the
+CLI:
+
+1. reuses the last ID of that kind you used on this machine, if there is
+   one (remembered in `~/.synthgraph/cli-state.json` - nothing here ever
+   affects what gets written to the backend, only which lookup runs by
+   default), or
+2. lists your actual resources and asks you to pick one, drilling into
+   whatever parent scope it needs first - asking for a training run with
+   no experiment yet picks a project, then an experiment, then lists its
+   training runs
+
+```bash
+$ synthgraph training-runs get
+No ID given. Pick one:
+  1. yolo_v3_baseline (a1b2c3d4-...)  (last used)
+  2. yolo_v3_augmented (e5f6a7b8-...)
+Enter a number (1-2) [1]:
+```
+
+None of this ever triggers in a script or a pipeline: it only engages when
+stdin is a real terminal, so a script that omits a required ID still gets
+the same immediate, scriptable usage error it always did. Mistyped command
+names also get a suggestion (`No such command 'trainig-runs'. Did you mean
+'training-runs'?`), and `synthgraph --install-completion` sets up shell tab
+completion for command and option names (not resource IDs).
+
 The CLI is a query and export surface. Creating projects, experiments,
 generations, training runs, evaluations, assets and datasets belongs to the
 SDK, so there is only one write API to learn and maintain.

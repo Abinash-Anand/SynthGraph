@@ -36,6 +36,17 @@ class CLIResult:
         return self.stdout + self.stderr
 
 
+@pytest.fixture(autouse=True)
+def isolated_cli_state(tmp_path, monkeypatch) -> None:
+    """Never let a test read or write the real ~/.synthgraph/cli-state.json.
+
+    Without this, a test that exercises the interactive resolvers would
+    silently pollute (or depend on) whatever remembered state happens to
+    exist on the machine running the suite.
+    """
+    monkeypatch.setenv("SYNTHGRAPH_CLI_STATE_PATH", str(tmp_path / "cli-state.json"))
+
+
 @pytest.fixture
 def run_cli(backend: MockBackend, monkeypatch) -> Iterator[Callable[..., CLIResult]]:
     """Run the CLI end to end against the mock backend."""
