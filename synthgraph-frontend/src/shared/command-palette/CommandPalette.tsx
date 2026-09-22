@@ -3,6 +3,7 @@
 import { Command } from "cmdk";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { cn } from "@/lib/utils";
 
 type CommandEntry = { id: string; label: string; href: string; group: string };
 
@@ -73,14 +74,20 @@ export function CommandPalette() {
       open={open}
       onOpenChange={setOpen}
       label="Command palette"
-      className={
-        open
-          ? "fixed inset-0 z-[60] flex items-start justify-center bg-research-bg/70 pt-[15vh]"
-          : "hidden"
-      }
+      className={cn(
+        "fixed inset-0 z-[60] flex items-start justify-center bg-research-bg/70 pt-[15vh]",
+        "transition-opacity duration-200",
+        open ? "opacity-100" : "pointer-events-none opacity-0",
+      )}
       shouldFilter
     >
-      <div className="w-full max-w-[560px] overflow-hidden rounded-xl border border-research-border bg-research-panel shadow-2xl">
+      <div
+        className={cn(
+          "w-full max-w-[560px] overflow-hidden rounded-xl border border-research-border bg-research-panel shadow-2xl",
+          "transition-[transform,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]",
+          open ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0",
+        )}
+      >
         <Command.Input
           autoFocus
           placeholder="Type a command or search..."

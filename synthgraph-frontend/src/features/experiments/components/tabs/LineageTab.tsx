@@ -1,17 +1,25 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useMemo } from "react";
-import {
-  LineageGraph,
-  type LineageGraphEdge,
-  type LineageGraphNode,
-  type LineageNodeKind,
+import type {
+  LineageGraphEdge,
+  LineageGraphNode,
+  LineageNodeKind,
 } from "@/shared/lineage/LineageGraph";
 import type {
   EnrichedGeneration,
   EnrichedTrainingRun,
   SelectedEntity,
 } from "../../types/experiment-workspace";
+
+// @xyflow/react is a sizeable dependency (canvas/graph engine + its own
+// CSS) - only load it when the Lineage tab actually renders, not as part
+// of every Experiment Detail page's initial bundle.
+const LineageGraph = dynamic(
+  () => import("@/shared/lineage/LineageGraph").then((m) => m.LineageGraph),
+  { ssr: false, loading: () => <div className="h-[460px] animate-pulse rounded-xl bg-research-panel" /> },
+);
 
 export function LineageTab({
   generations,

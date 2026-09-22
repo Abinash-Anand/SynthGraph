@@ -5,6 +5,7 @@ import { CaptureStatusBadge } from "@/features/training-runs/components/CaptureS
 import { CaptureStatusControl } from "@/features/training-runs/components/CaptureStatusControl";
 import { TrainingRunStatusBadge } from "@/features/training-runs/components/TrainingRunStatusBadge";
 import { TrainingRunStatusControl } from "@/features/training-runs/components/TrainingRunStatusControl";
+import { useLiveTrainingRun } from "@/features/training-runs/hooks/useLiveTrainingRun";
 import type { TrainingRunHealthMetric } from "@/features/reports/types/report";
 import { cn } from "@/lib/utils";
 import { formatDateTime } from "@/shared/lib/format";
@@ -41,7 +42,14 @@ export function TrainingRunInspector({
   enriched: EnrichedTrainingRun;
   onSelectEvaluation: (id: string) => void;
 }) {
-  const { run, metrics, evaluations, health, drift } = enriched;
+  const { health, drift } = enriched;
+  // Server-prefetched props are the baseline; polling only overrides once
+  // it actually has fresher data, and only ever runs at all if the run
+  // started non-terminal (see useLiveTrainingRun's own reasoning).
+  const { live, isPolling, isLive } = useLiveTrainingRun(enriched.run.id, enriched.run.status);
+  const run = live?.run ?? enriched.run;
+  const metrics = live?.metrics ?? enriched.metrics;
+  const evaluations = live?.evaluations ?? enriched.evaluations;
 
   return (
     <div className="flex flex-col gap-6 p-5">
@@ -51,6 +59,18 @@ export function TrainingRunInspector({
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <TrainingRunStatusBadge status={run.status} />
           <CaptureStatusBadge status={run.captureStatus?.status ?? null} />
+          {isLive ? (
+            <span className="inline-flex items-center gap-1.5 font-mono text-[10px] tracking-[0.1em] text-research-info uppercase">
+              <span
+                className={cn(
+                  "size-1.5 rounded-full bg-research-info",
+                  isPolling && "motion-safe:animate-pulse",
+                )}
+                aria-hidden
+              />
+              Live
+            </span>
+          ) : null}
         </div>
       </div>
 
