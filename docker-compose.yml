@@ -33,6 +33,7 @@ services:
       context: ./synthgraph-frontend
     environment:
       NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3001}
+      SYNTHGRAPH_API_URL: http://backend:3000
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       DEMO_NOTIFY_TO: ${DEMO_NOTIFY_TO:-}
       DEMO_NOTIFY_FROM: ${DEMO_NOTIFY_FROM:-}

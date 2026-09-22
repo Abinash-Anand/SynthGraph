@@ -113,6 +113,21 @@ export function TextArea({
   );
 }
 
+/** A `TextArea` for optional free-form JSON-object input (see shared/lib/json-field.ts). */
+export function JsonField(props: BaseProps & {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <TextArea
+      {...props}
+      rows={4}
+      placeholder={props.placeholder ?? '{"key": "value"}'}
+    />
+  );
+}
+
 export function SelectField({
   value,
   onChange,

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { toFieldErrors as toFieldErrorsGeneric } from "@/shared/lib/validation";
 
 export const ROLE_OPTIONS = [
   "PhD Researcher",
@@ -103,14 +104,6 @@ export const EMPTY_DEMO_REQUEST: DemoRequest = {
   website: "",
 };
 
-/** Flattens a Zod error into one message per field, for inline display. */
 export function toFieldErrors(error: z.ZodError<DemoRequest>): DemoFieldErrors {
-  const result: DemoFieldErrors = {};
-  for (const issue of error.issues) {
-    const key = issue.path[0];
-    if (typeof key === "string" && !(key in result)) {
-      result[key as keyof DemoRequest] = issue.message;
-    }
-  }
-  return result;
+  return toFieldErrorsGeneric(error);
 }
