@@ -1,19 +1,24 @@
 import Link from "next/link";
 import { buildComparisonRows } from "@/features/comparisons/lib/parameter-diff";
-import type { ComparedGeneration } from "@/features/comparisons/types/comparison";
+import type {
+  ComparedGeneration,
+  GenerationDifference,
+} from "@/features/comparisons/types/comparison";
 import { cn } from "@/lib/utils";
 
 export function ComparisonTable({
   generations,
+  differences,
   projectIdByExperimentId,
 }: {
   generations: ComparedGeneration[];
+  differences: GenerationDifference[];
   /** Resolved server-side (this shape only carries experimentId, not
    * projectId) via the flat GET /experiments/:id route — missing entries
    * (a lookup that failed) fall back to plain text instead of a link. */
   projectIdByExperimentId: Record<string, string>;
 }) {
-  const rows = buildComparisonRows(generations);
+  const rows = buildComparisonRows(generations, differences);
 
   return (
     <div className="overflow-x-auto rounded-lg border border-line">

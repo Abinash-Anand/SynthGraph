@@ -5,6 +5,8 @@ import { getSession, requireSession } from "@/features/auth/server/session";
 import { getExperimentForProject } from "@/features/experiments/server/experiments-api";
 import { GenerationRow } from "@/features/generations/components/GenerationRow";
 import { listGenerations } from "@/features/generations/server/generations-api";
+import { ParameterCorrelationView } from "@/features/reports/components/ParameterCorrelationView";
+import { getParameterCorrelationReport } from "@/features/reports/server/reports-api";
 import { TrainingRunRow } from "@/features/training-runs/components/TrainingRunRow";
 import { listTrainingRunsForExperiment } from "@/features/training-runs/server/training-runs-api";
 import { NotFoundError } from "@/shared/http/errors";
@@ -40,9 +42,10 @@ export default async function ExperimentDetailPage({ params }: { params: Promise
     },
   );
 
-  const [generations, trainingRuns] = await Promise.all([
+  const [generations, trainingRuns, correlationReport] = await Promise.all([
     listGenerations(session.apiKey, experimentId),
     listTrainingRunsForExperiment(session.apiKey, experimentId),
+    getParameterCorrelationReport(session.apiKey, experimentId),
   ]);
 
   return (
@@ -105,6 +108,11 @@ export default async function ExperimentDetailPage({ params }: { params: Promise
             ))}
           </div>
         )}
+      </div>
+
+      <div>
+        <h2 className="mono-label mb-3">Parameter Correlation</h2>
+        <ParameterCorrelationView report={correlationReport} />
       </div>
     </div>
   );

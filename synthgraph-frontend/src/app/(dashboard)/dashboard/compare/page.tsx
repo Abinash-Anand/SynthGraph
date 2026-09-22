@@ -56,6 +56,7 @@ export default async function ComparePage({
       {result ? (
         <ComparisonTable
           generations={result.generations}
+          differences={result.differences}
           projectIdByExperimentId={projectIdByExperimentId}
         />
       ) : null}

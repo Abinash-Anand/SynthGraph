@@ -34,7 +34,18 @@ export type ComparedGeneration = {
   updatedAt: string;
 };
 
-/** The backend does no diffing — it just returns the full entities. */
+/**
+ * Computed server-side by CompareGenerationsService — only fields that
+ * actually differ appear here (id and createdAt are deliberately excluded
+ * by the backend: two distinct records trivially always have different
+ * ids/creation times, so diffing them is not a useful signal).
+ */
+export type GenerationDifference = {
+  field: string;
+  values: Record<string, unknown>;
+};
+
 export type GenerationComparison = {
   generations: ComparedGeneration[];
+  differences: GenerationDifference[];
 };
