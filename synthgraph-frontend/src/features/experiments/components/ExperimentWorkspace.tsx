@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import type { Experiment } from "@/features/experiments/types/experiment";
 import type { ParameterCorrelationReport } from "@/features/reports/types/report";
 import { ResearchWorkspace } from "@/shared/layout/ResearchWorkspace";
@@ -47,6 +47,18 @@ export function ExperimentWorkspace({
   const searchParams = useSearchParams();
   const activeTab = searchParams.get("tab") ?? "overview";
   const selected = parseSelectedEntity(searchParams.get("entity"));
+
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareSelection, setCompareSelection] = useState<Set<string>>(new Set());
+
+  const toggleCompareSelection = useCallback((id: string) => {
+    setCompareSelection((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else if (next.size < 10) next.add(id);
+      return next;
+    });
+  }, []);
 
   const setSelected = useCallback(
     (entity: SelectedEntity) => {
@@ -142,6 +154,9 @@ export function ExperimentWorkspace({
           trainingRuns={trainingRuns}
           onSelectGeneration={(id) => setSelected({ type: "generation", id })}
           onSelectRun={(id) => setSelected({ type: "run", id })}
+          compareMode={compareMode}
+          compareSelection={compareSelection}
+          onToggleCompareSelection={toggleCompareSelection}
         />
       );
   }
@@ -153,6 +168,20 @@ export function ExperimentWorkspace({
         generations={generations.map((g) => g.generation)}
         trainingRuns={trainingRuns}
         onOpenReproduction={() => setTab("reproduction")}
+        compareMode={compareMode}
+        compareCount={compareSelection.size}
+        onStartCompare={() => {
+          setCompareMode(true);
+          setCompareSelection(new Set());
+          setTab("overview");
+        }}
+        onCancelCompare={() => {
+          setCompareMode(false);
+          setCompareSelection(new Set());
+        }}
+        onConfirmCompare={() => {
+          router.push(`/dashboard/compare?ids=${Array.from(compareSelection).join(",")}`);
+        }}
       />
       <Tabs tabs={TABS} />
       <ResearchWorkspace canvas={canvas} inspector={inspector} inspectorTitle={inspectorTitle} />

@@ -1,5 +1,6 @@
 import { GenerationStatusBadge } from "@/features/generations/components/GenerationStatusBadge";
 import { TrainingRunStatusBadge } from "@/features/training-runs/components/TrainingRunStatusBadge";
+import { cn } from "@/lib/utils";
 import { formatDateTime } from "@/shared/lib/format";
 import type { EnrichedGeneration, EnrichedTrainingRun } from "../../types/experiment-workspace";
 
@@ -17,11 +18,22 @@ export function OverviewTab({
   trainingRuns,
   onSelectGeneration,
   onSelectRun,
+  compareMode = false,
+  compareSelection,
+  onToggleCompareSelection,
 }: {
   generations: EnrichedGeneration[];
   trainingRuns: EnrichedTrainingRun[];
   onSelectGeneration: (id: string) => void;
   onSelectRun: (id: string) => void;
+  /** When true, the generations list becomes a checkbox picker instead of
+   * a click-to-inspect list - the multi-select entry point for Compare
+   * (the only place a generations list already exists to pick from; there
+   * is no fleet-wide "list all generations" backend endpoint to build a
+   * standalone picker from). */
+  compareMode?: boolean;
+  compareSelection?: Set<string>;
+  onToggleCompareSelection?: (id: string) => void;
 }) {
   const completedRuns = trainingRuns.filter((r) => r.run.status === "completed").length;
   const totalEvaluations = trainingRuns.reduce((sum, r) => sum + r.evaluations.length, 0);
@@ -47,22 +59,51 @@ export function OverviewTab({
       ) : null}
 
       <div>
-        <h2 className="mono-label mb-3 text-research-ink-muted">Recent generations</h2>
+        <h2 className="mono-label mb-3 text-research-ink-muted">
+          {compareMode ? "Select generations to compare" : "Recent generations"}
+        </h2>
         {generations.length === 0 ? (
           <p className="text-[13.5px] text-research-ink-muted">No generations yet.</p>
         ) : (
           <div className="flex flex-col gap-1.5">
-            {generations.slice(0, 5).map(({ generation }) => (
-              <button
-                key={generation.id}
-                type="button"
-                onClick={() => onSelectGeneration(generation.id)}
-                className="flex items-center justify-between gap-3 rounded-lg border border-research-border bg-research-panel px-4 py-3 text-left transition-colors hover:border-research-accent-subtle"
-              >
-                <span className="truncate text-[13.5px] text-research-ink">{generation.name}</span>
-                <GenerationStatusBadge status={generation.status} />
-              </button>
-            ))}
+            {(compareMode ? generations : generations.slice(0, 5)).map(({ generation }) => {
+              const checked = compareSelection?.has(generation.id) ?? false;
+              if (compareMode) {
+                return (
+                  <label
+                    key={generation.id}
+                    className={cn(
+                      "flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 transition-colors",
+                      checked
+                        ? "border-research-accent bg-research-accent-subtle/10"
+                        : "border-research-border bg-research-panel hover:border-research-accent-subtle",
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => onToggleCompareSelection?.(generation.id)}
+                      className="accent-[var(--color-research-accent)]"
+                    />
+                    <span className="min-w-0 flex-1 truncate text-[13.5px] text-research-ink">
+                      {generation.name}
+                    </span>
+                    <GenerationStatusBadge status={generation.status} />
+                  </label>
+                );
+              }
+              return (
+                <button
+                  key={generation.id}
+                  type="button"
+                  onClick={() => onSelectGeneration(generation.id)}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-research-border bg-research-panel px-4 py-3 text-left transition-colors hover:border-research-accent-subtle"
+                >
+                  <span className="truncate text-[13.5px] text-research-ink">{generation.name}</span>
+                  <GenerationStatusBadge status={generation.status} />
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
