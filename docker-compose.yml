@@ -1,0 +1,47 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: synthgraph
+      POSTGRES_PASSWORD: synthgraph
+      POSTGRES_DB: synthgraph
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U synthgraph"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./synthgraph-backend
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgresql://synthgraph:synthgraph@postgres:5432/synthgraph
+      JWT_SECRET: ${JWT_SECRET:-dev-only-change-me}
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./synthgraph-frontend
+    environment:
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3001}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      DEMO_NOTIFY_TO: ${DEMO_NOTIFY_TO:-}
+      DEMO_NOTIFY_FROM: ${DEMO_NOTIFY_FROM:-}
+      DEMO_FORM_ENDPOINT: ${DEMO_FORM_ENDPOINT:-}
+      DEMO_FORM_TOKEN: ${DEMO_FORM_TOKEN:-}
+    ports:
+      - "3001:3000"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
