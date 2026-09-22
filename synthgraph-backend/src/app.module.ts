@@ -11,6 +11,7 @@ import { DocumentationModule } from './documentation/documentation.module.js';
 import { EvaluationResultsModule } from './evaluation-results/evaluation-results.module.js';
 import { ExperimentsModule } from './experiments/experiments.module.js';
 import { GenerationsModule } from './generations/generations.module.js';
+import { HealthController } from './health.controller.js';
 import { ProjectsModule } from './projects/projects.module.js';
 import { ReproductionModule } from './reproduction/reproduction.module.js';
 import { TrainingRunsModule } from './training-runs/training-runs.module.js';
@@ -49,5 +50,6 @@ import { ApiKeysModule } from './api-keys/api-keys.module.js';
     ComparisonsModule,
     ApiKeysModule
   ],
+  controllers: [HealthController],
 })
 export class AppModule {}
