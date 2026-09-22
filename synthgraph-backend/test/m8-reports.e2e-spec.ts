@@ -11,6 +11,10 @@ import { Dataset } from '../src/database/entities/dataset.entity.js';
 import { DatasetVersion } from '../src/database/entities/dataset-version.entity.js';
 import { EvaluationResult } from '../src/database/entities/evaluation-result.entity.js';
 import { Experiment } from '../src/database/entities/experiment.entity.js';
+import {
+  Generation,
+  GenerationStatus,
+} from '../src/database/entities/generation.entity.js';
 import { Project } from '../src/database/entities/project.entity.js';
 import { TrainingRunMetric } from '../src/database/entities/training-run-metric.entity.js';
 import {
@@ -31,10 +35,12 @@ describe('M8 Reports (e2e)', () => {
   let projectA: Project;
   let projectB: Project;
   let projectC: Project; // userA, but isolated from projectA's fleet-wide report counts
+  let projectD: Project; // userA, isolated - drift-alert fixtures
   let experimentA1: Experiment;
   let experimentA2: Experiment;
   let experimentB: Experiment;
   let experimentC: Experiment;
+  let experimentD1: Experiment;
 
   let runA1: TrainingRun; // completed, lr=0.01, capture unknown (null)
   let runA2: TrainingRun; // completed, lr=0.1, capture partial (wandb attached, not closed)
@@ -42,9 +48,14 @@ describe('M8 Reports (e2e)', () => {
   let runA4: TrainingRun; // completed, lr=0.02, metrics.finalLoss=0.05, has step-metric history
   let runA5: TrainingRun; // completed, only 1 step-metric row (insufficient_data case)
   let runB1: TrainingRun; // belongs to userB - must never appear in userA's reports
+  let runD1: TrainingRun; // completed, t0, trainer v2.8.0/gpu A100 - baseline
+  let runD2: TrainingRun; // completed, t0+1h, trainer v2.8.0/gpu A100 - baseline
+  let runD3: TrainingRun; // completed, t0+2h, trainer v2.9.0/gpu H100 - drifts from D1/D2
 
   let datasetA: Dataset;
   let datasetVersionA: DatasetVersion;
+  let genX1: Generation; // references datasetVersionA (generation_dataset_refs)
+  let genX2: Generation; // references datasetVersionA (generation_dataset_refs)
 
   let userRepository: ReturnType<DataSource['getRepository']>;
   let apiKeyRepository: ReturnType<DataSource['getRepository']>;
@@ -55,6 +66,7 @@ describe('M8 Reports (e2e)', () => {
   let datasetRepository: ReturnType<DataSource['getRepository']>;
   let datasetVersionRepository: ReturnType<DataSource['getRepository']>;
   let evaluationResultRepository: ReturnType<DataSource['getRepository']>;
+  let generationRepository: ReturnType<DataSource['getRepository']>;
 
   function createRawApiKey(): string {
     return `sg_${randomBytes(32).toString('hex')}`;
@@ -90,6 +102,7 @@ describe('M8 Reports (e2e)', () => {
     datasetRepository = dataSource.getRepository(Dataset);
     datasetVersionRepository = dataSource.getRepository(DatasetVersion);
     evaluationResultRepository = dataSource.getRepository(EvaluationResult);
+    generationRepository = dataSource.getRepository(Generation);
 
     userA = await userRepository.save(
       userRepository.create({
@@ -144,6 +157,15 @@ describe('M8 Reports (e2e)', () => {
         description: null,
       }),
     );
+    // Isolated for the same reason as projectC - drift-alert fixtures must
+    // not shift projectA's/experimentA1's already-asserted fleet counts.
+    projectD = await projectRepository.save(
+      projectRepository.create({
+        userId: userA.id,
+        name: 'M8 Reports Project D',
+        description: null,
+      }),
+    );
 
     experimentA1 = await experimentRepository.save(
       experimentRepository.create({
@@ -170,6 +192,13 @@ describe('M8 Reports (e2e)', () => {
       experimentRepository.create({
         projectId: projectC.id,
         name: 'M8 Reports Experiment C',
+        description: null,
+      }),
+    );
+    experimentD1 = await experimentRepository.save(
+      experimentRepository.create({
+        projectId: projectD.id,
+        name: 'M8 Reports Experiment D1',
         description: null,
       }),
     );
@@ -302,6 +331,61 @@ describe('M8 Reports (e2e)', () => {
       }),
     );
 
+    const driftT0 = new Date('2026-02-01T00:00:00.000Z');
+    const driftT1 = new Date('2026-02-01T01:00:00.000Z');
+    const driftT2 = new Date('2026-02-01T02:00:00.000Z');
+
+    runD1 = await trainingRunRepository.save(
+      trainingRunRepository.create({
+        experimentId: experimentD1.id,
+        name: 'Run D1 (baseline)',
+        description: null,
+        trainer: { name: 'pytorch', version: '2.8.0', type: 'rl' },
+        parameters: {},
+        metrics: {},
+        metadata: { gpu: 'A100' },
+        status: TrainingRunStatus.Completed,
+        startedAt: driftT0,
+        completedAt: driftT0,
+        createdAt: driftT0,
+        captureStatus: null,
+      }),
+    );
+
+    runD2 = await trainingRunRepository.save(
+      trainingRunRepository.create({
+        experimentId: experimentD1.id,
+        name: 'Run D2 (baseline)',
+        description: null,
+        trainer: { name: 'pytorch', version: '2.8.0', type: 'rl' },
+        parameters: {},
+        metrics: {},
+        metadata: { gpu: 'A100' },
+        status: TrainingRunStatus.Completed,
+        startedAt: driftT1,
+        completedAt: driftT1,
+        createdAt: driftT1,
+        captureStatus: null,
+      }),
+    );
+
+    runD3 = await trainingRunRepository.save(
+      trainingRunRepository.create({
+        experimentId: experimentD1.id,
+        name: 'Run D3 (drifted)',
+        description: null,
+        trainer: { name: 'pytorch', version: '2.9.0', type: 'rl' },
+        parameters: {},
+        metrics: {},
+        metadata: { gpu: 'H100' },
+        status: TrainingRunStatus.Completed,
+        startedAt: driftT2,
+        completedAt: driftT2,
+        createdAt: driftT2,
+        captureStatus: null,
+      }),
+    );
+
     datasetA = await datasetRepository.save(
       datasetRepository.create({
         userId: userA.id,
@@ -338,9 +422,65 @@ describe('M8 Reports (e2e)', () => {
         metadata: {},
       }),
     ]);
+
+    // Dataset-impact fixtures: two generations and two training runs (the
+    // already-created runA1/runA2, reusing their mAP 0.9/0.6 evaluations)
+    // both independently reference datasetVersionA - there's no direct
+    // Generation<->TrainingRun link in this schema, only these two separate
+    // junction tables, so the report reflects that honestly.
+    genX1 = await generationRepository.save(
+      generationRepository.create({
+        experimentId: experimentA1.id,
+        name: 'Gen X1 (impact fixture)',
+        description: null,
+        generator: { name: 'blender' },
+        parameters: {},
+        reproducibility: {},
+        status: GenerationStatus.Completed,
+        metadata: {},
+      }),
+    );
+    genX2 = await generationRepository.save(
+      generationRepository.create({
+        experimentId: experimentA1.id,
+        name: 'Gen X2 (impact fixture)',
+        description: null,
+        generator: { name: 'blender' },
+        parameters: {},
+        reproducibility: {},
+        status: GenerationStatus.Completed,
+        metadata: {},
+      }),
+    );
+
+    await dataSource.query(
+      `INSERT INTO generation_dataset_refs (generation_id, dataset_version_id, role) VALUES ($1, $2, 'input')`,
+      [genX1.id, datasetVersionA.id],
+    );
+    await dataSource.query(
+      `INSERT INTO generation_dataset_refs (generation_id, dataset_version_id, role) VALUES ($1, $2, 'input')`,
+      [genX2.id, datasetVersionA.id],
+    );
+    await dataSource.query(
+      `INSERT INTO training_run_dataset_refs (training_run_id, dataset_version_id, role) VALUES ($1, $2, 'training')`,
+      [runA1.id, datasetVersionA.id],
+    );
+    await dataSource.query(
+      `INSERT INTO training_run_dataset_refs (training_run_id, dataset_version_id, role) VALUES ($1, $2, 'training')`,
+      [runA2.id, datasetVersionA.id],
+    );
   });
 
   afterAll(async () => {
+    await dataSource.query(
+      `DELETE FROM generation_dataset_refs WHERE generation_id = ANY($1)`,
+      [[genX1.id, genX2.id]],
+    );
+    await dataSource.query(
+      `DELETE FROM training_run_dataset_refs WHERE training_run_id = ANY($1)`,
+      [[runA1.id, runA2.id]],
+    );
+    await generationRepository.delete([genX1.id, genX2.id]);
     await evaluationResultRepository.delete({ trainingRunId: runA1.id });
     await evaluationResultRepository.delete({ trainingRunId: runA2.id });
     await datasetVersionRepository.delete(datasetVersionA.id);
@@ -354,14 +494,23 @@ describe('M8 Reports (e2e)', () => {
       runA4.id,
       runA5.id,
       runB1.id,
+      runD1.id,
+      runD2.id,
+      runD3.id,
     ]);
     await experimentRepository.delete([
       experimentA1.id,
       experimentA2.id,
       experimentB.id,
       experimentC.id,
+      experimentD1.id,
     ]);
-    await projectRepository.delete([projectA.id, projectB.id, projectC.id]);
+    await projectRepository.delete([
+      projectA.id,
+      projectB.id,
+      projectC.id,
+      projectD.id,
+    ]);
     await apiKeyRepository.delete({ userId: userA.id });
     await apiKeyRepository.delete({ userId: userB.id });
     await userRepository.delete([userA.id, userB.id]);
@@ -645,6 +794,102 @@ describe('M8 Reports (e2e)', () => {
         .expect(200);
 
       expect(response.body.records).toEqual([]);
+    });
+  });
+
+  describe('GET /reports/training-run-drift', () => {
+    it('requires trainingRunId', async () => {
+      await request(app.getHttpServer())
+        .get('/reports/training-run-drift')
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(400);
+    });
+
+    it("404s for another user's training run", async () => {
+      await request(app.getHttpServer())
+        .get(`/reports/training-run-drift?trainingRunId=${runB1.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(404);
+    });
+
+    it('reports no baseline for the first run in an experiment', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/reports/training-run-drift?trainingRunId=${runD1.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(200);
+
+      expect(response.body.baselineRunCount).toBe(0);
+      expect(response.body.drift).toEqual([]);
+    });
+
+    it('flags trainer.version and metadata.gpu drift against an agreeing baseline', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/reports/training-run-drift?trainingRunId=${runD3.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(200);
+
+      expect(response.body.baselineRunCount).toBe(2);
+
+      const fields = response.body.drift.map(
+        (entry: { field: string }) => entry.field,
+      );
+      expect(fields.sort()).toEqual(['metadata.gpu', 'trainer.version']);
+
+      const versionDrift = response.body.drift.find(
+        (entry: { field: string }) => entry.field === 'trainer.version',
+      );
+      expect(versionDrift.currentValue).toBe('2.9.0');
+      expect(versionDrift.baselineValue).toBe('2.8.0');
+
+      const gpuDrift = response.body.drift.find(
+        (entry: { field: string }) => entry.field === 'metadata.gpu',
+      );
+      expect(gpuDrift.currentValue).toBe('H100');
+      expect(gpuDrift.baselineValue).toBe('A100');
+
+      // trainer.name and trainer.type are unchanged across D1/D2/D3 - must
+      // not be reported as drift.
+      expect(fields).not.toContain('trainer.name');
+      expect(fields).not.toContain('trainer.type');
+    });
+  });
+
+  describe('GET /reports/dataset-impact', () => {
+    it('requires datasetVersionId', async () => {
+      await request(app.getHttpServer())
+        .get('/reports/dataset-impact')
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(400);
+    });
+
+    it("404s for a dataset version that does not belong to the caller", async () => {
+      await request(app.getHttpServer())
+        .get(`/reports/dataset-impact?datasetVersionId=${datasetVersionA.id}`)
+        .set('Authorization', `Bearer ${apiKeyB}`)
+        .expect(404);
+    });
+
+    it('reports generation count, training runs, and per-metric stats', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/reports/dataset-impact?datasetVersionId=${datasetVersionA.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(200);
+
+      expect(response.body.generationCount).toBe(2);
+
+      const trainingRunIds = response.body.trainingRuns.map(
+        (run: { trainingRunId: string }) => run.trainingRunId,
+      );
+      expect(trainingRunIds.sort()).toEqual([runA1.id, runA2.id].sort());
+
+      const mAP = response.body.metrics.find(
+        (metric: { metricKey: string }) => metric.metricKey === 'mAP',
+      );
+      expect(mAP.avg).toBeCloseTo(0.75, 5);
+      expect(mAP.highestValue).toBe(0.9);
+      expect(mAP.highestTrainingRunId).toBe(runA1.id);
+      expect(mAP.lowestValue).toBe(0.6);
+      expect(mAP.lowestTrainingRunId).toBe(runA2.id);
     });
   });
 });
