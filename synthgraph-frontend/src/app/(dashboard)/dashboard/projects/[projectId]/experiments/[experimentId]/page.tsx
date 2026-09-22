@@ -1,17 +1,19 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getSession, requireSession } from "@/features/auth/server/session";
+import { ExperimentWorkspace } from "@/features/experiments/components/ExperimentWorkspace";
 import { getExperimentForProject } from "@/features/experiments/server/experiments-api";
-import { GenerationRow } from "@/features/generations/components/GenerationRow";
 import { listGenerations } from "@/features/generations/server/generations-api";
-import { ParameterCorrelationView } from "@/features/reports/components/ParameterCorrelationView";
-import { getParameterCorrelationReport } from "@/features/reports/server/reports-api";
-import { TrainingRunRow } from "@/features/training-runs/components/TrainingRunRow";
+import { getReproductionManifest } from "@/features/reproduction/server/reproduction-api";
+import {
+  getParameterCorrelationReport,
+  getTrainingRunDrift,
+  getTrainingRunHealth,
+} from "@/features/reports/server/reports-api";
+import { listEvaluationResults } from "@/features/evaluation-results/server/evaluation-results-api";
+import { listTrainingRunMetrics } from "@/features/training-runs/server/training-run-metrics-api";
 import { listTrainingRunsForExperiment } from "@/features/training-runs/server/training-runs-api";
 import { NotFoundError } from "@/shared/http/errors";
-import { formatDate } from "@/shared/lib/format";
-import { EmptyState } from "@/shared/ui/EmptyState";
 
 type PageParams = { projectId: string; experimentId: string };
 
@@ -48,72 +50,34 @@ export default async function ExperimentDetailPage({ params }: { params: Promise
     getParameterCorrelationReport(session.apiKey, experimentId),
   ]);
 
+  // Everything the workspace needs is prefetched once here (experiment-
+  // scoped, small N) rather than fetched on demand per inspector selection
+  // - see EnrichedTrainingRun/EnrichedGeneration's own comment on why.
+  const enrichedTrainingRuns = await Promise.all(
+    trainingRuns.map(async (run) => ({
+      run,
+      metrics: await listTrainingRunMetrics(session.apiKey, run.id),
+      evaluations: await listEvaluationResults(session.apiKey, run.id),
+      health: await getTrainingRunHealth(session.apiKey, run.id),
+      drift: await getTrainingRunDrift(session.apiKey, run.id),
+    })),
+  );
+
+  const enrichedGenerations = await Promise.all(
+    generations.map(async (generation) => ({
+      generation,
+      manifest: await getReproductionManifest(session.apiKey, generation.id).catch(() => null),
+    })),
+  );
+
   return (
-    <div className="flex flex-col gap-8">
-      <div>
-        <Link
-          href={`/dashboard/projects/${projectId}`}
-          className="mono-label text-ink-faint transition-colors hover:text-ink"
-        >
-          ← Project
-        </Link>
-        <h1 className="mt-2 text-[22px] font-medium tracking-[-0.01em] text-ink">
-          {experiment.name}
-        </h1>
-        {experiment.description ? (
-          <p className="mt-1 text-[14px] text-ink-muted">{experiment.description}</p>
-        ) : null}
-        <p className="mt-2 font-mono text-[11px] text-ink-faint">
-          Created {formatDate(experiment.createdAt)}
-        </p>
-      </div>
-
-      <div>
-        <h2 className="mono-label mb-3">Generations</h2>
-        {generations.length === 0 ? (
-          <EmptyState
-            title="No generations yet"
-            description="Generations are created from the SynthGraph SDK. Once one exists in this experiment, it shows up here."
-          />
-        ) : (
-          <div className="flex flex-col gap-2">
-            {generations.map((generation) => (
-              <GenerationRow
-                key={generation.id}
-                projectId={projectId}
-                experimentId={experimentId}
-                generation={generation}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div>
-        <h2 className="mono-label mb-3">Training Runs</h2>
-        {trainingRuns.length === 0 ? (
-          <EmptyState
-            title="No training runs yet"
-            description="Training runs are created from the SynthGraph SDK. Once one exists in this experiment, it shows up here."
-          />
-        ) : (
-          <div className="flex flex-col gap-2">
-            {trainingRuns.map((trainingRun) => (
-              <TrainingRunRow
-                key={trainingRun.id}
-                projectId={projectId}
-                experimentId={experimentId}
-                trainingRun={trainingRun}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div>
-        <h2 className="mono-label mb-3">Parameter Correlation</h2>
-        <ParameterCorrelationView report={correlationReport} />
-      </div>
-    </div>
+    <ExperimentWorkspace
+      projectId={projectId}
+      experimentId={experimentId}
+      experiment={experiment}
+      generations={enrichedGenerations}
+      trainingRuns={enrichedTrainingRuns}
+      correlationReport={correlationReport}
+    />
   );
 }

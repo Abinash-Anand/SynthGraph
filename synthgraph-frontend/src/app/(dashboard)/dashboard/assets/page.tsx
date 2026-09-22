@@ -14,7 +14,7 @@ export default async function AssetsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-[22px] font-medium tracking-[-0.01em] text-ink">Assets</h1>
+        <h1 className="text-[22px] font-medium tracking-[-0.01em] text-research-ink">Assets</h1>
         <ButtonLink href="/dashboard/assets/new" size="sm">
           New asset
         </ButtonLink>

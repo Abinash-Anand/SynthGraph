@@ -18,7 +18,14 @@ export default async function ComparePage({
   if (requested.length < 2) {
     return (
       <div className="flex max-w-[640px] flex-col gap-6">
-        <h1 className="text-[22px] font-medium tracking-[-0.01em] text-ink">Compare generations</h1>
+        <div>
+          <h1 className="text-[22px] font-medium tracking-[-0.01em] text-research-ink">
+            Compare generations
+          </h1>
+          <p className="mt-1 text-[13.5px] text-research-ink-muted">
+            Paste IDs below, or select generations to compare from an experiment&rsquo;s Overview tab.
+          </p>
+        </div>
         <GenerationIdsForm prefill={requested} />
       </div>
     );
@@ -46,7 +53,7 @@ export default async function ComparePage({
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-[22px] font-medium tracking-[-0.01em] text-ink">Compare generations</h1>
+      <h1 className="text-[22px] font-medium tracking-[-0.01em] text-research-ink">Compare generations</h1>
       <div className="max-w-[640px]">
         <GenerationIdsForm
           prefill={requested}

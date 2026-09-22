@@ -43,21 +43,23 @@ export default async function DatasetDetailPage({ params }: { params: Promise<Pa
       <div>
         <Link
           href="/dashboard/datasets"
-          className="mono-label text-ink-faint transition-colors hover:text-ink"
+          className="mono-label text-research-ink-muted transition-colors hover:text-research-ink"
         >
           ← Datasets
         </Link>
-        <h1 className="mt-2 text-[22px] font-medium tracking-[-0.01em] text-ink">{dataset.name}</h1>
+        <h1 className="mt-2 text-[22px] font-medium tracking-[-0.01em] text-research-ink">
+          {dataset.name}
+        </h1>
         {dataset.description ? (
-          <p className="mt-1 text-[14px] text-ink-muted">{dataset.description}</p>
+          <p className="mt-1 text-[14px] text-research-ink-muted">{dataset.description}</p>
         ) : null}
-        <p className="mt-2 font-mono text-[11px] text-ink-faint">
+        <p className="mt-2 font-mono text-[11px] text-research-ink-muted">
           Created {formatDate(dataset.createdAt)}
         </p>
       </div>
 
       <div className="flex flex-col gap-3">
-        <h2 className="mono-label">Versions</h2>
+        <h2 className="mono-label text-research-ink-muted">Versions</h2>
         <CreateDatasetVersionForm datasetId={datasetId} />
         {versions.length === 0 ? (
           <EmptyState title="No versions yet" description="Add the first version above." />
