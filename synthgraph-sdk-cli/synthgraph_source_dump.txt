@@ -2578,7 +2578,7 @@ def normalize_dataset_references(
 
 from __future__ import annotations
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 
 ========== D:\HackNation6thHackathon\Startup\SynthGraph\synthgraph-sdk-cli\src\synthgraph\__init__.py ==========
