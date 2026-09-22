@@ -1,6 +1,11 @@
 # ---- deps: install once, reused by the build stage ----
+# npm 10.x (bundled with node:22-alpine) fails resolving this tree's
+# optional platform packages (e.g. the @emnapi/* WASM fallbacks pulled in
+# by lightningcss/@tailwindcss/oxide); npm >=11 resolves it fine, so bump
+# first — mirrors the same fix already applied to the backend Dockerfile.
 FROM node:22-alpine AS deps
 WORKDIR /app
+RUN npm install -g npm@11
 COPY package.json package-lock.json ./
 RUN npm ci
 
