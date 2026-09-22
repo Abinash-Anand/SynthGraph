@@ -272,6 +272,36 @@ describe('M7 Generation comparison (e2e)', () => {
     ]);
   });
 
+  it('computes differences for parameters that vary between generations', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/generations/compare')
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .send({
+        generationIds: [
+          generationA.id,
+          generationB.id,
+        ],
+      })
+      .expect(201);
+
+    const lightingDifference = response.body.differences.find(
+      (difference: { field: string }) =>
+        difference.field === 'parameters.lighting',
+    );
+    expect(lightingDifference).toBeDefined();
+    expect(lightingDifference.values).toEqual({
+      [generationA.id]: 'low',
+      [generationB.id]: 'medium',
+    });
+
+    // status is identical (both Completed in the fixtures) - must not
+    // show up as a difference.
+    const statusDifference = response.body.differences.find(
+      (difference: { field: string }) => difference.field === 'status',
+    );
+    expect(statusDifference).toBeUndefined();
+  });
+
   it('supports comparing more than two generations', async () => {
     const response = await request(app.getHttpServer())
       .post('/generations/compare')

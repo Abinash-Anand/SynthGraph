@@ -13,6 +13,7 @@ import { ExperimentsModule } from './experiments/experiments.module.js';
 import { GenerationsModule } from './generations/generations.module.js';
 import { HealthController } from './health.controller.js';
 import { ProjectsModule } from './projects/projects.module.js';
+import { ReportsModule } from './reports/reports.module.js';
 import { ReproductionModule } from './reproduction/reproduction.module.js';
 import { TrainingRunsModule } from './training-runs/training-runs.module.js';
 import { TrainingRunMetricsModule } from './training-run-metrics/training-run-metrics.module.js';
@@ -48,6 +49,7 @@ import { ApiKeysModule } from './api-keys/api-keys.module.js';
     ReproductionModule,
     DocumentationModule,
     ComparisonsModule,
+    ReportsModule,
     ApiKeysModule
   ],
   controllers: [HealthController],

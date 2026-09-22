@@ -1,40 +1,66 @@
-import type { Generation } from "@/features/generations/types/generation";
+import type {
+  ComparedGeneration,
+  GenerationDifference,
+} from "@/features/comparisons/types/comparison";
 
 export type ComparisonRow = {
   label: string;
   values: string[];
-  /** True when not all generations' values are deep-equal — the backend
-   * does no diffing itself, this is computed client-side. */
   differs: boolean;
 };
 
-/** Fixed rows first, then the union of `parameters.*` keys across all
- * compared generations (missing key on one → "—"). */
-export function buildComparisonRows(generations: Generation[]): ComparisonRow[] {
+// `field: null` rows (ID, Created) are never highlighted — the backend
+// deliberately excludes them from its own diff (two distinct records
+// trivially always have different ids/creation times, not a useful signal).
+const FIXED_ROWS: Array<{
+  label: string;
+  field: string | null;
+  getValue: (generation: ComparedGeneration) => unknown;
+}> = [
+  { label: "ID", field: null, getValue: (g) => g.id },
+  { label: "Status", field: "status", getValue: (g) => g.status },
+  {
+    label: "Generator",
+    field: "generator",
+    getValue: (g) => `${g.generator.name}${g.generator.version ? ` @ ${g.generator.version}` : ""}`,
+  },
+  { label: "Started", field: "startedAt", getValue: (g) => g.startedAt },
+  { label: "Completed", field: "completedAt", getValue: (g) => g.completedAt },
+  { label: "Created", field: null, getValue: (g) => g.createdAt },
+];
+
+/**
+ * Fixed rows first, then the union of `parameters.*` keys across all
+ * compared generations. `differs` is read from the backend's own
+ * `differences` field — computed once, server-side — rather than
+ * recomputed client-side (this used to do its own deep-equal check; the
+ * backend now does the same comparison consistently for every consumer).
+ */
+export function buildComparisonRows(
+  generations: ComparedGeneration[],
+  differences: GenerationDifference[],
+): ComparisonRow[] {
+  const differingFields = new Set(differences.map((difference) => difference.field));
   const rows: ComparisonRow[] = [];
 
-  const addRow = (label: string, getValue: (generation: Generation) => unknown) => {
-    const raw = generations.map(getValue);
-    const baseline = JSON.stringify(raw[0]);
+  for (const { label, field, getValue } of FIXED_ROWS) {
     rows.push({
       label,
-      values: raw.map(formatValue),
-      differs: raw.some((value) => JSON.stringify(value) !== baseline),
+      values: generations.map((generation) => formatValue(getValue(generation))),
+      differs: field !== null && differingFields.has(field),
     });
-  };
-
-  addRow("ID", (g) => g.id);
-  addRow("Status", (g) => g.status);
-  addRow("Generator", (g) => `${g.generator.name}${g.generator.version ? ` @ ${g.generator.version}` : ""}`);
-  addRow("Started", (g) => g.started_at);
-  addRow("Completed", (g) => g.completed_at);
-  addRow("Created", (g) => g.created_at);
+  }
 
   const parameterKeys = Array.from(
     new Set(generations.flatMap((g) => Object.keys(g.parameters))),
   ).sort();
   for (const key of parameterKeys) {
-    addRow(`parameters.${key}`, (g) => g.parameters[key]);
+    const field = `parameters.${key}`;
+    rows.push({
+      label: field,
+      values: generations.map((generation) => formatValue(generation.parameters[key])),
+      differs: differingFields.has(field),
+    });
   }
 
   return rows;

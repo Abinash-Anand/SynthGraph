@@ -19,6 +19,14 @@ const NAV_ITEMS: NavItem[] = [
 // No owning entity, so it doesn't fit under Dashboard or Settings.
 const TOOLS_ITEMS: NavItem[] = [{ label: "Compare", href: "/dashboard/compare" }];
 
+// Both fleet-wide (aggregated across every project), so they're real
+// top-level pages, unlike Parameter Correlation (experiment-scoped, lives
+// as a section on the Experiment detail page instead).
+const REPORTS_ITEMS: NavItem[] = [
+  { label: "Capture Completeness", href: "/dashboard/reports/capture-completeness" },
+  { label: "Efficiency Leaderboard", href: "/dashboard/reports/efficiency-leaderboard" },
+];
+
 const SETTINGS_ITEMS: NavItem[] = [{ label: "API Keys", href: "/dashboard/settings/api-keys" }];
 
 // Training Runs and Evaluation Results have no flat "list all" backend
@@ -38,6 +46,15 @@ export function Sidebar() {
         <p className="mono-label mb-2 px-2">Dashboard</p>
         <ul className="flex flex-col gap-0.5">
           {NAV_ITEMS.map((item) => (
+            <SidebarLink key={item.href} item={item} active={isActive(item.href)} />
+          ))}
+        </ul>
+      </div>
+
+      <div>
+        <p className="mono-label mb-2 px-2">Reports</p>
+        <ul className="flex flex-col gap-0.5">
+          {REPORTS_ITEMS.map((item) => (
             <SidebarLink key={item.href} item={item} active={isActive(item.href)} />
           ))}
         </ul>
