@@ -5,6 +5,7 @@ from __future__ import annotations
 import typer
 
 from ..context import CLIContext
+from ..interactive import resolve_experiment, resolve_project
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -17,11 +18,14 @@ _COLUMNS = [("ID", "id"), ("NAME", "name"), ("CREATED", "created_at")]
 @app.command("list")
 def list_experiments(
     ctx: typer.Context,
-    project: str = typer.Option(..., "--project", "-p", help="Project ID."),
+    project: str | None = typer.Option(None, "--project", "-p", help="Project ID."),
     search: str | None = typer.Option(None, "--search", "-s", help="Filter by search term."),
     json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a table."),
 ) -> None:
     """List the experiments in a project.
+
+    Omitting ``--project`` in an interactive terminal prompts you to pick
+    one from your actual projects.
 
     Example:
 
@@ -29,6 +33,7 @@ def list_experiments(
     """
     cli: CLIContext = ctx.obj
     out = cli.output(json_output)
+    project = resolve_project(ctx, project)
 
     experiments = cli.client().experiments.list(project_id=project, search=search)
     rows = [experiment.to_dict() for experiment in experiments]
@@ -40,12 +45,13 @@ def list_experiments(
 def search_experiments(
     ctx: typer.Context,
     query: str = typer.Argument(..., help="Search term."),
-    project: str = typer.Option(..., "--project", "-p", help="Project ID."),
+    project: str | None = typer.Option(None, "--project", "-p", help="Project ID."),
     json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a table."),
 ) -> None:
     """Search experiments in a project by name or description.
 
-    The backend performs the search; this does not filter locally.
+    The backend performs the search; this does not filter locally. Omitting
+    ``--project`` in an interactive terminal prompts you to pick one.
 
     Example:
 
@@ -53,6 +59,7 @@ def search_experiments(
     """
     cli: CLIContext = ctx.obj
     out = cli.output(json_output)
+    project = resolve_project(ctx, project)
 
     experiments = cli.client().experiments.search(project_id=project, query=query)
     rows = [experiment.to_dict() for experiment in experiments]
@@ -66,10 +73,13 @@ def search_experiments(
 @app.command("get")
 def get_experiment(
     ctx: typer.Context,
-    experiment_id: str = typer.Argument(..., help="Experiment ID."),
+    experiment_id: str | None = typer.Argument(None, help="Experiment ID."),
     json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a field list."),
 ) -> None:
     """Show one experiment.
+
+    Omitting the ID in an interactive terminal prompts you to pick a project,
+    then an experiment within it.
 
     Example:
 
@@ -77,6 +87,7 @@ def get_experiment(
     """
     cli: CLIContext = ctx.obj
     out = cli.output(json_output)
+    experiment_id = resolve_experiment(ctx, experiment_id)
 
     experiment = cli.client().experiments.get(experiment_id)
 

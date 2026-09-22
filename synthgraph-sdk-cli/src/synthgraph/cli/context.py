@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from ..client import SynthGraphClient
 from ..config import SynthGraphConfig
 from .output import Output
+from .state import CLIState
 
 __all__ = ["CLIContext"]
 
@@ -23,6 +24,7 @@ class CLIContext:
     api_url: str | None = None
     timeout: float | None = None
     _client: SynthGraphClient | None = field(default=None, repr=False, init=False)
+    _state: CLIState | None = field(default=None, repr=False, init=False)
 
     def output(self, json_override: bool = False) -> Output:
         """The renderer for this invocation."""
@@ -43,6 +45,12 @@ class CLIContext:
             config.require_api_key()
             self._client = SynthGraphClient(config=config)
         return self._client
+
+    def state(self) -> CLIState:
+        """The remembered-context store (last-used project/experiment/etc.)."""
+        if self._state is None:
+            self._state = CLIState()
+        return self._state
 
     def close(self) -> None:
         """Release the HTTP client, if one was ever created."""

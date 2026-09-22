@@ -31,7 +31,7 @@ from .errors import ExitCode, describe_error
 app = typer.Typer(
     name="synthgraph",
     no_args_is_help=True,
-    add_completion=False,
+    add_completion=True,
     context_settings={"help_option_names": ["-h", "--help"]},
     help=(
         "Query, inspect and export SynthGraph provenance.\n\n"

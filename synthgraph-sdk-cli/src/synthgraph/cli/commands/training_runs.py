@@ -7,6 +7,7 @@ from typing import Any
 import typer
 
 from ..context import CLIContext
+from ..interactive import resolve_experiment, resolve_training_run
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -38,7 +39,7 @@ def _capture_label(capture_status: dict[str, Any] | None) -> str:
 @app.command("list")
 def list_training_runs(
     ctx: typer.Context,
-    experiment: str = typer.Option(..., "--experiment", "-e", help="Experiment ID."),
+    experiment: str | None = typer.Option(None, "--experiment", "-e", help="Experiment ID."),
     capture_status: str | None = typer.Option(
         None,
         "--capture-status",
@@ -50,7 +51,8 @@ def list_training_runs(
 
     ``--capture-status`` is the audit query this feature exists for: find
     every run where something didn't get fully captured, without digging
-    through logs.
+    through logs. Omitting ``--experiment`` in an interactive terminal
+    prompts you to pick one.
 
     Examples:
 
@@ -61,6 +63,7 @@ def list_training_runs(
     """
     cli: CLIContext = ctx.obj
     out = cli.output(json_output)
+    experiment = resolve_experiment(ctx, experiment)
 
     training_runs = cli.client().training_runs.list(
         experiment_id=experiment,
@@ -89,11 +92,14 @@ def list_training_runs(
 @app.command("get")
 def get_training_run(
     ctx: typer.Context,
-    training_run_id: str = typer.Argument(..., help="Training run ID."),
+    training_run_id: str | None = typer.Argument(None, help="Training run ID."),
     json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a field list."),
 ) -> None:
     """Show one training run: its config, status, capture-completeness
     report and attached datasets.
+
+    Omitting the ID in an interactive terminal prompts you to pick a
+    project, then an experiment, then a training run within it.
 
     Example:
 
@@ -101,6 +107,7 @@ def get_training_run(
     """
     cli: CLIContext = ctx.obj
     out = cli.output(json_output)
+    training_run_id = resolve_training_run(ctx, training_run_id)
 
     run = cli.client().training_runs.get(training_run_id)
 
@@ -135,10 +142,12 @@ def get_training_run(
 @app.command("metrics")
 def list_training_run_metrics(
     ctx: typer.Context,
-    training_run_id: str = typer.Argument(..., help="Training run ID."),
+    training_run_id: str | None = typer.Argument(None, help="Training run ID."),
     json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a table."),
 ) -> None:
     """List the metric points recorded for a training run, ordered by step.
+
+    Omitting the ID in an interactive terminal prompts you to pick one.
 
     Example:
 
@@ -146,6 +155,7 @@ def list_training_run_metrics(
     """
     cli: CLIContext = ctx.obj
     out = cli.output(json_output)
+    training_run_id = resolve_training_run(ctx, training_run_id)
 
     metric_points = cli.client().training_runs.metrics(training_run_id=training_run_id)
 
