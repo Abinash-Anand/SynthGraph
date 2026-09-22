@@ -2,7 +2,7 @@
 
 Status of the wire contract between this client and the SynthGraph backend.
 
-**Package version:** 0.3.0 — not 1.0. Sections 3 and 4 must be closed before a
+**Package version:** 0.3.1 — not 1.0. Sections 3 and 4 must be closed before a
 1.0 release.
 
 This file exists because the handoff specification (§66) requires one
