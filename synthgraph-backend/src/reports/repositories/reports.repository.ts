@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 
+import { DatasetVersion } from '../../database/entities/dataset-version.entity.js';
 import { EvaluationResult } from '../../database/entities/evaluation-result.entity.js';
 import { TrainingRunMetric } from '../../database/entities/training-run-metric.entity.js';
 import {
@@ -53,6 +54,8 @@ export class ReportsRepository {
     private readonly evaluationResultRepository: Repository<EvaluationResult>,
     @InjectRepository(TrainingRunMetric)
     private readonly trainingRunMetricRepository: Repository<TrainingRunMetric>,
+    @InjectRepository(DatasetVersion)
+    private readonly datasetVersionRepository: Repository<DatasetVersion>,
     @InjectDataSource()
     private readonly dataSource: DataSource,
   ) {}
@@ -217,5 +220,82 @@ export class ReportsRepository {
     }
 
     return query.getRawMany<NumericFilterMatchRow>();
+  }
+
+  // The drift-alert baseline: completed runs in the same experiment that
+  // existed before this one, excluding itself. Chronological ordering (not
+  // just "completed") matters here - a run created after the one being
+  // checked isn't a valid baseline for "did this run drift from what came
+  // before it".
+  async findPriorCompletedTrainingRunsInExperiment(
+    experimentId: string,
+    beforeCreatedAt: Date,
+    excludeTrainingRunId: string,
+  ): Promise<TrainingRun[]> {
+    return this.trainingRunRepository
+      .createQueryBuilder('trainingRun')
+      .where('trainingRun.experimentId = :experimentId', { experimentId })
+      .andWhere('trainingRun.id != :excludeTrainingRunId', {
+        excludeTrainingRunId,
+      })
+      .andWhere('trainingRun.status = :status', {
+        status: TrainingRunStatus.Completed,
+      })
+      .andWhere('trainingRun.createdAt < :beforeCreatedAt', {
+        beforeCreatedAt,
+      })
+      .orderBy('trainingRun.createdAt', 'ASC')
+      .getMany();
+  }
+
+  // Mirrors TypeOrmDatasetVersionRepository.findByIdForUser's own
+  // ownership join - re-implemented here directly (rather than importing
+  // that factory-provided repository, which isn't wired for plain class
+  // injection) since this module already reaches into entities directly
+  // everywhere else.
+  async findDatasetVersionForUser(
+    datasetVersionId: string,
+    userId: string,
+  ): Promise<DatasetVersion | null> {
+    return this.datasetVersionRepository
+      .createQueryBuilder('version')
+      .innerJoin('version.dataset', 'dataset')
+      .where('version.id = :datasetVersionId', { datasetVersionId })
+      .andWhere('dataset.userId = :userId', { userId })
+      .getOne();
+  }
+
+  // generation_dataset_refs/training_run_dataset_refs have no entities
+  // registered in this module (their own modules own that) - raw SQL
+  // against the two junction tables, same "raw SQL is the right tool
+  // outside QueryBuilder's reach" precedent as getIntegrationBreakdown.
+  async countGenerationReferencesForDatasetVersion(
+    datasetVersionId: string,
+  ): Promise<number> {
+    const rows = await this.dataSource.query<Array<{ count: string }>>(
+      `SELECT COUNT(DISTINCT generation_id)::text AS count
+       FROM generation_dataset_refs
+       WHERE dataset_version_id = $1`,
+      [datasetVersionId],
+    );
+    return Number(rows[0]?.count ?? 0);
+  }
+
+  async findTrainingRunsForDatasetVersion(
+    datasetVersionId: string,
+  ): Promise<TrainingRun[]> {
+    return this.trainingRunRepository
+      .createQueryBuilder('trainingRun')
+      .innerJoin(
+        'training_run_dataset_refs',
+        'ref',
+        'ref.training_run_id = trainingRun.id',
+      )
+      .where('ref.dataset_version_id = :datasetVersionId', {
+        datasetVersionId,
+      })
+      .distinct(true)
+      .orderBy('trainingRun.createdAt', 'DESC')
+      .getMany();
   }
 }
