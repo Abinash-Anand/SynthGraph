@@ -13,6 +13,12 @@ import {
 export type NumericFilterField = 'parameters' | 'metrics';
 export type NumericFilterOperator = 'gt' | 'gte' | 'lt' | 'lte' | 'eq';
 
+// These repository methods feed derived/aggregated reports, not a raw list a
+// client pages through - so instead of a public limit/offset API, they get a
+// fixed internal safety cap. Each query orders most-recent-first, so for a
+// user with more rows than this, it's the oldest that get dropped.
+const REPORT_ROW_LIMIT = 2000;
+
 const NUMERIC_FILTER_SQL_OPERATORS: Record<NumericFilterOperator, string> = {
   gt: '>',
   gte: '>=',
@@ -136,7 +142,7 @@ export class ReportsRepository {
       query.andWhere('project.id = :projectId', { projectId });
     }
 
-    return query.getMany();
+    return query.take(REPORT_ROW_LIMIT).getMany();
   }
 
   async findTrainingRunsForExperimentOwnedByUser(
@@ -211,6 +217,10 @@ export class ReportsRepository {
       .addSelect('trainingRun.experimentId', 'experimentId')
       .addSelect(`${column} ->> :filterKey`, 'matchedValue')
       .where('project.userId = :userId', { userId })
+      // Indexed containment check first (IDX_training_runs_parameters_gin /
+      // _metrics_gin, migration 1789000000000) - excludes rows lacking the
+      // key via the GIN index before the regex below ever runs on them.
+      .andWhere(`${column} ? :filterKey`)
       .andWhere(`${column} ->> :filterKey ~ '^-?[0-9]+(\\.[0-9]+)?$'`)
       .andWhere(`(${column} ->> :filterKey)::numeric ${sqlOperator} :filterValue`)
       .setParameters({ filterKey: key, filterValue: value });
@@ -219,7 +229,10 @@ export class ReportsRepository {
       query.andWhere('project.id = :projectId', { projectId });
     }
 
-    return query.getRawMany<NumericFilterMatchRow>();
+    return query
+      .orderBy('trainingRun.createdAt', 'DESC')
+      .take(REPORT_ROW_LIMIT)
+      .getRawMany<NumericFilterMatchRow>();
   }
 
   // The drift-alert baseline: completed runs in the same experiment that
@@ -296,6 +309,7 @@ export class ReportsRepository {
       })
       .distinct(true)
       .orderBy('trainingRun.createdAt', 'DESC')
+      .take(REPORT_ROW_LIMIT)
       .getMany();
   }
 }
