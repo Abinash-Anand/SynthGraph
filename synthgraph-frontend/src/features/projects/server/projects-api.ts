@@ -1,7 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { backendFetch } from "@/shared/http/http";
-import type { CreateProjectRequest } from "../schemas/project-schemas";
+import type { CreateProjectRequest, UpdateProjectRequest } from "../schemas/project-schemas";
 import type { Project } from "../types/project";
 
 export function listProjects(apiKey: string): Promise<Project[]> {
@@ -17,3 +17,17 @@ export function createProject(apiKey: string, input: CreateProjectRequest): Prom
 export const getProject = cache((apiKey: string, projectId: string): Promise<Project> => {
   return backendFetch(`/projects/${projectId}`, { token: apiKey });
 });
+
+export function updateProject(
+  apiKey: string,
+  projectId: string,
+  input: UpdateProjectRequest,
+): Promise<Project> {
+  return backendFetch(`/projects/${projectId}`, { method: "PATCH", body: input, token: apiKey });
+}
+
+// Soft-delete (archive) - the backend's DELETE route, not a real row
+// delete. See the backend's own archived_at migration/entity comments.
+export function archiveProject(apiKey: string, projectId: string): Promise<{ message: string }> {
+  return backendFetch(`/projects/${projectId}`, { method: "DELETE", token: apiKey });
+}
