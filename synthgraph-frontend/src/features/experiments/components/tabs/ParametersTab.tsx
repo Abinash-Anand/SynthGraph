@@ -12,16 +12,25 @@ function formatValue(value: unknown): string {
 
 /** Varying keys are the research question ("what actually changed?") -
  * kept prominent; constant keys are muted, per design.md's Parameter
- * Presentation rules. */
-function ParametersAcrossRuns({ runs }: { runs: EnrichedTrainingRun[] }) {
+ * Presentation rules. Which keys vary is read from correlationReport
+ * (the backend's own grouping already excludes constant keys - "a
+ * constant param across every run has nothing to correlate" - so a key
+ * present there is, by construction, a varying one) rather than
+ * recomputed here, so there's one definition of "varying" instead of two
+ * that could disagree on an edge case. */
+function ParametersAcrossRuns({
+  runs,
+  correlationReport,
+}: {
+  runs: EnrichedTrainingRun[];
+  correlationReport: ParameterCorrelationReport;
+}) {
   if (runs.length === 0) return null;
 
   const keys = Array.from(new Set(runs.flatMap((r) => Object.keys(r.run.parameters)))).sort();
-  const varyingKeys = keys.filter((key) => {
-    const values = runs.map((r) => formatValue(r.run.parameters[key]));
-    return new Set(values).size > 1;
-  });
-  const constantKeys = keys.filter((key) => !varyingKeys.includes(key));
+  const varyingKeySet = new Set(correlationReport.correlations.map((c) => c.parameterKey));
+  const varyingKeys = keys.filter((key) => varyingKeySet.has(key));
+  const constantKeys = keys.filter((key) => !varyingKeySet.has(key));
 
   return (
     <div className="overflow-x-auto rounded-xl border border-research-border">
@@ -38,7 +47,7 @@ function ParametersAcrossRuns({ runs }: { runs: EnrichedTrainingRun[] }) {
         </thead>
         <tbody>
           {[...varyingKeys, ...constantKeys].map((key) => {
-            const varying = varyingKeys.includes(key);
+            const varying = varyingKeySet.has(key);
             return (
               <tr
                 key={key}
@@ -84,7 +93,7 @@ export function ParametersTab({
         {runs.length === 0 ? (
           <p className="text-[13.5px] text-research-ink-muted">No training runs yet.</p>
         ) : (
-          <ParametersAcrossRuns runs={runs} />
+          <ParametersAcrossRuns runs={runs} correlationReport={correlationReport} />
         )}
       </div>
       <div>
