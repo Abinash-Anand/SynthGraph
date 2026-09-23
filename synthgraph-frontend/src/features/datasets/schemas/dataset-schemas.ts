@@ -54,3 +54,22 @@ export const createDatasetVersionSchema = z.object({
 export type CreateDatasetVersionInput = z.input<typeof createDatasetVersionSchema>;
 export type CreateDatasetVersionRequest = z.infer<typeof createDatasetVersionSchema>;
 export type CreateDatasetVersionFieldErrors = Partial<Record<keyof CreateDatasetVersionInput, string>>;
+
+// Mirrors the backend's UpdateDatasetDto: name/description only (no
+// metadata - matches the backend PATCH route's scope exactly).
+export const updateDatasetSchema = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .min(1, "Name is required.")
+      .max(255, "Name must be 255 characters or fewer.")
+      .optional(),
+    description: z.string().trim().max(2000).optional().or(z.literal("")),
+  })
+  .refine((data) => data.name !== undefined || data.description !== undefined, {
+    message: "Change the name or description before saving.",
+  });
+
+export type UpdateDatasetRequest = z.infer<typeof updateDatasetSchema>;
+export type UpdateDatasetFieldErrors = Partial<Record<keyof UpdateDatasetRequest, string>>;

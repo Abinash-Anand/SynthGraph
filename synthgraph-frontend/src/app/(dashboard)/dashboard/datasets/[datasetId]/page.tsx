@@ -3,10 +3,10 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getSession, requireSession } from "@/features/auth/server/session";
 import { CreateDatasetVersionForm } from "@/features/datasets/components/CreateDatasetVersionForm";
+import { DatasetDetailHeader } from "@/features/datasets/components/DatasetDetailHeader";
 import { DatasetVersionRow } from "@/features/datasets/components/DatasetVersionRow";
 import { getDataset, listDatasetVersions } from "@/features/datasets/server/datasets-api";
 import { NotFoundError } from "@/shared/http/errors";
-import { formatDate } from "@/shared/lib/format";
 import { EmptyState } from "@/shared/ui/EmptyState";
 
 type PageParams = { datasetId: string };
@@ -47,15 +47,9 @@ export default async function DatasetDetailPage({ params }: { params: Promise<Pa
         >
           ← Datasets
         </Link>
-        <h1 className="mt-2 text-[22px] font-medium tracking-[-0.01em] text-research-ink">
-          {dataset.name}
-        </h1>
-        {dataset.description ? (
-          <p className="mt-1 text-[14px] text-research-ink-muted">{dataset.description}</p>
-        ) : null}
-        <p className="mt-2 font-mono text-[11px] text-research-ink-muted">
-          Created {formatDate(dataset.createdAt)}
-        </p>
+        <div className="mt-2">
+          <DatasetDetailHeader dataset={dataset} />
+        </div>
       </div>
 
       <div className="flex flex-col gap-3">
