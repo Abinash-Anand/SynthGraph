@@ -24,6 +24,8 @@ import { ListDatasetsService } from './services/list-datasets.service.js';
 import { CreateDatasetVersionService } from './services/create-dataset-version.service.js';
 import { GetDatasetVersionService } from './services/get-dataset-version.service.js';
 import { ListDatasetVersionsService } from './services/list-dataset-versions.service.js';
+import { UpdateDatasetService } from './services/update-dataset.service.js';
+import { ArchiveDatasetService } from './services/archive-dataset.service.js';
 
 @Module({
   imports: [
@@ -66,6 +68,8 @@ import { ListDatasetVersionsService } from './services/list-dataset-versions.ser
     CreateDatasetVersionService,
     GetDatasetVersionService,
     ListDatasetVersionsService,
+    UpdateDatasetService,
+    ArchiveDatasetService,
   ],
 })
 export class DatasetsModule {}
