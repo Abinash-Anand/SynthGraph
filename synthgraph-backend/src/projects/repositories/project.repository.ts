@@ -10,4 +10,12 @@ export interface ProjectRepository {
     limit: number,
     offset: number,
   ): Promise<Project[]>;
+
+  update(
+    projectId: string,
+    userId: string,
+    changes: { name?: string; description?: string },
+  ): Promise<boolean>;
+
+  archive(projectId: string, userId: string): Promise<boolean>;
 }

@@ -9,6 +9,8 @@ import { GetProjectService } from './services/get-project.service.js';
 import { ProjectsController } from './projects.controller.js';
 import { ListProjectsService } from './services/list-projects.service.js';
 import { CreateProjectService } from './services/create-project.service.js';
+import { UpdateProjectService } from './services/update-project.service.js';
+import { ArchiveProjectService } from './services/archive-project.service.js';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Project]), AuthModule],
@@ -21,6 +23,8 @@ import { CreateProjectService } from './services/create-project.service.js';
     GetProjectService,
     CreateProjectService,
     ListProjectsService,
+    UpdateProjectService,
+    ArchiveProjectService,
   ],
   exports: [PROJECT_REPOSITORY],
 })
