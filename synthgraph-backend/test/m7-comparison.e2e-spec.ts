@@ -270,6 +270,20 @@ describe('M7 Generation comparison (e2e)', () => {
       generationA.id,
       generationB.id,
     ]);
+
+    // Additive `normalizedGenerations` field alongside the existing
+    // `generations` field (untouched - the CLI's `synthgraph compare`
+    // command already consumes it).
+    expect(response.body.normalizedGenerations).toHaveLength(2);
+    expect(
+      response.body.normalizedGenerations.map(
+        (generation: { id: string }) => generation.id,
+      ),
+    ).toEqual([generationA.id, generationB.id]);
+    expect(response.body.normalizedGenerations[0]).toMatchObject({
+      id: generationA.id,
+      experimentId: generationA.experimentId,
+    });
   });
 
   it('computes differences for parameters that vary between generations', async () => {

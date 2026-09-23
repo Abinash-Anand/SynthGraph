@@ -124,6 +124,26 @@ describe('GetReproductionManifestService', () => {
         inputs: generation.inputs,
         outputs: generation.outputs,
       },
+      // Additive `normalized` field - same source data as `generation`
+      // above, camelCase, complete (the mock doesn't set createdAt/
+      // updatedAt/metadata, so those come through as undefined here too).
+      normalized: {
+        id: generation.id,
+        experimentId: generation.experimentId,
+        name: generation.name,
+        description: generation.description,
+        generator: generation.generator,
+        parameters: generation.parameters,
+        reproducibility: generation.reproducibility,
+        status: generation.status,
+        inputs: generation.inputs,
+        outputs: generation.outputs,
+        startedAt: generation.startedAt,
+        completedAt: generation.completedAt,
+        createdAt: generation.createdAt,
+        updatedAt: generation.updatedAt,
+        metadata: generation.metadata,
+      },
       datasetReferences: [
         {
           datasetVersionId: 'dataset-version-1',

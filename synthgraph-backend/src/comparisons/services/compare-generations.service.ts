@@ -8,6 +8,10 @@ import {
 import { Generation } from '../../database/entities/generation.entity.js';
 import type { GenerationRepository } from '../../generations/repositories/generation.repository.js';
 import { GENERATION_REPOSITORY } from '../../generations/repositories/generation.tokens.js';
+import {
+  NormalizedGeneration,
+  toNormalizedGeneration,
+} from '../../generations/responses/generation.response.js';
 
 export type GenerationDifference = {
   field: string;
@@ -26,6 +30,7 @@ export class CompareGenerationsService {
     userId: string,
   ): Promise<{
     generations: Generation[];
+    normalizedGenerations: NormalizedGeneration[];
     differences: GenerationDifference[];
   }> {
     const uniqueGenerationIds = [...new Set(generationIds)];
@@ -56,6 +61,7 @@ export class CompareGenerationsService {
 
     return {
       generations,
+      normalizedGenerations: generations.map(toNormalizedGeneration),
       differences: buildDifferences(generations),
     };
   }
