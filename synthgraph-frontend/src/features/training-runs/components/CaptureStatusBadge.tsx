@@ -1,8 +1,12 @@
 import { Badge } from "@/components/ui/Badge";
 import type { CaptureStatusValue } from "../types/training-run";
 
+// "complete" deliberately isn't "ok" (green) - that tone is already used by
+// TrainingRunStatusBadge's "completed", and the two badges render side by
+// side. Capture completeness and run success are different axes; giving
+// them different tones avoids a same-color collision at a glance.
 const CAPTURE_TONE = {
-  complete: "ok",
+  complete: "blue",
   partial: "warn",
   unknown: "neutral",
 } as const;

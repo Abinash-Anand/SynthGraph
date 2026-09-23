@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { CodeBlock } from "@/components/ui/CodeBlock";
 import { cn } from "@/lib/utils";
+import { JsonTree } from "./JsonTree";
 
 export type KeyValueRow = { label: string; value: ReactNode };
 
@@ -21,6 +21,18 @@ export function KeyValueList({
   emptyLabel?: string;
 }) {
   const [showRaw, setShowRaw] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const copyRaw = async () => {
+    if (raw === undefined) return;
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(raw, null, 2));
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-3">
@@ -35,16 +47,31 @@ export function KeyValueList({
       )}
       {raw !== undefined ? (
         <div>
-          <button
-            type="button"
-            onClick={() => setShowRaw((v) => !v)}
-            className="font-mono text-[11px] tracking-[0.08em] text-research-ink-muted uppercase transition-colors hover:text-research-accent-hover"
-          >
-            {showRaw ? "Hide raw JSON" : "View raw JSON"}
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setShowRaw((v) => !v)}
+              className="font-mono text-[11px] tracking-[0.08em] text-research-ink-muted uppercase transition-colors hover:text-research-accent-hover"
+            >
+              {showRaw ? "Hide raw JSON" : "View raw JSON"}
+            </button>
+            {showRaw ? (
+              <button
+                type="button"
+                onClick={copyRaw}
+                className="font-mono text-[11px] tracking-[0.08em] text-research-ink-muted uppercase transition-colors hover:text-research-accent-hover"
+              >
+                {copied ? "Copied" : "Copy"}
+              </button>
+            ) : null}
+          </div>
           {showRaw ? (
-            <div className="mt-2">
-              <CodeBlock language="json" code={JSON.stringify(raw, null, 2)} />
+            // Collapsible per-node, not a flat dump - lets a large nested
+            // object (e.g. a domain-randomization config) be explored one
+            // branch at a time. max-h/overflow-y bounds it inside a fixed-
+            // width rail instead of growing the rail unboundedly.
+            <div className="mt-2 max-h-[420px] overflow-y-auto rounded-lg border border-research-border bg-research-bg p-3">
+              <JsonTree value={raw} />
             </div>
           ) : null}
         </div>
@@ -56,8 +83,10 @@ export function KeyValueList({
 function FieldRow({ label, value }: { label: string; value: ReactNode }) {
   return (
     <>
-      <dt className="text-[13px] text-research-ink-muted">{label}</dt>
-      <dd className={cn("font-mono text-[13px] text-research-ink", "tabular-nums")}>{value}</dd>
+      <dt className="min-w-0 text-[13px] text-research-ink-muted">{label}</dt>
+      <dd className={cn("min-w-0 font-mono text-[13px] text-research-ink", "tabular-nums", "break-all")}>
+        {value}
+      </dd>
     </>
   );
 }
