@@ -24,11 +24,13 @@ export class TypeOrmGenerationDatasetReferenceRepository
   async exists(
     generationId: string,
     datasetVersionId: string,
+    role: string,
   ): Promise<boolean> {
     const reference = await this.repository.findOne({
       where: {
         generationId,
         datasetVersionId,
+        role,
       },
     });
 
