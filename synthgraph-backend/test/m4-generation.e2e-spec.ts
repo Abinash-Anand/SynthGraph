@@ -204,6 +204,22 @@ describe('M4 Generation provenance workflow (e2e)', () => {
     expect(response.body.id).toEqual(expect.any(String));
     expect(response.body.created_at).toEqual(expect.any(String));
 
+    // Additive `normalized` field: same data as the top-level snake_case
+    // response, camelCase, alongside it - not replacing it.
+    expect(response.body.normalized).toMatchObject({
+      id: response.body.id,
+      experimentId: experimentA.id,
+      name: 'Persisted Generation',
+      description: null,
+      generator: generationPayload.generator,
+      parameters: generationPayload.parameters,
+      status: 'pending',
+      startedAt: null,
+      completedAt: null,
+    });
+    expect(response.body.normalized.createdAt).toEqual(expect.any(String));
+    expect(response.body.normalized.updatedAt).toEqual(expect.any(String));
+
     const stored = await generationRepository.findOneByOrFail({
       id: response.body.id as string,
     });
