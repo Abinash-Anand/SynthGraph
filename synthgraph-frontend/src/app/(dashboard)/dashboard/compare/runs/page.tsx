@@ -1,14 +1,14 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ComparisonTable } from "@/features/comparisons/components/ComparisonTable";
-import { GenerationIdsForm } from "@/features/comparisons/components/GenerationIdsForm";
-import { compareGenerations } from "@/features/comparisons/server/comparisons-api";
 import { requireSession } from "@/features/auth/server/session";
+import { TrainingRunComparisonTable } from "@/features/comparisons/components/TrainingRunComparisonTable";
+import { TrainingRunIdsForm } from "@/features/comparisons/components/TrainingRunIdsForm";
+import { compareTrainingRuns } from "@/features/comparisons/server/comparisons-api";
 import { getExperiment } from "@/features/experiments/server/experiments-api";
 
-export const metadata: Metadata = { title: "Compare" };
+export const metadata: Metadata = { title: "Compare Training Runs" };
 
-export default async function ComparePage({
+export default async function CompareTrainingRunsPage({
   searchParams,
 }: {
   searchParams: Promise<{ ids?: string }>;
@@ -21,33 +21,30 @@ export default async function ComparePage({
       <div className="flex max-w-[640px] flex-col gap-6">
         <div>
           <h1 className="text-[22px] font-medium tracking-[-0.01em] text-research-ink">
-            Compare generations
+            Compare training runs
           </h1>
           <p className="mt-1 text-[13.5px] text-research-ink-muted">
-            Paste IDs below, or select generations to compare from an experiment&rsquo;s Overview tab.{" "}
-            <Link
-              href="/dashboard/compare/runs"
-              className="underline underline-offset-2 hover:text-research-accent-hover"
-            >
-              Compare training runs instead
+            Paste IDs below, or select training runs to compare from an experiment&rsquo;s Runs tab.{" "}
+            <Link href="/dashboard/compare" className="underline underline-offset-2 hover:text-research-accent-hover">
+              Compare generations instead
             </Link>
           </p>
         </div>
-        <GenerationIdsForm prefill={requested} />
+        <TrainingRunIdsForm prefill={requested} />
       </div>
     );
   }
 
   const session = await requireSession();
-  const result = await compareGenerations(session.apiKey, requested).catch(() => null);
+  const result = await compareTrainingRuns(session.apiKey, requested).catch(() => null);
 
-  // Generation only carries experiment_id, not projectId — resolve each
-  // unique experiment (deduped, since compared generations often share one)
-  // via the flat GET /experiments/:id route so the table can link back to
-  // each generation's detail page.
+  // TrainingRun only carries experimentId, not projectId — resolve each
+  // unique experiment (deduped, since compared runs often share one) via
+  // the flat GET /experiments/:id route, same pattern as the generations
+  // compare page.
   let projectIdByExperimentId: Record<string, string> = {};
   if (result) {
-    const uniqueExperimentIds = Array.from(new Set(result.generations.map((g) => g.experimentId)));
+    const uniqueExperimentIds = Array.from(new Set(result.trainingRuns.map((r) => r.experimentId)));
     const experiments = await Promise.all(
       uniqueExperimentIds.map((id) => getExperiment(session.apiKey, id).catch(() => null)),
     );
@@ -60,16 +57,16 @@ export default async function ComparePage({
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-[22px] font-medium tracking-[-0.01em] text-research-ink">Compare generations</h1>
+      <h1 className="text-[22px] font-medium tracking-[-0.01em] text-research-ink">Compare training runs</h1>
       <div className="max-w-[640px]">
-        <GenerationIdsForm
+        <TrainingRunIdsForm
           prefill={requested}
           error={result ? undefined : "Could not load that comparison. Check the IDs and try again."}
         />
       </div>
       {result ? (
-        <ComparisonTable
-          generations={result.generations}
+        <TrainingRunComparisonTable
+          trainingRuns={result.trainingRuns}
           differences={result.differences}
           projectIdByExperimentId={projectIdByExperimentId}
         />

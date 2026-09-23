@@ -49,6 +49,7 @@ export function ExperimentWorkspace({
   const selected = parseSelectedEntity(searchParams.get("entity"));
 
   const [compareMode, setCompareMode] = useState(false);
+  const [compareTarget, setCompareTarget] = useState<"generation" | "trainingRun">("generation");
   const [compareSelection, setCompareSelection] = useState<Set<string>>(new Set());
 
   const toggleCompareSelection = useCallback((id: string) => {
@@ -126,6 +127,9 @@ export function ExperimentWorkspace({
           runs={trainingRuns}
           selectedId={selected?.type === "run" ? selected.id : null}
           onSelect={(id) => setSelected({ type: "run", id })}
+          compareMode={compareMode && compareTarget === "trainingRun"}
+          compareSelection={compareSelection}
+          onToggleCompareSelection={toggleCompareSelection}
         />
       );
       break;
@@ -154,7 +158,7 @@ export function ExperimentWorkspace({
           trainingRuns={trainingRuns}
           onSelectGeneration={(id) => setSelected({ type: "generation", id })}
           onSelectRun={(id) => setSelected({ type: "run", id })}
-          compareMode={compareMode}
+          compareMode={compareMode && compareTarget === "generation"}
           compareSelection={compareSelection}
           onToggleCompareSelection={toggleCompareSelection}
         />
@@ -167,20 +171,26 @@ export function ExperimentWorkspace({
         experiment={experiment}
         generations={generations.map((g) => g.generation)}
         trainingRuns={trainingRuns}
+        activeTab={activeTab}
         onOpenReproduction={() => setTab("reproduction")}
         compareMode={compareMode}
+        compareTarget={compareTarget}
         compareCount={compareSelection.size}
         onStartCompare={() => {
+          const target = activeTab === "runs" ? "trainingRun" : "generation";
+          setCompareTarget(target);
           setCompareMode(true);
           setCompareSelection(new Set());
-          setTab("overview");
+          if (target === "generation") setTab("overview");
         }}
         onCancelCompare={() => {
           setCompareMode(false);
           setCompareSelection(new Set());
         }}
         onConfirmCompare={() => {
-          router.push(`/dashboard/compare?ids=${Array.from(compareSelection).join(",")}`);
+          const ids = Array.from(compareSelection).join(",");
+          const path = compareTarget === "trainingRun" ? "/dashboard/compare/runs" : "/dashboard/compare";
+          router.push(`${path}?ids=${ids}`);
         }}
       />
       <Tabs tabs={TABS} />

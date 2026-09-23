@@ -7,8 +7,15 @@ export const compareGenerationsSchema = z.object({
     .max(10, "Compare at most 10 generations at a time."),
 });
 
+export const compareTrainingRunsSchema = z.object({
+  trainingRunIds: z
+    .array(z.string().uuid("Each ID must be a valid UUID."))
+    .min(2, "Enter at least 2 training run IDs.")
+    .max(10, "Compare at most 10 training runs at a time."),
+});
+
 /** Splits newline- or comma-separated pasted IDs, trims, drops empties, dedupes. */
-export function parseGenerationIdsInput(raw: string): string[] {
+export function parseIdsInput(raw: string): string[] {
   const ids = raw
     .split(/[\n,]+/)
     .map((id) => id.trim())
