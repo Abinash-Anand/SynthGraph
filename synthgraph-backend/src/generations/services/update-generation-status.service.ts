@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -8,7 +9,8 @@ import {
   Generation,
   GenerationStatus,
 } from '../../database/entities/generation.entity.js';
-import { TypeOrmGenerationRepository } from '../repositories/typeorm-generation.repository.js';
+import type { GenerationRepository } from '../repositories/generation.repository.js';
+import { GENERATION_REPOSITORY } from '../repositories/generation.tokens.js';
 
 const validTransitions: Readonly<
   Record<GenerationStatus, readonly GenerationStatus[]>
@@ -25,7 +27,8 @@ const validTransitions: Readonly<
 @Injectable()
 export class UpdateGenerationStatusService {
   constructor(
-    private readonly generationRepository: TypeOrmGenerationRepository,
+    @Inject(GENERATION_REPOSITORY)
+    private readonly generationRepository: GenerationRepository,
   ) {}
 
   async execute(

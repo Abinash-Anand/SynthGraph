@@ -1,10 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 
-import { TypeOrmProjectRepository } from '../repositories/typeorm-project.repository.js';
+import type { ProjectRepository } from '../repositories/project.repository.js';
+import { PROJECT_REPOSITORY } from '../repositories/project.tokens.js';
 
 @Injectable()
 export class GetProjectService {
-  constructor(private readonly projectRepository: TypeOrmProjectRepository) {}
+  constructor(
+    @Inject(PROJECT_REPOSITORY)
+    private readonly projectRepository: ProjectRepository,
+  ) {}
 
   async execute(projectId: string, userId: string) {
     const project = await this.projectRepository.findByIdForUser(

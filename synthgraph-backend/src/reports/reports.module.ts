@@ -8,7 +8,9 @@ import { Experiment } from '../database/entities/experiment.entity.js';
 import { TrainingRunMetric } from '../database/entities/training-run-metric.entity.js';
 import { TrainingRun } from '../database/entities/training-run.entity.js';
 import { TypeOrmExperimentRepository } from '../experiments/repositories/typeorm-experiment.repository.js';
+import { EXPERIMENT_REPOSITORY } from '../experiments/repositories/experiment.tokens.js';
 import { TypeOrmTrainingRunRepository } from '../training-runs/repositories/typeorm-training-run.repository.js';
+import { TRAINING_RUN_REPOSITORY } from '../training-runs/repositories/training-run.tokens.js';
 
 import { ReportsController } from './reports.controller.js';
 import { ReportsRepository } from './repositories/reports.repository.js';
@@ -25,13 +27,15 @@ import { SearchTrainingRunsService } from './services/search-training-runs.servi
   imports: [
     AuthModule,
     // Experiment/TrainingRun are registered here too (not just in their own
-    // modules) because TypeOrmExperimentRepository/TypeOrmTrainingRunRepository
-    // are re-declared as this module's own providers below - forFeature
-    // bindings are module-scoped, so each module that instantiates a
-    // repository needs its own registration. Mirrors ComparisonsModule
-    // re-declaring TypeOrmGenerationRepository. DatasetVersion is queried
-    // directly by ReportsRepository (not via datasets/'s own factory-
-    // provided repository, which isn't wired for plain class injection).
+    // modules) because their repositories are re-declared as this module's
+    // own providers below (behind EXPERIMENT_REPOSITORY/TRAINING_RUN_REPOSITORY,
+    // same tokens their own modules provide - not a separate binding) -
+    // forFeature bindings are module-scoped, so each module that
+    // instantiates a repository needs its own registration. Mirrors
+    // ComparisonsModule re-declaring TypeOrmGenerationRepository.
+    // DatasetVersion is queried directly by ReportsRepository (not via
+    // datasets/'s own factory-provided repository, which isn't wired for
+    // plain class injection).
     TypeOrmModule.forFeature([
       TrainingRun,
       EvaluationResult,
@@ -43,8 +47,17 @@ import { SearchTrainingRunsService } from './services/search-training-runs.servi
   controllers: [ReportsController],
   providers: [
     ReportsRepository,
-    TypeOrmExperimentRepository,
-    TypeOrmTrainingRunRepository,
+
+    {
+      provide: EXPERIMENT_REPOSITORY,
+      useClass: TypeOrmExperimentRepository,
+    },
+
+    {
+      provide: TRAINING_RUN_REPOSITORY,
+      useClass: TypeOrmTrainingRunRepository,
+    },
+
     GetCaptureCompletenessReportService,
     GetEfficiencyLeaderboardService,
     GetParameterCorrelationReportService,
