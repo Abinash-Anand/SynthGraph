@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 
 import { Asset } from '../../database/entities/asset.entity.js';
 import type { AssetRepository } from './asset.repository.js';
@@ -24,6 +24,7 @@ export class TypeOrmAssetRepository implements AssetRepository {
       where: {
         id: assetId,
         userId,
+        archivedAt: IsNull(),
       },
     });
   }
@@ -36,6 +37,7 @@ export class TypeOrmAssetRepository implements AssetRepository {
     return this.repository.find({
       where: {
         userId,
+        archivedAt: IsNull(),
       },
       order: {
         createdAt: 'DESC',
@@ -43,5 +45,27 @@ export class TypeOrmAssetRepository implements AssetRepository {
       take: limit,
       skip: offset,
     });
+  }
+
+  async update(
+    assetId: string,
+    userId: string,
+    changes: { name?: string; description?: string },
+  ): Promise<boolean> {
+    const result = await this.repository.update(
+      { id: assetId, userId, archivedAt: IsNull() },
+      changes,
+    );
+
+    return result.affected === 1;
+  }
+
+  async archive(assetId: string, userId: string): Promise<boolean> {
+    const result = await this.repository.update(
+      { id: assetId, userId, archivedAt: IsNull() },
+      { archivedAt: new Date() },
+    );
+
+    return result.affected === 1;
   }
 }

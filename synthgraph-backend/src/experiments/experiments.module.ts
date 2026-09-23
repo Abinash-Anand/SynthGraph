@@ -9,6 +9,8 @@ import { PROJECT_REPOSITORY } from '../projects/repositories/project.tokens.js';
 import { CreateExperimentService } from './services/create-experiment.service.js';
 import { GetExperimentService } from './services/get-experiment.service.js';
 import { ListExperimentsService } from './services/list-experiments.service.js';
+import { UpdateExperimentService } from './services/update-experiment.service.js';
+import { ArchiveExperimentService } from './services/archive-experiment.service.js';
 import { TypeOrmExperimentRepository } from './repositories/typeorm-experiment.repository.js';
 import { EXPERIMENT_REPOSITORY } from './repositories/experiment.tokens.js';
 import { ExperimentsController } from './experiments.controller.js';
@@ -28,6 +30,8 @@ import { ExperimentsController } from './experiments.controller.js';
     CreateExperimentService,
     ListExperimentsService,
     GetExperimentService,
+    UpdateExperimentService,
+    ArchiveExperimentService,
   ],
   exports: [EXPERIMENT_REPOSITORY],
 })

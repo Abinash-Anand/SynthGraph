@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 
 import { Project } from '../../database/entities/project.entity.js';
 import { ProjectRepository } from './project.repository.js';
@@ -24,6 +24,7 @@ export class TypeOrmProjectRepository implements ProjectRepository {
       where: {
         id: projectId,
         userId,
+        archivedAt: IsNull(),
       },
     });
   }
@@ -36,6 +37,7 @@ export class TypeOrmProjectRepository implements ProjectRepository {
     return this.repository.find({
       where: {
         userId,
+        archivedAt: IsNull(),
       },
       order: {
         createdAt: 'DESC',
@@ -43,5 +45,27 @@ export class TypeOrmProjectRepository implements ProjectRepository {
       take: limit,
       skip: offset,
     });
+  }
+
+  async update(
+    projectId: string,
+    userId: string,
+    changes: { name?: string; description?: string },
+  ): Promise<boolean> {
+    const result = await this.repository.update(
+      { id: projectId, userId, archivedAt: IsNull() },
+      changes,
+    );
+
+    return result.affected === 1;
+  }
+
+  async archive(projectId: string, userId: string): Promise<boolean> {
+    const result = await this.repository.update(
+      { id: projectId, userId, archivedAt: IsNull() },
+      { archivedAt: new Date() },
+    );
+
+    return result.affected === 1;
   }
 }

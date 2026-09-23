@@ -25,4 +25,12 @@ export interface ExperimentRepository {
     limit: number,
     offset: number,
   ): Promise<Experiment[]>;
+
+  update(
+    experimentId: string,
+    userId: string,
+    changes: { name?: string; description?: string },
+  ): Promise<boolean>;
+
+  archive(experimentId: string, userId: string): Promise<boolean>;
 }

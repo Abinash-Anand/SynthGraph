@@ -1,8 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -15,6 +17,7 @@ import { PaginationQueryDto } from '../../common/dto/pagination-query.dto.js';
 
 import { CreateAssetDto } from '../dto/create-asset.dto.js';
 import { CreateAssetVersionDto } from '../dto/create-asset-version.dto.js';
+import { UpdateAssetDto } from '../dto/update-asset.dto.js';
 
 import { CreateAssetService } from '../services/create-asset.service.js';
 import { GetAssetService } from '../services/get-asset.service.js';
@@ -22,6 +25,8 @@ import { ListAssetsService } from '../services/list-assets.service.js';
 import { CreateAssetVersionService } from '../services/create-asset-version.service.js';
 import { GetAssetVersionService } from '../services/get-asset-version.service.js';
 import { ListAssetVersionsService } from '../services/list-asset-versions.service.js';
+import { UpdateAssetService } from '../services/update-asset.service.js';
+import { ArchiveAssetService } from '../services/archive-asset.service.js';
 
 type AuthenticatedRequest = Request & {
   user: {
@@ -39,6 +44,8 @@ export class AssetsController {
     private readonly createAssetVersionService: CreateAssetVersionService,
     private readonly getAssetVersionService: GetAssetVersionService,
     private readonly listAssetVersionsService: ListAssetVersionsService,
+    private readonly updateAssetService: UpdateAssetService,
+    private readonly archiveAssetService: ArchiveAssetService,
   ) {}
 
   @Post('assets')
@@ -73,6 +80,28 @@ export class AssetsController {
       assetId,
       request.user.id,
     );
+  }
+
+  @Patch('assets/:assetId')
+  async updateAsset(
+    @Req() request: AuthenticatedRequest,
+    @Param('assetId') assetId: string,
+    @Body() body: UpdateAssetDto,
+  ) {
+    return this.updateAssetService.execute(assetId, request.user.id, {
+      name: body.name,
+      description: body.description,
+    });
+  }
+
+  @Delete('assets/:assetId')
+  async archiveAsset(
+    @Req() request: AuthenticatedRequest,
+    @Param('assetId') assetId: string,
+  ) {
+    await this.archiveAssetService.execute(assetId, request.user.id);
+
+    return { message: 'Asset archived' };
   }
 
   @Post('assets/:assetId/versions')

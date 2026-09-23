@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 
 import { Dataset } from '../../database/entities/dataset.entity.js';
 import type { DatasetRepository } from './dataset.repository.js';
@@ -24,6 +24,7 @@ export class TypeOrmDatasetRepository implements DatasetRepository {
       where: {
         id: datasetId,
         userId,
+        archivedAt: IsNull(),
       },
     });
   }
@@ -36,6 +37,7 @@ export class TypeOrmDatasetRepository implements DatasetRepository {
     return this.repository.find({
       where: {
         userId,
+        archivedAt: IsNull(),
       },
       order: {
         createdAt: 'DESC',
@@ -43,5 +45,27 @@ export class TypeOrmDatasetRepository implements DatasetRepository {
       take: limit,
       skip: offset,
     });
+  }
+
+  async update(
+    datasetId: string,
+    userId: string,
+    changes: { name?: string; description?: string },
+  ): Promise<boolean> {
+    const result = await this.repository.update(
+      { id: datasetId, userId, archivedAt: IsNull() },
+      changes,
+    );
+
+    return result.affected === 1;
+  }
+
+  async archive(datasetId: string, userId: string): Promise<boolean> {
+    const result = await this.repository.update(
+      { id: datasetId, userId, archivedAt: IsNull() },
+      { archivedAt: new Date() },
+    );
+
+    return result.affected === 1;
   }
 }

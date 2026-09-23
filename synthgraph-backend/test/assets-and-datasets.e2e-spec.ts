@@ -290,6 +290,113 @@ describe('Assets and datasets (e2e)', () => {
         .expect(400);
     });
 
+    it('updates name and description via PATCH', async () => {
+      const created = await request(app.getHttpServer())
+        .post('/assets')
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'Patch Original Asset', description: 'Original' })
+        .expect(201);
+
+      const patched = await request(app.getHttpServer())
+        .patch(`/assets/${created.body.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'Patch Updated Asset', description: 'Updated' })
+        .expect(200);
+
+      expect(patched.body).toMatchObject({
+        id: created.body.id,
+        name: 'Patch Updated Asset',
+        description: 'Updated',
+      });
+
+      await assetRepository.delete(created.body.id);
+    });
+
+    it('rejects an empty PATCH body', async () => {
+      const created = await request(app.getHttpServer())
+        .post('/assets')
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'Patch Empty Asset' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .patch(`/assets/${created.body.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({})
+        .expect(400);
+
+      await assetRepository.delete(created.body.id);
+    });
+
+    it('does not allow patching another user asset', async () => {
+      const created = await request(app.getHttpServer())
+        .post('/assets')
+        .set('Authorization', `Bearer ${apiKeyB}`)
+        .send({ name: 'Patch User B Asset' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .patch(`/assets/${created.body.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'Hijacked' })
+        .expect(404);
+
+      await assetRepository.delete(created.body.id);
+    });
+
+    it('archives an asset via DELETE, hiding it from GET and list', async () => {
+      const created = await request(app.getHttpServer())
+        .post('/assets')
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'Archive Me Asset' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .delete(`/assets/${created.body.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .get(`/assets/${created.body.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(404);
+
+      const listed = await request(app.getHttpServer())
+        .get('/assets?limit=200')
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(200);
+
+      expect(
+        listed.body.some(
+          (asset: { id: string }) => asset.id === created.body.id,
+        ),
+      ).toBe(false);
+
+      // Archiving an already-archived asset is not idempotent - matches
+      // ApiKeyManagementService.revoke()'s convention elsewhere in this API.
+      await request(app.getHttpServer())
+        .delete(`/assets/${created.body.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(404);
+
+      await assetRepository.delete(created.body.id);
+    });
+
+    it('does not allow archiving another user asset', async () => {
+      const created = await request(app.getHttpServer())
+        .post('/assets')
+        .set('Authorization', `Bearer ${apiKeyB}`)
+        .send({ name: 'Archive User B Asset' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .delete(`/assets/${created.body.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(404);
+
+      await assetRepository.delete(created.body.id);
+    });
+
     describe('ownership isolation', () => {
       it('prevents user B from retrieving user A asset', async () => {
         await request(app.getHttpServer())
@@ -521,6 +628,113 @@ describe('Assets and datasets (e2e)', () => {
         .set('Authorization', `Bearer ${apiKeyA}`)
         .send({ version: '2' })
         .expect(400);
+    });
+
+    it('updates name and description via PATCH', async () => {
+      const created = await request(app.getHttpServer())
+        .post('/datasets')
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'Patch Original Dataset', description: 'Original' })
+        .expect(201);
+
+      const patched = await request(app.getHttpServer())
+        .patch(`/datasets/${created.body.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'Patch Updated Dataset', description: 'Updated' })
+        .expect(200);
+
+      expect(patched.body).toMatchObject({
+        id: created.body.id,
+        name: 'Patch Updated Dataset',
+        description: 'Updated',
+      });
+
+      await datasetRepository.delete(created.body.id);
+    });
+
+    it('rejects an empty PATCH body', async () => {
+      const created = await request(app.getHttpServer())
+        .post('/datasets')
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'Patch Empty Dataset' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .patch(`/datasets/${created.body.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({})
+        .expect(400);
+
+      await datasetRepository.delete(created.body.id);
+    });
+
+    it('does not allow patching another user dataset', async () => {
+      const created = await request(app.getHttpServer())
+        .post('/datasets')
+        .set('Authorization', `Bearer ${apiKeyB}`)
+        .send({ name: 'Patch User B Dataset' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .patch(`/datasets/${created.body.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'Hijacked' })
+        .expect(404);
+
+      await datasetRepository.delete(created.body.id);
+    });
+
+    it('archives a dataset via DELETE, hiding it from GET and list', async () => {
+      const created = await request(app.getHttpServer())
+        .post('/datasets')
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'Archive Me Dataset' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .delete(`/datasets/${created.body.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .get(`/datasets/${created.body.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(404);
+
+      const listed = await request(app.getHttpServer())
+        .get('/datasets?limit=200')
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(200);
+
+      expect(
+        listed.body.some(
+          (dataset: { id: string }) => dataset.id === created.body.id,
+        ),
+      ).toBe(false);
+
+      // Archiving an already-archived dataset is not idempotent - matches
+      // ApiKeyManagementService.revoke()'s convention elsewhere in this API.
+      await request(app.getHttpServer())
+        .delete(`/datasets/${created.body.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(404);
+
+      await datasetRepository.delete(created.body.id);
+    });
+
+    it('does not allow archiving another user dataset', async () => {
+      const created = await request(app.getHttpServer())
+        .post('/datasets')
+        .set('Authorization', `Bearer ${apiKeyB}`)
+        .send({ name: 'Archive User B Dataset' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .delete(`/datasets/${created.body.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(404);
+
+      await datasetRepository.delete(created.body.id);
     });
 
     describe('ownership isolation', () => {
