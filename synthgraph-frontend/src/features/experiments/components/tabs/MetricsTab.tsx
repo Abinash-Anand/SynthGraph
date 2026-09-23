@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { MetricsTable } from "@/features/training-runs/components/MetricsTable";
+import { MetricKeyPicker, extractMetricKeys, useMetricKeySelection } from "@/shared/charts/MetricKeyPicker";
 import type { EnrichedTrainingRun } from "../../types/experiment-workspace";
 
 // ECharts is heavy - split out of the main bundle, only loaded when the
@@ -22,14 +23,20 @@ export function MetricsTab({
 }) {
   const runsWithMetrics = runs.filter((r) => r.metrics.length > 0);
 
-  if (runsWithMetrics.length === 0) {
-    return <p className="text-[13.5px] text-research-ink-muted">No training runs have step metrics yet.</p>;
-  }
-
   const activeRunId =
     (selectedRunId && runsWithMetrics.some((r) => r.run.id === selectedRunId) ? selectedRunId : null) ??
-    runsWithMetrics[0].run.id;
-  const active = runsWithMetrics.find((r) => r.run.id === activeRunId)!;
+    runsWithMetrics[0]?.run.id ?? null;
+  const active = runsWithMetrics.find((r) => r.run.id === activeRunId) ?? null;
+
+  // Hooks must run unconditionally on every render - compute against an
+  // empty fallback rather than early-returning above this point. The React
+  // Compiler handles memoization here, so no manual useMemo.
+  const allMetricKeys = extractMetricKeys(active?.metrics ?? []);
+  const [selectedKeys, toggleKey] = useMetricKeySelection(allMetricKeys);
+
+  if (runsWithMetrics.length === 0 || !active) {
+    return <p className="text-[13.5px] text-research-ink-muted">No training runs have step metrics yet.</p>;
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -37,7 +44,7 @@ export function MetricsTab({
         <label className="flex flex-col gap-2 text-[13.5px] text-research-ink">
           Training run
           <select
-            value={activeRunId}
+            value={active.run.id}
             onChange={(event) => onSelectRun(event.target.value)}
             className="w-full rounded-md border border-research-border bg-research-bg px-3.5 py-2.5 text-[14px] text-research-ink focus:border-research-accent-subtle focus:outline-none"
           >
@@ -49,7 +56,8 @@ export function MetricsTab({
           </select>
         </label>
       </div>
-      <MetricsLineChart metrics={active.metrics} />
+      <MetricKeyPicker keys={allMetricKeys} selected={selectedKeys} onToggle={toggleKey} />
+      <MetricsLineChart metrics={active.metrics} selectedKeys={selectedKeys} />
       <MetricsTable metrics={active.metrics} />
     </div>
   );

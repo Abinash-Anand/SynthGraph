@@ -9,6 +9,7 @@ import { useLiveTrainingRun } from "@/features/training-runs/hooks/useLiveTraini
 import type { TrainingRunHealthMetric } from "@/features/reports/types/report";
 import { cn } from "@/lib/utils";
 import { formatDateTime } from "@/shared/lib/format";
+import { MetricKeyPicker, extractMetricKeys, useMetricKeySelection } from "@/shared/charts/MetricKeyPicker";
 import { KeyValueList } from "@/shared/ui/KeyValueList";
 import type { EnrichedTrainingRun } from "../../types/experiment-workspace";
 
@@ -50,6 +51,9 @@ export function TrainingRunInspector({
   const run = live?.run ?? enriched.run;
   const metrics = live?.metrics ?? enriched.metrics;
   const evaluations = live?.evaluations ?? enriched.evaluations;
+
+  const allMetricKeys = extractMetricKeys(metrics);
+  const [selectedMetricKeys, toggleMetricKey] = useMetricKeySelection(allMetricKeys);
 
   return (
     <div className="flex flex-col gap-6 p-5">
@@ -103,7 +107,10 @@ export function TrainingRunInspector({
       {metrics.length > 0 ? (
         <div>
           <p className="mono-label mb-2 text-research-ink-muted">Metrics</p>
-          <MetricsLineChart metrics={metrics} />
+          <div className="mb-2">
+            <MetricKeyPicker keys={allMetricKeys} selected={selectedMetricKeys} onToggle={toggleMetricKey} />
+          </div>
+          <MetricsLineChart metrics={metrics} selectedKeys={selectedMetricKeys} height={200} />
         </div>
       ) : null}
 

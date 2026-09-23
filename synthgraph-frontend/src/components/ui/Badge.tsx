@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-type Tone = "neutral" | "cyan" | "ok" | "warn" | "bad" | "planned";
+type Tone = "neutral" | "cyan" | "blue" | "ok" | "warn" | "bad" | "planned";
 
 const tones: Record<Tone, string> = {
   neutral: "border-line-strong text-ink-muted",
   cyan: "border-cyan/35 text-cyan bg-cyan/5",
+  blue: "border-blue/35 text-blue bg-blue/5",
   ok: "border-ok/35 text-ok bg-ok/5",
   warn: "border-warn/35 text-warn bg-warn/5",
   bad: "border-bad/35 text-bad bg-bad/5",

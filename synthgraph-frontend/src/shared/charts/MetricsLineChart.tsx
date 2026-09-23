@@ -4,6 +4,7 @@ import type { EChartsCoreOption } from "echarts/core";
 import { useMemo } from "react";
 import type { TrainingRunMetric } from "@/features/training-runs/types/training-run-metric";
 import { EChart } from "./EChart";
+import { extractMetricKeys } from "./MetricKeyPicker";
 
 // Cycles through the app's existing design tokens rather than inventing new
 // chart colors (same reasoning as the hand-rolled MetricsChart it replaces).
@@ -16,33 +17,43 @@ const SERIES_COLORS = [
   "#d9584c", // bad
 ];
 
-export function MetricsLineChart({ metrics }: { metrics: TrainingRunMetric[] }) {
-  const option = useMemo<EChartsCoreOption>(() => buildOption(metrics), [metrics]);
+export function MetricsLineChart({
+  metrics,
+  selectedKeys,
+  height = 320,
+}: {
+  metrics: TrainingRunMetric[];
+  /** Restricts which series are drawn. Omit to draw every numeric key
+   * (the old, unfiltered behavior). */
+  selectedKeys?: Set<string>;
+  height?: number;
+}) {
+  const option = useMemo<EChartsCoreOption>(() => buildOption(metrics, selectedKeys), [metrics, selectedKeys]);
 
   if (metrics.length === 0) {
     return <p className="text-[13.5px] text-research-ink-muted">No step metrics recorded.</p>;
   }
 
-  return <EChart option={option} height={320} />;
+  if (selectedKeys && selectedKeys.size === 0) {
+    return <p className="text-[13.5px] text-research-ink-muted">No metrics selected.</p>;
+  }
+
+  return <EChart option={option} height={height} />;
 }
 
-function buildOption(metrics: TrainingRunMetric[]): EChartsCoreOption {
+function buildOption(metrics: TrainingRunMetric[], selectedKeys?: Set<string>): EChartsCoreOption {
   const sorted = [...metrics].sort((a, b) => a.step - b.step);
   const steps = Array.from(new Set(sorted.map((m) => m.step))).sort((a, b) => a - b);
 
-  const metricKeys = new Set<string>();
-  for (const row of sorted) {
-    for (const [key, value] of Object.entries(row.metrics)) {
-      if (typeof value === "number") metricKeys.add(key);
-    }
-  }
+  const allKeys = extractMetricKeys(sorted);
+  const metricKeys = selectedKeys ? allKeys.filter((key) => selectedKeys.has(key)) : allKeys;
 
   const valueByStepAndKey = new Map<number, Record<string, number>>();
   for (const row of sorted) {
     valueByStepAndKey.set(row.step, row.metrics as Record<string, number>);
   }
 
-  const series = Array.from(metricKeys).map((key, index) => ({
+  const series = metricKeys.map((key, index) => ({
     name: key,
     type: "line" as const,
     showSymbol: false,
