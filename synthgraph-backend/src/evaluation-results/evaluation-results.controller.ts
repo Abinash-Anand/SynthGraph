@@ -4,11 +4,14 @@ import {
   Get,
   Param,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
 
 import { ApiKeyGuard } from '../auth/guards/api-key.guard.js';
+import type { AuthenticatedRequest } from '../auth/types/authenticated-request.js';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto.js';
 import { CreateEvaluationResultDto } from './dto/create-evaluation-result.dto.js';
 import { CreateEvaluationResultService } from './services/create-evaluation-result.service.js';
 import { GetEvaluationResultService } from './services/get-evaluation-result.service.js';
@@ -27,7 +30,7 @@ export class EvaluationResultsController {
   async create(
     @Param('trainingRunId') trainingRunId: string,
     @Body() dto: CreateEvaluationResultDto,
-    @Req() request: any,
+    @Req() request: AuthenticatedRequest,
   ) {
     return this.createEvaluationResultService.execute(
       trainingRunId,
@@ -42,7 +45,7 @@ export class EvaluationResultsController {
   @Get('evaluation-results/:evaluationResultId')
   async get(
     @Param('evaluationResultId') evaluationResultId: string,
-    @Req() request: any,
+    @Req() request: AuthenticatedRequest,
   ) {
     return this.getEvaluationResultService.execute(
       evaluationResultId,
@@ -53,11 +56,14 @@ export class EvaluationResultsController {
   @Get('training-runs/:trainingRunId/evaluations')
   async list(
     @Param('trainingRunId') trainingRunId: string,
-    @Req() request: any,
+    @Query() query: PaginationQueryDto,
+    @Req() request: AuthenticatedRequest,
   ) {
     return this.listEvaluationResultsService.execute(
       trainingRunId,
       request.user.id,
+      query.limit,
+      query.offset,
     );
   }
 }

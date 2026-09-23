@@ -22,6 +22,11 @@ services:
       PORT: 3000
       DATABASE_URL: postgresql://synthgraph:synthgraph@postgres:5432/synthgraph
       JWT_SECRET: ${JWT_SECRET:-dev-only-change-me}
+      # Comma-separated browser origins allowed to call this API directly.
+      # Only matters for third-party, browser-based API consumers - the
+      # first-party frontend talks to this backend server-side, not from
+      # the browser. Unset: permissive outside production, deny-all in it.
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
     ports:
       - "3000:3000"
     depends_on:

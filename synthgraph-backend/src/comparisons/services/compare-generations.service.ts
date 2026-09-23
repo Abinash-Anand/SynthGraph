@@ -1,11 +1,13 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 
 import { Generation } from '../../database/entities/generation.entity.js';
-import { TypeOrmGenerationRepository } from '../../generations/repositories/typeorm-generation.repository.js';
+import type { GenerationRepository } from '../../generations/repositories/generation.repository.js';
+import { GENERATION_REPOSITORY } from '../../generations/repositories/generation.tokens.js';
 
 export type GenerationDifference = {
   field: string;
@@ -15,7 +17,8 @@ export type GenerationDifference = {
 @Injectable()
 export class CompareGenerationsService {
   constructor(
-    private readonly generationRepository: TypeOrmGenerationRepository,
+    @Inject(GENERATION_REPOSITORY)
+    private readonly generationRepository: GenerationRepository,
   ) {}
 
   async execute(

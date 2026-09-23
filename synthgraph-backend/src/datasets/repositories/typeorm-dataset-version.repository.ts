@@ -29,6 +29,8 @@ export class TypeOrmDatasetVersionRepository
   async findAllForDataset(
     datasetId: string,
     userId: string,
+    limit: number,
+    offset: number,
   ): Promise<DatasetVersion[]> {
     return this.repository
       .createQueryBuilder('version')
@@ -36,6 +38,8 @@ export class TypeOrmDatasetVersionRepository
       .where('version.dataset_id = :datasetId', { datasetId })
       .andWhere('dataset.user_id = :userId', { userId })
       .orderBy('version.created_at', 'DESC')
+      .take(limit)
+      .skip(offset)
       .getMany();
   }
 

@@ -6,7 +6,8 @@ import {
 
 import { TrainingRun } from '../../database/entities/training-run.entity.js';
 
-import { TypeOrmExperimentRepository } from '../../experiments/repositories/typeorm-experiment.repository.js';
+import type { ExperimentRepository } from '../../experiments/repositories/experiment.repository.js';
+import { EXPERIMENT_REPOSITORY } from '../../experiments/repositories/experiment.tokens.js';
 
 import type { TrainingRunDatasetReferenceRepository } from '../repositories/training-run-dataset-reference.repository.js';
 import { TRAINING_RUN_DATASET_REFERENCE_REPOSITORY } from '../repositories/training-run-dataset-reference.tokens.js';
@@ -16,7 +17,8 @@ import { TRAINING_RUN_REPOSITORY } from '../repositories/training-run.tokens.js'
 @Injectable()
 export class ListTrainingRunsService {
   constructor(
-    private readonly experimentRepository: TypeOrmExperimentRepository,
+    @Inject(EXPERIMENT_REPOSITORY)
+    private readonly experimentRepository: ExperimentRepository,
 
     @Inject(TRAINING_RUN_REPOSITORY)
     private readonly trainingRunRepository: TrainingRunRepository,
@@ -28,7 +30,9 @@ export class ListTrainingRunsService {
   async execute(
     experimentId: string,
     userId: string,
-    captureStatus?: 'complete' | 'partial' | 'unknown',
+    captureStatus: 'complete' | 'partial' | 'unknown' | undefined,
+    limit: number,
+    offset: number,
   ): Promise<TrainingRun[]> {
     const experiment = await this.experimentRepository.findByIdForUser(
       experimentId,
@@ -44,9 +48,13 @@ export class ListTrainingRunsService {
         ? await this.trainingRunRepository.findByCaptureStatus(
             experiment.id,
             captureStatus,
+            limit,
+            offset,
           )
         : await this.trainingRunRepository.findAllForExperiment(
             experiment.id,
+            limit,
+            offset,
           );
 
     await Promise.all(

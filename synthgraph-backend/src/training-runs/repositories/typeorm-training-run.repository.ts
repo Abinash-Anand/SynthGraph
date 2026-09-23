@@ -37,6 +37,8 @@ export class TypeOrmTrainingRunRepository
 
   async findAllForExperiment(
     experimentId: string,
+    limit: number,
+    offset: number,
   ): Promise<TrainingRun[]> {
     return this.repository.find({
       where: {
@@ -45,12 +47,16 @@ export class TypeOrmTrainingRunRepository
       order: {
         createdAt: 'DESC',
       },
+      take: limit,
+      skip: offset,
     });
   }
 
   async findByCaptureStatus(
     experimentId: string,
     captureStatus: 'complete' | 'partial' | 'unknown',
+    limit: number,
+    offset: number,
   ): Promise<TrainingRun[]> {
     const query = this.repository
       .createQueryBuilder('trainingRun')
@@ -68,7 +74,11 @@ export class TypeOrmTrainingRunRepository
       );
     }
 
-    return query.orderBy('trainingRun.createdAt', 'DESC').getMany();
+    return query
+      .orderBy('trainingRun.createdAt', 'DESC')
+      .take(limit)
+      .skip(offset)
+      .getMany();
   }
 
   async transitionStatus(

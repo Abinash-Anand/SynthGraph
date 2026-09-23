@@ -23,6 +23,8 @@ export class ListEvaluationResultsService {
   async execute(
     trainingRunId: string,
     userId: string,
+    limit: number,
+    offset: number,
   ): Promise<EvaluationResult[]> {
     const trainingRun = await this.trainingRunRepository.findByIdForUser(
       trainingRunId,
@@ -35,6 +37,8 @@ export class ListEvaluationResultsService {
 
     return this.evaluationResultRepository.findAllForTrainingRun(
       trainingRun.id,
+      limit,
+      offset,
     );
   }
 }

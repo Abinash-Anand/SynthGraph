@@ -28,7 +28,11 @@ export class TypeOrmAssetRepository implements AssetRepository {
     });
   }
 
-  async findAllForUser(userId: string): Promise<Asset[]> {
+  async findAllForUser(
+    userId: string,
+    limit: number,
+    offset: number,
+  ): Promise<Asset[]> {
     return this.repository.find({
       where: {
         userId,
@@ -36,6 +40,8 @@ export class TypeOrmAssetRepository implements AssetRepository {
       order: {
         createdAt: 'DESC',
       },
+      take: limit,
+      skip: offset,
     });
   }
 }

@@ -1,11 +1,13 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 
 import { TrainingRun } from '../../database/entities/training-run.entity.js';
-import { TypeOrmTrainingRunRepository } from '../../training-runs/repositories/typeorm-training-run.repository.js';
+import type { TrainingRunRepository } from '../../training-runs/repositories/training-run.repository.js';
+import { TRAINING_RUN_REPOSITORY } from '../../training-runs/repositories/training-run.tokens.js';
 
 export type TrainingRunDifference = {
   field: string;
@@ -15,7 +17,8 @@ export type TrainingRunDifference = {
 @Injectable()
 export class CompareTrainingRunsService {
   constructor(
-    private readonly trainingRunRepository: TypeOrmTrainingRunRepository,
+    @Inject(TRAINING_RUN_REPOSITORY)
+    private readonly trainingRunRepository: TrainingRunRepository,
   ) {}
 
   async execute(

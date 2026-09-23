@@ -1,12 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 
 import { Generation } from '../../database/entities/generation.entity.js';
-import { TypeOrmGenerationRepository } from '../repositories/typeorm-generation.repository.js';
+import type { GenerationRepository } from '../repositories/generation.repository.js';
+import { GENERATION_REPOSITORY } from '../repositories/generation.tokens.js';
 
 @Injectable()
 export class GetGenerationService {
   constructor(
-    private readonly generationRepository: TypeOrmGenerationRepository,
+    @Inject(GENERATION_REPOSITORY)
+    private readonly generationRepository: GenerationRepository,
   ) {}
 
   async execute(generationId: string, userId: string): Promise<Generation> {

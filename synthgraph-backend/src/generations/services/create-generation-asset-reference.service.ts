@@ -10,7 +10,8 @@ import { ASSET_VERSION_REPOSITORY } from '../../assets/repositories/asset.tokens
 
 import { GenerationAssetReference } from '../../database/entities/generation-asset-reference.entity.js';
 
-import { TypeOrmGenerationRepository } from '../repositories/typeorm-generation.repository.js';
+import type { GenerationRepository } from '../repositories/generation.repository.js';
+import { GENERATION_REPOSITORY } from '../repositories/generation.tokens.js';
 
 import type { GenerationAssetReferenceRepository } from '../repositories/generation-asset-reference.repository.js';
 import { GENERATION_ASSET_REFERENCE_REPOSITORY } from '../repositories/generation-asset-reference.tokens.js';
@@ -24,7 +25,8 @@ export class CreateGenerationAssetReferenceService {
     @Inject(ASSET_VERSION_REPOSITORY)
     private readonly assetVersionRepository: AssetVersionRepository,
 
-    private readonly generationRepository: TypeOrmGenerationRepository,
+    @Inject(GENERATION_REPOSITORY)
+    private readonly generationRepository: GenerationRepository,
   ) {}
 
   async execute(

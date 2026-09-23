@@ -9,6 +9,7 @@ import { GenerationDatasetReference } from '../database/entities/generation-data
 import { GenerationAssetReference } from '../database/entities/generation-asset-reference.entity.js';
 
 import { TypeOrmExperimentRepository } from '../experiments/repositories/typeorm-experiment.repository.js';
+import { EXPERIMENT_REPOSITORY } from '../experiments/repositories/experiment.tokens.js';
 
 import { DatasetVersion } from '../database/entities/dataset-version.entity.js';
 import { DATASET_VERSION_REPOSITORY } from '../datasets/repositories/dataset.tokens.js';
@@ -29,6 +30,7 @@ import { GENERATION_ASSET_REFERENCE_REPOSITORY } from './repositories/generation
 import { TypeOrmGenerationAssetReferenceRepository } from './repositories/typeorm-generation-asset-reference.repository.js';
 
 import { TypeOrmGenerationRepository } from './repositories/typeorm-generation.repository.js';
+import { GENERATION_REPOSITORY } from './repositories/generation.tokens.js';
 
 import { CreateGenerationService } from './services/create-generation.service.js';
 import { GetGenerationService } from './services/get-generation.service.js';
@@ -55,8 +57,15 @@ import { CreateGenerationAssetReferenceService } from './services/create-generat
   ],
 
   providers: [
-    TypeOrmGenerationRepository,
-    TypeOrmExperimentRepository,
+    {
+      provide: GENERATION_REPOSITORY,
+      useClass: TypeOrmGenerationRepository,
+    },
+
+    {
+      provide: EXPERIMENT_REPOSITORY,
+      useClass: TypeOrmExperimentRepository,
+    },
 
     {
       provide: DATASET_VERSION_REPOSITORY,
@@ -95,5 +104,7 @@ import { CreateGenerationAssetReferenceService } from './services/create-generat
     CreateGenerationDatasetReferenceService,
     CreateGenerationAssetReferenceService,
   ],
+
+  exports: [GENERATION_REPOSITORY],
 })
 export class GenerationsModule {}

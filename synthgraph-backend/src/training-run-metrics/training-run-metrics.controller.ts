@@ -4,11 +4,14 @@ import {
   Get,
   Param,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
 
 import { ApiKeyGuard } from '../auth/guards/api-key.guard.js';
+import type { AuthenticatedRequest } from '../auth/types/authenticated-request.js';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto.js';
 import { CreateTrainingRunMetricDto } from './dto/create-training-run-metric.dto.js';
 import { CreateTrainingRunMetricsBatchDto } from './dto/create-training-run-metrics-batch.dto.js';
 import { CreateTrainingRunMetricService } from './services/create-training-run-metric.service.js';
@@ -28,7 +31,7 @@ export class TrainingRunMetricsController {
   async create(
     @Param('trainingRunId') trainingRunId: string,
     @Body() dto: CreateTrainingRunMetricDto,
-    @Req() request: any,
+    @Req() request: AuthenticatedRequest,
   ) {
     return this.createTrainingRunMetricService.execute(
       trainingRunId,
@@ -42,7 +45,7 @@ export class TrainingRunMetricsController {
   async createBatch(
     @Param('trainingRunId') trainingRunId: string,
     @Body() dto: CreateTrainingRunMetricsBatchDto,
-    @Req() request: any,
+    @Req() request: AuthenticatedRequest,
   ) {
     return this.createTrainingRunMetricsBatchService.execute(
       trainingRunId,
@@ -54,11 +57,14 @@ export class TrainingRunMetricsController {
   @Get('training-runs/:trainingRunId/metrics')
   async list(
     @Param('trainingRunId') trainingRunId: string,
-    @Req() request: any,
+    @Query() query: PaginationQueryDto,
+    @Req() request: AuthenticatedRequest,
   ) {
     return this.listTrainingRunMetricsService.execute(
       trainingRunId,
       request.user.id,
+      query.limit,
+      query.offset,
     );
   }
 }

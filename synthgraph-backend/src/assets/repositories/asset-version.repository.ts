@@ -11,6 +11,8 @@ export interface AssetVersionRepository {
   findAllForAsset(
     assetId: string,
     userId: string,
+    limit: number,
+    offset: number,
   ): Promise<AssetVersion[]>;
 
   existsByAssetAndVersion(

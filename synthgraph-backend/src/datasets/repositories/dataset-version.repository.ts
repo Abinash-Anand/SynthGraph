@@ -11,6 +11,8 @@ export interface DatasetVersionRepository {
   findAllForDataset(
     datasetId: string,
     userId: string,
+    limit: number,
+    offset: number,
   ): Promise<DatasetVersion[]>;
 
   existsByDatasetAndVersion(

@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { AssetsModule } from './assets/assets.module.js';
@@ -26,6 +28,17 @@ import { ApiKeysModule } from './api-keys/api-keys.module.js';
       isGlobal: true,
       load: [configuration],
     }),
+
+    // Per-IP, in-memory (single-instance) rate limiting - the global default
+    // covers every route; AuthController overrides this per-route (tighter
+    // limit on login/register, its own brute-force/spam surface).
+    ThrottlerModule.forRoot([
+      {
+        name: 'default',
+        ttl: 60_000,
+        limit: 120,
+      },
+    ]),
 
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -55,5 +68,11 @@ import { ApiKeysModule } from './api-keys/api-keys.module.js';
     ApiKeysModule
   ],
   controllers: [HealthController],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}

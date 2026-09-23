@@ -9,5 +9,7 @@ export interface TrainingRunMetricRepository {
 
   findAllForTrainingRun(
     trainingRunId: string,
+    limit: number,
+    offset: number,
   ): Promise<TrainingRunMetric[]>;
 }

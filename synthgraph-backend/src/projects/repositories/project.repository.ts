@@ -5,5 +5,9 @@ export interface ProjectRepository {
 
   findByIdForUser(projectId: string, userId: string): Promise<Project | null>;
 
-  findAllForUser(userId: string): Promise<Project[]>;
+  findAllForUser(
+    userId: string,
+    limit: number,
+    offset: number,
+  ): Promise<Project[]>;
 }

@@ -71,6 +71,8 @@ export class TrainingRunsController {
       experimentId,
       request.user.id,
       query.captureStatus,
+      query.limit,
+      query.offset,
     );
   }
 

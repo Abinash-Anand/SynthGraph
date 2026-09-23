@@ -193,6 +193,49 @@ describe('M3 Project → Experiment workflow (e2e)', () => {
         ),
       ).toBe(false);
     });
+
+    it('paginates the project list via limit/offset', async () => {
+      // Self-contained rather than relying on fixture ordering from other
+      // tests in this file: creates its own two projects (most recent, by
+      // the list's createdAt DESC order) so the two pages are deterministic
+      // regardless of how many other projects userA already has.
+      const older = await request(app.getHttpServer())
+        .post('/projects')
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'M3 Pagination Older', description: null })
+        .expect(201);
+
+      const newer = await request(app.getHttpServer())
+        .post('/projects')
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'M3 Pagination Newer', description: null })
+        .expect(201);
+
+      const firstPage = await request(app.getHttpServer())
+        .get('/projects?limit=1&offset=0')
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(200);
+
+      expect(firstPage.body).toHaveLength(1);
+      expect(firstPage.body[0].id).toBe(newer.body.id);
+
+      const secondPage = await request(app.getHttpServer())
+        .get('/projects?limit=1&offset=1')
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(200);
+
+      expect(secondPage.body).toHaveLength(1);
+      expect(secondPage.body[0].id).toBe(older.body.id);
+
+      await projectRepository.delete([older.body.id, newer.body.id]);
+    });
+
+    it('rejects an out-of-range limit', async () => {
+      await request(app.getHttpServer())
+        .get('/projects?limit=500')
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(400);
+    });
   });
 
   describe('experiments', () => {
@@ -233,6 +276,43 @@ describe('M3 Project → Experiment workflow (e2e)', () => {
           }),
         ]),
       );
+    });
+
+    it('paginates the experiment list via limit/offset', async () => {
+      // Self-contained rather than relying on fixture ordering from other
+      // tests in this file: creates its own two experiments (most recent,
+      // by the list's createdAt DESC order) so the two pages are
+      // deterministic regardless of how many other experiments projectA
+      // already has.
+      const older = await request(app.getHttpServer())
+        .post(`/projects/${projectA.id}/experiments`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'M3 Pagination Older Experiment', description: null })
+        .expect(201);
+
+      const newer = await request(app.getHttpServer())
+        .post(`/projects/${projectA.id}/experiments`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'M3 Pagination Newer Experiment', description: null })
+        .expect(201);
+
+      const firstPage = await request(app.getHttpServer())
+        .get(`/projects/${projectA.id}/experiments?limit=1&offset=0`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(200);
+
+      expect(firstPage.body).toHaveLength(1);
+      expect(firstPage.body[0].id).toBe(newer.body.id);
+
+      const secondPage = await request(app.getHttpServer())
+        .get(`/projects/${projectA.id}/experiments?limit=1&offset=1`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(200);
+
+      expect(secondPage.body).toHaveLength(1);
+      expect(secondPage.body[0].id).toBe(older.body.id);
+
+      await experimentRepository.delete([older.body.id, newer.body.id]);
     });
 
     it('retrieves an experiment nested under its project', async () => {

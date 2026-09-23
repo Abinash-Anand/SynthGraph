@@ -28,7 +28,11 @@ export class TypeOrmDatasetRepository implements DatasetRepository {
     });
   }
 
-  async findAllForUser(userId: string): Promise<Dataset[]> {
+  async findAllForUser(
+    userId: string,
+    limit: number,
+    offset: number,
+  ): Promise<Dataset[]> {
     return this.repository.find({
       where: {
         userId,
@@ -36,6 +40,8 @@ export class TypeOrmDatasetRepository implements DatasetRepository {
       order: {
         createdAt: 'DESC',
       },
+      take: limit,
+      skip: offset,
     });
   }
 }

@@ -9,7 +9,8 @@ import {
   TrainingRunTrainer,
 } from '../../database/entities/training-run.entity.js';
 
-import { TypeOrmExperimentRepository } from '../../experiments/repositories/typeorm-experiment.repository.js';
+import type { ExperimentRepository } from '../../experiments/repositories/experiment.repository.js';
+import { EXPERIMENT_REPOSITORY } from '../../experiments/repositories/experiment.tokens.js';
 
 import type { TrainingRunRepository } from '../repositories/training-run.repository.js';
 import { TRAINING_RUN_REPOSITORY } from '../repositories/training-run.tokens.js';
@@ -17,7 +18,8 @@ import { TRAINING_RUN_REPOSITORY } from '../repositories/training-run.tokens.js'
 @Injectable()
 export class CreateTrainingRunService {
   constructor(
-    private readonly experimentRepository: TypeOrmExperimentRepository,
+    @Inject(EXPERIMENT_REPOSITORY)
+    private readonly experimentRepository: ExperimentRepository,
 
     @Inject(TRAINING_RUN_REPOSITORY)
     private readonly trainingRunRepository: TrainingRunRepository,

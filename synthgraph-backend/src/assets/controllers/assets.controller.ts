@@ -4,12 +4,14 @@ import {
   Get,
   Param,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
 
 import { ApiKeyGuard } from '../../auth/guards/api-key.guard.js';
+import { PaginationQueryDto } from '../../common/dto/pagination-query.dto.js';
 
 import { CreateAssetDto } from '../dto/create-asset.dto.js';
 import { CreateAssetVersionDto } from '../dto/create-asset-version.dto.js';
@@ -53,9 +55,12 @@ export class AssetsController {
   @Get('assets')
   async listAssets(
     @Req() request: AuthenticatedRequest,
+    @Query() query: PaginationQueryDto,
   ) {
     return this.listAssetsService.execute(
       request.user.id,
+      query.limit,
+      query.offset,
     );
   }
 
@@ -87,10 +92,13 @@ export class AssetsController {
   async listAssetVersions(
     @Req() request: AuthenticatedRequest,
     @Param('assetId') assetId: string,
+    @Query() query: PaginationQueryDto,
   ) {
     return this.listAssetVersionsService.execute(
       assetId,
       request.user.id,
+      query.limit,
+      query.offset,
     );
   }
 

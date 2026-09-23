@@ -10,5 +10,7 @@ export interface EvaluationResultRepository {
 
   findAllForTrainingRun(
     trainingRunId: string,
+    limit: number,
+    offset: number,
   ): Promise<EvaluationResult[]>;
 }

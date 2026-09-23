@@ -13,11 +13,15 @@ export interface GenerationRepository {
 
   findAllForExperiment(
     experimentId: string,
+    limit: number,
+    offset: number,
   ): Promise<Generation[]>;
 
   findByParameters(
     experimentId: string,
     parameters: Record<string, unknown>,
+    limit: number,
+    offset: number,
   ): Promise<Generation[]>;
 
   transitionStatus(

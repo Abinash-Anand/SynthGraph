@@ -15,10 +15,14 @@ export interface ExperimentRepository {
 
   findAllForProject(
     projectId: string,
+    limit: number,
+    offset: number,
   ): Promise<Experiment[]>;
 
   searchForProject(
     projectId: string,
     search: string,
+    limit: number,
+    offset: number,
   ): Promise<Experiment[]>;
 }

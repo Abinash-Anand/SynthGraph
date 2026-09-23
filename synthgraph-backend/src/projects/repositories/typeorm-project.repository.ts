@@ -28,7 +28,11 @@ export class TypeOrmProjectRepository implements ProjectRepository {
     });
   }
 
-  async findAllForUser(userId: string): Promise<Project[]> {
+  async findAllForUser(
+    userId: string,
+    limit: number,
+    offset: number,
+  ): Promise<Project[]> {
     return this.repository.find({
       where: {
         userId,
@@ -36,6 +40,8 @@ export class TypeOrmProjectRepository implements ProjectRepository {
       order: {
         createdAt: 'DESC',
       },
+      take: limit,
+      skip: offset,
     });
   }
 }
