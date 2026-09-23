@@ -37,6 +37,11 @@ jobs:
           cache: npm
           cache-dependency-path: synthgraph-backend/package-lock.json
 
+      # npm 10.x (bundled with actions/setup-node's default) crashes resolving
+      # this tree's conflicting typescript peer ranges - same issue documented
+      # in synthgraph-backend/Dockerfile, same fix.
+      - run: npm install -g npm@11
+
       - run: npm ci
 
       - name: Lint
