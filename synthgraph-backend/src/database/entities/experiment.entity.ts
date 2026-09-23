@@ -50,4 +50,13 @@ export class Experiment {
     type: 'timestamptz',
   })
   updatedAt: Date;
+
+  // NULL means active. Soft-delete, not a real column-level delete flag,
+  // since training runs/generations/etc. reference this row with
+  // ON DELETE RESTRICT - see the migration for why. Read paths
+  // (findByIdForProject, findByIdForUser, findAllForProject,
+  // searchForProject) filter this out, so an archived experiment is
+  // 404/absent everywhere a real delete would make it disappear.
+  @Column({ name: 'archived_at', type: 'timestamptz', nullable: true })
+  archivedAt: Date | null;
 }

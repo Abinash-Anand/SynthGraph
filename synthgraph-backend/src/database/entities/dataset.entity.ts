@@ -1,4 +1,11 @@
-import { CreateDateColumn, Entity, Index, PrimaryGeneratedColumn, Column } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  Index,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 
 @Entity({ name: 'datasets' })
 export class Dataset {
@@ -23,4 +30,18 @@ export class Dataset {
     type: 'timestamptz',
   })
   createdAt: Date;
+
+  @UpdateDateColumn({
+    name: 'updated_at',
+    type: 'timestamptz',
+  })
+  updatedAt: Date;
+
+  // NULL means active. Soft-delete, not a real column-level delete flag,
+  // since dataset versions/etc. reference this row with ON DELETE
+  // RESTRICT - see the migration for why. Read paths (findByIdForUser,
+  // findAllForUser) filter this out, so an archived dataset is 404/absent
+  // everywhere a real delete would make it disappear.
+  @Column({ name: 'archived_at', type: 'timestamptz', nullable: true })
+  archivedAt: Date | null;
 }

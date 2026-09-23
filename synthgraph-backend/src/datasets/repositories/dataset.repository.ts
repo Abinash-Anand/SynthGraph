@@ -13,4 +13,12 @@ export interface DatasetRepository {
     limit: number,
     offset: number,
   ): Promise<Dataset[]>;
+
+  update(
+    datasetId: string,
+    userId: string,
+    changes: { name?: string; description?: string },
+  ): Promise<boolean>;
+
+  archive(datasetId: string, userId: string): Promise<boolean>;
 }

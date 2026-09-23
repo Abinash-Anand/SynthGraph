@@ -24,6 +24,8 @@ import { ListAssetsService } from './services/list-assets.service.js';
 import { CreateAssetVersionService } from './services/create-asset-version.service.js';
 import { GetAssetVersionService } from './services/get-asset-version.service.js';
 import { ListAssetVersionsService } from './services/list-asset-versions.service.js';
+import { UpdateAssetService } from './services/update-asset.service.js';
+import { ArchiveAssetService } from './services/archive-asset.service.js';
 
 @Module({
   imports: [
@@ -66,6 +68,8 @@ import { ListAssetVersionsService } from './services/list-asset-versions.service
     CreateAssetVersionService,
     GetAssetVersionService,
     ListAssetVersionsService,
+    UpdateAssetService,
+    ArchiveAssetService,
   ],
 })
 export class AssetsModule {}

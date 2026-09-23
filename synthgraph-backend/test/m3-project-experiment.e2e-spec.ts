@@ -236,6 +236,113 @@ describe('M3 Project → Experiment workflow (e2e)', () => {
         .set('Authorization', `Bearer ${apiKeyA}`)
         .expect(400);
     });
+
+    it('updates name and description via PATCH', async () => {
+      const created = await request(app.getHttpServer())
+        .post('/projects')
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'M3 Patch Original', description: 'Original' })
+        .expect(201);
+
+      const patched = await request(app.getHttpServer())
+        .patch(`/projects/${created.body.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'M3 Patch Updated', description: 'Updated' })
+        .expect(200);
+
+      expect(patched.body).toMatchObject({
+        id: created.body.id,
+        name: 'M3 Patch Updated',
+        description: 'Updated',
+      });
+
+      await projectRepository.delete(created.body.id);
+    });
+
+    it('rejects an empty PATCH body', async () => {
+      const created = await request(app.getHttpServer())
+        .post('/projects')
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'M3 Patch Empty', description: null })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .patch(`/projects/${created.body.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({})
+        .expect(400);
+
+      await projectRepository.delete(created.body.id);
+    });
+
+    it('does not allow patching another user project', async () => {
+      const created = await request(app.getHttpServer())
+        .post('/projects')
+        .set('Authorization', `Bearer ${apiKeyB}`)
+        .send({ name: 'M3 Patch User B', description: null })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .patch(`/projects/${created.body.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'Hijacked' })
+        .expect(404);
+
+      await projectRepository.delete(created.body.id);
+    });
+
+    it('archives a project via DELETE, hiding it from GET and list', async () => {
+      const created = await request(app.getHttpServer())
+        .post('/projects')
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'M3 Archive Me', description: null })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .delete(`/projects/${created.body.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .get(`/projects/${created.body.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(404);
+
+      const listed = await request(app.getHttpServer())
+        .get('/projects?limit=200')
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(200);
+
+      expect(
+        listed.body.some(
+          (project: { id: string }) => project.id === created.body.id,
+        ),
+      ).toBe(false);
+
+      // Archiving an already-archived project is not idempotent - matches
+      // ApiKeyManagementService.revoke()'s convention elsewhere in this API.
+      await request(app.getHttpServer())
+        .delete(`/projects/${created.body.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(404);
+
+      await projectRepository.delete(created.body.id);
+    });
+
+    it('does not allow archiving another user project', async () => {
+      const created = await request(app.getHttpServer())
+        .post('/projects')
+        .set('Authorization', `Bearer ${apiKeyB}`)
+        .send({ name: 'M3 Archive User B', description: null })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .delete(`/projects/${created.body.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(404);
+
+      await projectRepository.delete(created.body.id);
+    });
   });
 
   describe('experiments', () => {
@@ -339,6 +446,113 @@ describe('M3 Project → Experiment workflow (e2e)', () => {
         projectId: projectA.id,
         name: 'M3 Experiment A',
       });
+    });
+
+    it('updates name and description via PATCH', async () => {
+      const created = await request(app.getHttpServer())
+        .post(`/projects/${projectA.id}/experiments`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'M3 Experiment Patch Original', description: 'Original' })
+        .expect(201);
+
+      const patched = await request(app.getHttpServer())
+        .patch(`/experiments/${created.body.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'M3 Experiment Patch Updated', description: 'Updated' })
+        .expect(200);
+
+      expect(patched.body).toMatchObject({
+        id: created.body.id,
+        name: 'M3 Experiment Patch Updated',
+        description: 'Updated',
+      });
+
+      await experimentRepository.delete(created.body.id);
+    });
+
+    it('rejects an empty PATCH body', async () => {
+      const created = await request(app.getHttpServer())
+        .post(`/projects/${projectA.id}/experiments`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'M3 Experiment Patch Empty', description: null })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .patch(`/experiments/${created.body.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({})
+        .expect(400);
+
+      await experimentRepository.delete(created.body.id);
+    });
+
+    it('does not allow patching another user experiment', async () => {
+      const created = await request(app.getHttpServer())
+        .post(`/projects/${projectA.id}/experiments`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'M3 Experiment Patch User B', description: null })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .patch(`/experiments/${created.body.id}`)
+        .set('Authorization', `Bearer ${apiKeyB}`)
+        .send({ name: 'Hijacked' })
+        .expect(404);
+
+      await experimentRepository.delete(created.body.id);
+    });
+
+    it('archives an experiment via DELETE, hiding it from GET and list', async () => {
+      const created = await request(app.getHttpServer())
+        .post(`/projects/${projectA.id}/experiments`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'M3 Experiment Archive Me', description: null })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .delete(`/experiments/${created.body.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .get(`/experiments/${created.body.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(404);
+
+      const listed = await request(app.getHttpServer())
+        .get(`/projects/${projectA.id}/experiments?limit=200`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(200);
+
+      expect(
+        listed.body.some(
+          (experiment: { id: string }) => experiment.id === created.body.id,
+        ),
+      ).toBe(false);
+
+      // Archiving an already-archived experiment is not idempotent - matches
+      // ApiKeyManagementService.revoke()'s convention elsewhere in this API.
+      await request(app.getHttpServer())
+        .delete(`/experiments/${created.body.id}`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(404);
+
+      await experimentRepository.delete(created.body.id);
+    });
+
+    it('does not allow archiving another user experiment', async () => {
+      const created = await request(app.getHttpServer())
+        .post(`/projects/${projectA.id}/experiments`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'M3 Experiment Archive User B', description: null })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .delete(`/experiments/${created.body.id}`)
+        .set('Authorization', `Bearer ${apiKeyB}`)
+        .expect(404);
+
+      await experimentRepository.delete(created.body.id);
     });
   });
 

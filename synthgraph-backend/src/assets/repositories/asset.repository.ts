@@ -13,4 +13,12 @@ export interface AssetRepository {
     limit: number,
     offset: number,
   ): Promise<Asset[]>;
+
+  update(
+    assetId: string,
+    userId: string,
+    changes: { name?: string; description?: string },
+  ): Promise<boolean>;
+
+  archive(assetId: string, userId: string): Promise<boolean>;
 }
