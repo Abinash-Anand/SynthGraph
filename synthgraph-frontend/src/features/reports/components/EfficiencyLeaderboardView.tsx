@@ -5,20 +5,13 @@ import type { EChartsCoreOption } from "echarts/core";
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { SelectField } from "@/components/ui/Field";
+import { formatDurationSeconds } from "@/shared/lib/format";
 import type { EfficiencyLeaderboard } from "../types/report";
 
 const EChart = dynamic(() => import("@/shared/charts/EChart").then((m) => m.EChart), {
   ssr: false,
   loading: () => <div className="h-[280px] animate-pulse rounded-lg bg-surface-2" />,
 });
-
-function formatDuration(seconds: number): string {
-  const hours = seconds / 3600;
-  if (hours >= 1) return `${hours.toFixed(1)}h`;
-  const minutes = seconds / 60;
-  if (minutes >= 1) return `${minutes.toFixed(1)}m`;
-  return `${seconds}s`;
-}
 
 // Deliberately client-side: which metric matters and whether higher is
 // "better" is a per-researcher, per-metric judgment call the backend
@@ -141,7 +134,7 @@ export function EfficiencyLeaderboardView({ leaderboard }: { leaderboard: Effici
             <div className="min-w-0">
               <p className="truncate text-[14.5px] font-medium text-ink">{run.name}</p>
               <p className="mt-0.5 font-mono text-[11px] text-ink-faint">
-                {formatDuration(run.durationSeconds)} training time
+                {formatDurationSeconds(run.durationSeconds)} training time
               </p>
             </div>
             <div className="shrink-0 text-right">

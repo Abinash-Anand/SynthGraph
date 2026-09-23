@@ -25,3 +25,12 @@ export function formatDateTime(iso: string): string {
     timeZone: DATE_TIME_ZONE,
   });
 }
+
+// The single frontend definition of "what does '1.5h' mean" - was
+// previously reimplemented separately in RunsTab.tsx and
+// EfficiencyLeaderboardView.tsx with subtly different rounding.
+export function formatDurationSeconds(seconds: number): string {
+  if (seconds < 60) return `${seconds.toFixed(0)}s`;
+  if (seconds < 3600) return `${(seconds / 60).toFixed(1)}m`;
+  return `${(seconds / 3600).toFixed(1)}h`;
+}
