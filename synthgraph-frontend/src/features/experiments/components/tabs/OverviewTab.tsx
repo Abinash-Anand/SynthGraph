@@ -3,7 +3,7 @@ import { GenerationStatusBadge } from "@/features/generations/components/Generat
 import { TRAINING_RUN_STATUS_TONE, TrainingRunStatusBadge } from "@/features/training-runs/components/TrainingRunStatusBadge";
 import type { TrainingRunStatus } from "@/features/training-runs/types/training-run";
 import { cn } from "@/lib/utils";
-import { formatDateTime, formatDurationSeconds } from "@/shared/lib/format";
+import { formatDateTime, formatDurationSeconds, formatMetricValue } from "@/shared/lib/format";
 import type { EnrichedGeneration, EnrichedTrainingRun } from "../../types/experiment-workspace";
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
@@ -141,10 +141,6 @@ function computeTotalTrainingSeconds(trainingRuns: EnrichedTrainingRun[]): numbe
     }
   }
   return total;
-}
-
-function formatMetricValue(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(3);
 }
 
 function ResultPanel({ trainingRuns }: { trainingRuns: EnrichedTrainingRun[] }) {
