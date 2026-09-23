@@ -331,6 +331,18 @@ describe('M7 Reproduction manifest (e2e)', () => {
         status: 'completed',
       },
     });
+
+    // Additive `normalized` field alongside the existing `generation`
+    // field (untouched). Unlike `generation`, `normalized` includes
+    // timestamps - the one thing the manifest's own nested shape lacks.
+    expect(response.body.normalized).toMatchObject({
+      id: generationA.id,
+      experimentId: experimentA.id,
+      name: 'Rainy Scene Generation',
+      status: 'completed',
+    });
+    expect(response.body.normalized.createdAt).toEqual(expect.any(String));
+    expect(response.body.normalized.updatedAt).toEqual(expect.any(String));
   });
 
   it('includes exact dataset version references', async () => {

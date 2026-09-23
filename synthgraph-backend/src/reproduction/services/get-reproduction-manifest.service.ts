@@ -7,6 +7,7 @@ import {
 import type { GenerationRepository } from '../../generations/repositories/generation.repository.js';
 import { GENERATION_REPOSITORY } from '../../generations/repositories/generation.tokens.js';
 import type { Generation } from '../../database/entities/generation.entity.js';
+import { toNormalizedGeneration } from '../../generations/responses/generation.response.js';
 
 import type { ReproductionRepository } from '../repositories/reproduction.repository.js';
 import { REPRODUCTION_REPOSITORY } from '../repositories/reproduction.repository.token.js';
@@ -143,6 +144,13 @@ export class GetReproductionManifestService {
         outputs:
           generation.outputs,
       },
+
+      // Additive - the `generation` field above is untouched (its own
+      // nested shape, camelCase but missing timestamps, is what existing
+      // consumers already read). `normalized` is the same complete,
+      // consistently-named shape every other Generation-returning response
+      // now carries (see generation.response.ts).
+      normalized: toNormalizedGeneration(generation),
 
       datasetReferences: mappedReferences,
     };

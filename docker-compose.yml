@@ -27,6 +27,10 @@ services:
       # first-party frontend talks to this backend server-side, not from
       # the browser. Unset: permissive outside production, deny-all in it.
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      # Set to "true" to stop serving the auto-generated API reference at
+      # /docs. It documents the API's shape only, nothing sensitive, so
+      # this defaults to on.
+      DISABLE_API_DOCS: ${DISABLE_API_DOCS:-}
     ports:
       - "3000:3000"
     depends_on:
