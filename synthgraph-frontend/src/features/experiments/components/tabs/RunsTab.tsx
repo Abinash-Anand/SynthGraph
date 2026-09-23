@@ -9,7 +9,7 @@ import {
   useTable,
   type SortingState,
 } from "@tanstack/react-table";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { CaptureStatusBadge } from "@/features/training-runs/components/CaptureStatusBadge";
 import { TrainingRunStatusBadge } from "@/features/training-runs/components/TrainingRunStatusBadge";
 import { cn } from "@/lib/utils";
@@ -88,11 +88,18 @@ export function RunsTab({
   onToggleCompareSelection?: (id: string) => void;
 }) {
   const [sorting, setSorting] = useState<SortingState>([{ id: "created", desc: true }]);
+  const [search, setSearch] = useState("");
+
+  const filteredRuns = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return runs;
+    return runs.filter((r) => r.run.name.toLowerCase().includes(query));
+  }, [runs, search]);
 
   const table = useTable({
     features,
     columns,
-    data: runs,
+    data: filteredRuns,
     state: { sorting },
     onSortingChange: setSorting,
     getRowId: (row) => row.run.id,
@@ -102,10 +109,26 @@ export function RunsTab({
     return <p className="text-[13.5px] text-research-ink-muted">No training runs yet.</p>;
   }
 
+  const searchInput = (
+    <input
+      type="text"
+      value={search}
+      onChange={(event) => setSearch(event.target.value)}
+      placeholder="Filter by name..."
+      aria-label="Filter training runs by name"
+      className="w-full max-w-[280px] rounded-md border border-research-border bg-research-bg px-3 py-2 text-[13.5px] text-research-ink placeholder:text-research-ink-muted focus:border-research-accent-subtle focus:outline-none"
+    />
+  );
+
   if (compareMode) {
     return (
-      <div className="flex flex-col gap-1.5">
-        {runs.map(({ run }) => {
+      <div className="flex flex-col gap-3">
+        {searchInput}
+        {filteredRuns.length === 0 ? (
+          <p className="text-[13.5px] text-research-ink-muted">No runs match &ldquo;{search}&rdquo;.</p>
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            {filteredRuns.map(({ run }) => {
           const checked = compareSelection?.has(run.id) ?? false;
           return (
             <label
@@ -127,14 +150,21 @@ export function RunsTab({
               <TrainingRunStatusBadge status={run.status} />
             </label>
           );
-        })}
+            })}
+          </div>
+        )}
       </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-research-border">
-      <table className="w-full border-collapse text-[13px]">
+    <div className="flex flex-col gap-3">
+      {searchInput}
+      {filteredRuns.length === 0 ? (
+        <p className="text-[13.5px] text-research-ink-muted">No runs match &ldquo;{search}&rdquo;.</p>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-research-border">
+          <table className="w-full border-collapse text-[13px]">
         <thead>
           {table.getHeaderGroups().map((headerGroup) => (
             <tr key={headerGroup.id} className="border-b border-research-border bg-research-panel">
@@ -186,7 +216,9 @@ export function RunsTab({
             </tr>
           ))}
         </tbody>
-      </table>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

@@ -15,6 +15,12 @@ type CodeBlockProps = {
   animate?: boolean;
   className?: string;
   showLineNumbers?: boolean;
+  /** Caps the block's height with an internal scrollbar (e.g. "420px") -
+   * unset by default so existing full-page/marketing usages keep growing
+   * to fit their content. Pass this wherever the block sits inside a
+   * fixed-size container (like the inspector rail) so a large object
+   * can't stretch its parent. */
+  maxHeight?: string;
 };
 
 /**
@@ -98,6 +104,7 @@ export function CodeBlock({
   animate = false,
   className,
   showLineNumbers = false,
+  maxHeight,
 }: CodeBlockProps) {
   const lines = useMemo(() => code.split("\n"), [code]);
   const highlighted = useMemo(
@@ -166,7 +173,13 @@ export function CodeBlock({
         </button>
       </div>
 
-      <pre className="overflow-x-auto p-4 text-[13px] leading-[1.75] md:text-[13.5px]">
+      <pre
+        className={cn(
+          "overflow-x-auto p-4 text-[13px] leading-[1.75] md:text-[13.5px]",
+          maxHeight && "overflow-y-auto",
+        )}
+        style={maxHeight ? { maxHeight } : undefined}
+      >
         <code className="font-mono">
           {highlighted.map((line, index) => (
             <span
