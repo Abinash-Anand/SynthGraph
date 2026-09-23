@@ -6,7 +6,6 @@ import { UsersModule } from '../users/users.module.js';
 import { AuthController } from './auth.controller.js';
 import { ApiKeyGuard } from './guards/api-key.guard.js';
 import { JwtGuard } from './guards/jwt.guard.js';
-import { ApiKeyCreationService } from './services/api-key-creation.service.js';
 import { ApiKeyService } from './services/api-key.service.js';
 import { AuthService } from './services/auth.service.js';
 
@@ -28,14 +27,12 @@ import { AuthService } from './services/auth.service.js';
   providers: [
     AuthService,
     ApiKeyService,
-    ApiKeyCreationService,
     ApiKeyGuard,
     JwtGuard,
   ],
   exports: [
     AuthService,
     ApiKeyService,
-    ApiKeyCreationService,
     ApiKeyGuard,
     JwtGuard,
     JwtModule,

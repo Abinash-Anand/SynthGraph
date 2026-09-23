@@ -1,7 +1,5 @@
 import type { Dataset } from '../../database/entities/dataset.entity.js';
 
-export const DATASET_REPOSITORY = Symbol('DATASET_REPOSITORY');
-
 export interface DatasetRepository {
   create(dataset: Dataset): Promise<Dataset>;
 
