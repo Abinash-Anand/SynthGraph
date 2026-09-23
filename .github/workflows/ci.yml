@@ -50,11 +50,14 @@ jobs:
       - name: Build (also typechecks)
         run: npm run build
 
-      - name: Unit tests
-        run: npm test
-
+      # vitest.config.ts's own `include` also sweeps in **/*.e2e-spec.ts
+      # (see test/*.e2e-spec.ts), so `npm test` needs the schema migrated
+      # too, not just the dedicated e2e run below.
       - name: Run migrations
         run: npm run migration:run
+
+      - name: Unit tests
+        run: npm test
 
       - name: E2E tests
         run: npm run test:e2e
