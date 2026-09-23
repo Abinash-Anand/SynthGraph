@@ -52,3 +52,22 @@ export const createAssetVersionSchema = z.object({
 export type CreateAssetVersionInput = z.input<typeof createAssetVersionSchema>;
 export type CreateAssetVersionRequest = z.infer<typeof createAssetVersionSchema>;
 export type CreateAssetVersionFieldErrors = Partial<Record<keyof CreateAssetVersionInput, string>>;
+
+// Mirrors the backend's UpdateAssetDto: name/description only - `type` is
+// deliberately excluded, matching the backend PATCH route's own scope.
+export const updateAssetSchema = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .min(1, "Name is required.")
+      .max(255, "Name must be 255 characters or fewer.")
+      .optional(),
+    description: z.string().trim().max(2000).optional().or(z.literal("")),
+  })
+  .refine((data) => data.name !== undefined || data.description !== undefined, {
+    message: "Change the name or description before saving.",
+  });
+
+export type UpdateAssetRequest = z.infer<typeof updateAssetSchema>;
+export type UpdateAssetFieldErrors = Partial<Record<keyof UpdateAssetRequest, string>>;

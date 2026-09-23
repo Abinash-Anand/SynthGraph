@@ -1,7 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { backendFetch } from "@/shared/http/http";
-import type { CreateExperimentRequest } from "../schemas/experiment-schemas";
+import type { CreateExperimentRequest, UpdateExperimentRequest } from "../schemas/experiment-schemas";
 import type { Experiment } from "../types/experiment";
 
 export function createExperiment(
@@ -46,3 +46,21 @@ export const getExperimentForProject = cache(
 export const getExperiment = cache((apiKey: string, experimentId: string): Promise<Experiment> => {
   return backendFetch(`/experiments/${experimentId}`, { token: apiKey });
 });
+
+// Flat routes, matching the backend (Experiment's PATCH/DELETE aren't
+// nested under /projects/:projectId - see the backend's own comment on
+// this, mirroring Training Run's flat PATCH convention).
+export function updateExperiment(
+  apiKey: string,
+  experimentId: string,
+  input: UpdateExperimentRequest,
+): Promise<Experiment> {
+  return backendFetch(`/experiments/${experimentId}`, { method: "PATCH", body: input, token: apiKey });
+}
+
+export function archiveExperiment(
+  apiKey: string,
+  experimentId: string,
+): Promise<{ message: string }> {
+  return backendFetch(`/experiments/${experimentId}`, { method: "DELETE", token: apiKey });
+}

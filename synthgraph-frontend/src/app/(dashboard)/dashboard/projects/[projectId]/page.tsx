@@ -5,9 +5,9 @@ import { ButtonLink } from "@/components/ui/Button";
 import { getSession, requireSession } from "@/features/auth/server/session";
 import { ExperimentRow } from "@/features/experiments/components/ExperimentRow";
 import { listExperiments } from "@/features/experiments/server/experiments-api";
+import { ProjectDetailHeader } from "@/features/projects/components/ProjectDetailHeader";
 import { getProject } from "@/features/projects/server/projects-api";
 import { NotFoundError } from "@/shared/http/errors";
-import { formatDate } from "@/shared/lib/format";
 import { EmptyState } from "@/shared/ui/EmptyState";
 
 type PageParams = { projectId: string };
@@ -51,15 +51,9 @@ export default async function ProjectDetailPage({ params }: { params: Promise<Pa
         >
           ← Projects
         </Link>
-        <h1 className="mt-2 text-[22px] font-medium tracking-[-0.01em] text-research-ink">
-          {project.name}
-        </h1>
-        {project.description ? (
-          <p className="mt-1 text-[14px] text-research-ink-muted">{project.description}</p>
-        ) : null}
-        <p className="mt-2 font-mono text-[11px] text-research-ink-muted">
-          Created {formatDate(project.createdAt)}
-        </p>
+        <div className="mt-2">
+          <ProjectDetailHeader project={project} />
+        </div>
       </div>
 
       <div>

@@ -1,7 +1,11 @@
 import "server-only";
 import { cache } from "react";
 import { backendFetch } from "@/shared/http/http";
-import type { CreateAssetRequest, CreateAssetVersionRequest } from "../schemas/asset-schemas";
+import type {
+  CreateAssetRequest,
+  CreateAssetVersionRequest,
+  UpdateAssetRequest,
+} from "../schemas/asset-schemas";
 import type { Asset, AssetVersion } from "../types/asset";
 
 export function listAssets(apiKey: string): Promise<Asset[]> {
@@ -14,6 +18,18 @@ export const getAsset = cache((apiKey: string, assetId: string): Promise<Asset> 
 
 export function createAsset(apiKey: string, input: CreateAssetRequest): Promise<Asset> {
   return backendFetch("/assets", { method: "POST", body: input, token: apiKey });
+}
+
+export function updateAsset(
+  apiKey: string,
+  assetId: string,
+  input: UpdateAssetRequest,
+): Promise<Asset> {
+  return backendFetch(`/assets/${assetId}`, { method: "PATCH", body: input, token: apiKey });
+}
+
+export function archiveAsset(apiKey: string, assetId: string): Promise<{ message: string }> {
+  return backendFetch(`/assets/${assetId}`, { method: "DELETE", token: apiKey });
 }
 
 export function listAssetVersions(apiKey: string, assetId: string): Promise<AssetVersion[]> {
