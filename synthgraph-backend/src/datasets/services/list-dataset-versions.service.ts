@@ -24,6 +24,8 @@ export class ListDatasetVersionsService {
   async execute(
     datasetId: string,
     userId: string,
+    limit: number,
+    offset: number,
   ): Promise<DatasetVersion[]> {
     const dataset = await this.datasetRepository.findByIdForUser(
       datasetId,
@@ -37,6 +39,8 @@ export class ListDatasetVersionsService {
     return this.repository.findAllForDataset(
       datasetId,
       userId,
+      limit,
+      offset,
     );
   }
 }

@@ -11,7 +11,11 @@ export class ListAssetsService {
     private readonly assetRepository: AssetRepository,
   ) {}
 
-  async execute(userId: string): Promise<Asset[]> {
-    return this.assetRepository.findAllForUser(userId);
+  async execute(
+    userId: string,
+    limit: number,
+    offset: number,
+  ): Promise<Asset[]> {
+    return this.assetRepository.findAllForUser(userId, limit, offset);
   }
 }

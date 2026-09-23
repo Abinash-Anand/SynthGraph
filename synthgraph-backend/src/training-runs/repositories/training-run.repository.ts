@@ -14,11 +14,15 @@ export interface TrainingRunRepository {
 
   findAllForExperiment(
     experimentId: string,
+    limit: number,
+    offset: number,
   ): Promise<TrainingRun[]>;
 
   findByCaptureStatus(
     experimentId: string,
     captureStatus: 'complete' | 'partial' | 'unknown',
+    limit: number,
+    offset: number,
   ): Promise<TrainingRun[]>;
 
   transitionStatus(

@@ -4,12 +4,14 @@ import {
   Get,
   Param,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
 
 import { ApiKeyGuard } from '../../auth/guards/api-key.guard.js';
+import { PaginationQueryDto } from '../../common/dto/pagination-query.dto.js';
 
 import { CreateDatasetDto } from '../dto/create-dataset.dto.js';
 import { CreateDatasetVersionDto } from '../dto/create-dataset-version.dto.js';
@@ -53,9 +55,12 @@ export class DatasetsController {
   @Get('datasets')
   async listDatasets(
     @Req() request: AuthenticatedRequest,
+    @Query() query: PaginationQueryDto,
   ) {
     return this.listDatasetsService.execute(
       request.user.id,
+      query.limit,
+      query.offset,
     );
   }
 
@@ -87,10 +92,13 @@ export class DatasetsController {
   async listDatasetVersions(
     @Req() request: AuthenticatedRequest,
     @Param('datasetId') datasetId: string,
+    @Query() query: PaginationQueryDto,
   ) {
     return this.listDatasetVersionsService.execute(
       datasetId,
       request.user.id,
+      query.limit,
+      query.offset,
     );
   }
 

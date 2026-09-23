@@ -10,5 +10,9 @@ export interface DatasetRepository {
     userId: string,
   ): Promise<Dataset | null>;
 
-  findAllForUser(userId: string): Promise<Dataset[]>;
+  findAllForUser(
+    userId: string,
+    limit: number,
+    offset: number,
+  ): Promise<Dataset[]>;
 }

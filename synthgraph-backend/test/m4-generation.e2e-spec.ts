@@ -284,6 +284,33 @@ describe('M4 Generation provenance workflow (e2e)', () => {
     );
   });
 
+  it('paginates the generation list via limit/offset', async () => {
+    // Self-contained: creates its own two generations (most recent, by
+    // the list's createdAt DESC order) so the two pages are deterministic
+    // regardless of how many other generations experimentA already has.
+    const older = await createGeneration('Pagination Older Generation');
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const newer = await createGeneration('Pagination Newer Generation');
+
+    const firstPage = await request(app.getHttpServer())
+      .get(`/experiments/${experimentA.id}/generations?limit=1&offset=0`)
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .expect(200);
+
+    expect(firstPage.body).toHaveLength(1);
+    expect(firstPage.body[0].id).toBe(newer.body.id);
+
+    const secondPage = await request(app.getHttpServer())
+      .get(`/experiments/${experimentA.id}/generations?limit=1&offset=1`)
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .expect(200);
+
+    expect(secondPage.body).toHaveLength(1);
+    expect(secondPage.body[0].id).toBe(older.body.id);
+
+    await generationRepository.delete([older.body.id, newer.body.id]);
+  });
+
   it('enforces pending to running to completed lifecycle timestamps', async () => {
     const created = await createGeneration('Completed Lifecycle');
 

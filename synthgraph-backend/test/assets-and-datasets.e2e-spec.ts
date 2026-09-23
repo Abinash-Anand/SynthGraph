@@ -169,6 +169,41 @@ describe('Assets and datasets (e2e)', () => {
       );
     });
 
+    it('paginates the asset list via limit/offset', async () => {
+      // Self-contained: creates its own two assets (most recent, by the
+      // list's createdAt DESC order) so the two pages are deterministic
+      // regardless of how many other assets userA already has.
+      const older = await request(app.getHttpServer())
+        .post('/assets')
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'Pagination Older Asset', type: 'model' })
+        .expect(201);
+
+      const newer = await request(app.getHttpServer())
+        .post('/assets')
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'Pagination Newer Asset', type: 'model' })
+        .expect(201);
+
+      const firstPage = await request(app.getHttpServer())
+        .get('/assets?limit=1&offset=0')
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(200);
+
+      expect(firstPage.body).toHaveLength(1);
+      expect(firstPage.body[0].id).toBe(newer.body.id);
+
+      const secondPage = await request(app.getHttpServer())
+        .get('/assets?limit=1&offset=1')
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(200);
+
+      expect(secondPage.body).toHaveLength(1);
+      expect(secondPage.body[0].id).toBe(older.body.id);
+
+      await assetRepository.delete([older.body.id, newer.body.id]);
+    });
+
     it('creates a version for the asset', async () => {
       const response = await request(app.getHttpServer())
         .post(`/assets/${assetId}/versions`)
@@ -197,6 +232,41 @@ describe('Assets and datasets (e2e)', () => {
           expect.objectContaining({ id: assetVersionId, version: '1' }),
         ]),
       );
+    });
+
+    it('paginates the asset version list via limit/offset', async () => {
+      // Self-contained: creates two extra versions under the shared
+      // asset fixture and cleans them up, rather than relying on the
+      // single "version 1" fixture created earlier in this file.
+      const older = await request(app.getHttpServer())
+        .post(`/assets/${assetId}/versions`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ version: 'pagination-older', uri: 's3://bucket/older.bin' })
+        .expect(201);
+
+      const newer = await request(app.getHttpServer())
+        .post(`/assets/${assetId}/versions`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ version: 'pagination-newer', uri: 's3://bucket/newer.bin' })
+        .expect(201);
+
+      const firstPage = await request(app.getHttpServer())
+        .get(`/assets/${assetId}/versions?limit=1&offset=0`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(200);
+
+      expect(firstPage.body).toHaveLength(1);
+      expect(firstPage.body[0].id).toBe(newer.body.id);
+
+      const secondPage = await request(app.getHttpServer())
+        .get(`/assets/${assetId}/versions?limit=1&offset=1`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(200);
+
+      expect(secondPage.body).toHaveLength(1);
+      expect(secondPage.body[0].id).toBe(older.body.id);
+
+      await assetVersionRepository.delete([older.body.id, newer.body.id]);
     });
 
     it('retrieves an asset version by id', async () => {
@@ -326,6 +396,41 @@ describe('Assets and datasets (e2e)', () => {
       );
     });
 
+    it('paginates the dataset list via limit/offset', async () => {
+      // Self-contained: creates its own two datasets (most recent, by the
+      // list's createdAt DESC order) so the two pages are deterministic
+      // regardless of how many other datasets userA already has.
+      const older = await request(app.getHttpServer())
+        .post('/datasets')
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'Pagination Older Dataset' })
+        .expect(201);
+
+      const newer = await request(app.getHttpServer())
+        .post('/datasets')
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({ name: 'Pagination Newer Dataset' })
+        .expect(201);
+
+      const firstPage = await request(app.getHttpServer())
+        .get('/datasets?limit=1&offset=0')
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(200);
+
+      expect(firstPage.body).toHaveLength(1);
+      expect(firstPage.body[0].id).toBe(newer.body.id);
+
+      const secondPage = await request(app.getHttpServer())
+        .get('/datasets?limit=1&offset=1')
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(200);
+
+      expect(secondPage.body).toHaveLength(1);
+      expect(secondPage.body[0].id).toBe(older.body.id);
+
+      await datasetRepository.delete([older.body.id, newer.body.id]);
+    });
+
     it('creates a version for the dataset', async () => {
       const response = await request(app.getHttpServer())
         .post(`/datasets/${datasetId}/versions`)
@@ -354,6 +459,47 @@ describe('Assets and datasets (e2e)', () => {
           expect.objectContaining({ id: datasetVersionId, version: '1' }),
         ]),
       );
+    });
+
+    it('paginates the dataset version list via limit/offset', async () => {
+      // Self-contained: creates two extra versions under the shared
+      // dataset fixture and cleans them up, rather than relying on the
+      // single "version 1" fixture created earlier in this file.
+      const older = await request(app.getHttpServer())
+        .post(`/datasets/${datasetId}/versions`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({
+          version: 'pagination-older',
+          uri: 's3://bucket/older.parquet',
+        })
+        .expect(201);
+
+      const newer = await request(app.getHttpServer())
+        .post(`/datasets/${datasetId}/versions`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .send({
+          version: 'pagination-newer',
+          uri: 's3://bucket/newer.parquet',
+        })
+        .expect(201);
+
+      const firstPage = await request(app.getHttpServer())
+        .get(`/datasets/${datasetId}/versions?limit=1&offset=0`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(200);
+
+      expect(firstPage.body).toHaveLength(1);
+      expect(firstPage.body[0].id).toBe(newer.body.id);
+
+      const secondPage = await request(app.getHttpServer())
+        .get(`/datasets/${datasetId}/versions?limit=1&offset=1`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(200);
+
+      expect(secondPage.body).toHaveLength(1);
+      expect(secondPage.body[0].id).toBe(older.body.id);
+
+      await datasetVersionRepository.delete([older.body.id, newer.body.id]);
     });
 
     it('retrieves a dataset version by id', async () => {

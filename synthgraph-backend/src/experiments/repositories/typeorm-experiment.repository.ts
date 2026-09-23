@@ -42,6 +42,8 @@ export class TypeOrmExperimentRepository implements ExperimentRepository {
 
   async findAllForProject(
     projectId: string,
+    limit: number,
+    offset: number,
   ): Promise<Experiment[]> {
     return this.repository.find({
       where: {
@@ -50,12 +52,16 @@ export class TypeOrmExperimentRepository implements ExperimentRepository {
       order: {
         createdAt: 'DESC',
       },
+      take: limit,
+      skip: offset,
     });
   }
 
   async searchForProject(
     projectId: string,
     search: string,
+    limit: number,
+    offset: number,
   ): Promise<Experiment[]> {
     return this.repository
       .createQueryBuilder('experiment')
@@ -65,6 +71,8 @@ export class TypeOrmExperimentRepository implements ExperimentRepository {
         { search: `%${search}%` },
       )
       .orderBy('experiment.createdAt', 'DESC')
+      .take(limit)
+      .skip(offset)
       .getMany();
   }
 }

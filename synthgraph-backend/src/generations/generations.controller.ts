@@ -89,6 +89,8 @@ export class GenerationsController {
       experimentId,
       request.user.id,
       query.parameters,
+      query.limit,
+      query.offset,
     );
 
     return generations.map(toGenerationResponse);

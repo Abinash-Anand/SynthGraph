@@ -3,12 +3,13 @@ import { createHash, randomBytes } from 'node:crypto';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import { DataSource } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 
 import { AppModule } from '../src/app.module.js';
 import { ApiKey } from '../src/database/entities/api-key.entity.js';
 import { Dataset } from '../src/database/entities/dataset.entity.js';
 import { DatasetVersion } from '../src/database/entities/dataset-version.entity.js';
+import { EvaluationResult } from '../src/database/entities/evaluation-result.entity.js';
 import { Experiment } from '../src/database/entities/experiment.entity.js';
 import { Project } from '../src/database/entities/project.entity.js';
 import { TrainingRun } from '../src/database/entities/training-run.entity.js';
@@ -29,6 +30,8 @@ describe('M6 EvaluationResult E2E', () => {
 
   let datasetVersionA: DatasetVersion;
   let datasetVersionB: DatasetVersion;
+
+  let evaluationResultRepository: Repository<EvaluationResult>;
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -55,6 +58,8 @@ describe('M6 EvaluationResult E2E', () => {
     const datasetVersionRepository =
       dataSource.getRepository(DatasetVersion);
     const apiKeyRepository = dataSource.getRepository(ApiKey);
+    evaluationResultRepository =
+      dataSource.getRepository(EvaluationResult);
 
     userA = await userRepository.save(
       userRepository.create({
@@ -290,6 +295,51 @@ describe('M6 EvaluationResult E2E', () => {
     expect(
       stored?.dataset_version_id ?? stored?.datasetVersionId,
     ).toBe(datasetVersionA.id);
+  });
+
+  it('paginates the evaluation result list via limit/offset', async () => {
+    // Self-contained: creates its own two evaluation results (most recent,
+    // by the list's createdAt DESC order) so the two pages are
+    // deterministic regardless of how many other evaluation results
+    // trainingRunA already has.
+    const older = await request(app.getHttpServer())
+      .post(`/training-runs/${trainingRunA.id}/evaluations`)
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .send({
+        datasetVersionId: datasetVersionA.id,
+        metrics: { accuracy: 0.5 },
+      })
+      .expect(201);
+
+    const newer = await request(app.getHttpServer())
+      .post(`/training-runs/${trainingRunA.id}/evaluations`)
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .send({
+        datasetVersionId: datasetVersionA.id,
+        metrics: { accuracy: 0.6 },
+      })
+      .expect(201);
+
+    const firstPage = await request(app.getHttpServer())
+      .get(`/training-runs/${trainingRunA.id}/evaluations?limit=1&offset=0`)
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .expect(200);
+
+    expect(firstPage.body).toHaveLength(1);
+    expect(firstPage.body[0].id).toBe(newer.body.id);
+
+    const secondPage = await request(app.getHttpServer())
+      .get(`/training-runs/${trainingRunA.id}/evaluations?limit=1&offset=1`)
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .expect(200);
+
+    expect(secondPage.body).toHaveLength(1);
+    expect(secondPage.body[0].id).toBe(older.body.id);
+
+    await evaluationResultRepository.delete([
+      older.body.id,
+      newer.body.id,
+    ]);
   });
 
   it('rejects a nonexistent DatasetVersion', async () => {

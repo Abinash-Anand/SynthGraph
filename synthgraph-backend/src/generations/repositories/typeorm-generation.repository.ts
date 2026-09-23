@@ -34,6 +34,8 @@ export class TypeOrmGenerationRepository implements GenerationRepository {
 
   async findAllForExperiment(
     experimentId: string,
+    limit: number,
+    offset: number,
   ): Promise<Generation[]> {
     return this.repository.find({
       where: {
@@ -42,12 +44,16 @@ export class TypeOrmGenerationRepository implements GenerationRepository {
       order: {
         createdAt: 'DESC',
       },
+      take: limit,
+      skip: offset,
     });
   }
 
   async findByParameters(
     experimentId: string,
     parameters: Record<string, unknown>,
+    limit: number,
+    offset: number,
   ): Promise<Generation[]> {
     const query = this.repository
       .createQueryBuilder('generation')
@@ -67,6 +73,8 @@ export class TypeOrmGenerationRepository implements GenerationRepository {
 
     return query
       .orderBy('generation.createdAt', 'DESC')
+      .take(limit)
+      .skip(offset)
       .getMany();
   }
 

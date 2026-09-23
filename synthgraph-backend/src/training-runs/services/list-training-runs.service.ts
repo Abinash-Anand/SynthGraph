@@ -28,7 +28,9 @@ export class ListTrainingRunsService {
   async execute(
     experimentId: string,
     userId: string,
-    captureStatus?: 'complete' | 'partial' | 'unknown',
+    captureStatus: 'complete' | 'partial' | 'unknown' | undefined,
+    limit: number,
+    offset: number,
   ): Promise<TrainingRun[]> {
     const experiment = await this.experimentRepository.findByIdForUser(
       experimentId,
@@ -44,9 +46,13 @@ export class ListTrainingRunsService {
         ? await this.trainingRunRepository.findByCaptureStatus(
             experiment.id,
             captureStatus,
+            limit,
+            offset,
           )
         : await this.trainingRunRepository.findAllForExperiment(
             experiment.id,
+            limit,
+            offset,
           );
 
     await Promise.all(

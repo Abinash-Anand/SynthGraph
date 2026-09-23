@@ -24,6 +24,8 @@ export class ListAssetVersionsService {
   async execute(
     assetId: string,
     userId: string,
+    limit: number,
+    offset: number,
   ): Promise<AssetVersion[]> {
     const asset = await this.assetRepository.findByIdForUser(
       assetId,
@@ -37,6 +39,8 @@ export class ListAssetVersionsService {
     return this.repository.findAllForAsset(
       assetId,
       userId,
+      limit,
+      offset,
     );
   }
 }

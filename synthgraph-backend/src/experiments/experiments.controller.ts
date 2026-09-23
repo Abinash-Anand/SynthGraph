@@ -51,6 +51,8 @@ export class ExperimentsController {
       projectId,
       request.user.id,
       query.search,
+      query.limit,
+      query.offset,
     );
   }
 

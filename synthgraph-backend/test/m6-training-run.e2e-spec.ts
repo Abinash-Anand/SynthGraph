@@ -315,6 +315,49 @@ describe('M6 Training run (e2e)', () => {
     ).toContain(created.body.id);
   });
 
+  it('paginates the training run list via limit/offset', async () => {
+    // Self-contained: creates its own two training runs (most recent, by
+    // the list's createdAt DESC order) so the two pages are deterministic
+    // regardless of how many other training runs experimentA already has.
+    const older = await request(app.getHttpServer())
+      .post(`/experiments/${experimentA.id}/training-runs`)
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .send({
+        name: 'Pagination Older Run',
+        trainer: { name: 'yolo' },
+        parameters: {},
+      })
+      .expect(201);
+
+    const newer = await request(app.getHttpServer())
+      .post(`/experiments/${experimentA.id}/training-runs`)
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .send({
+        name: 'Pagination Newer Run',
+        trainer: { name: 'yolo' },
+        parameters: {},
+      })
+      .expect(201);
+
+    const firstPage = await request(app.getHttpServer())
+      .get(`/experiments/${experimentA.id}/training-runs?limit=1&offset=0`)
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .expect(200);
+
+    expect(firstPage.body).toHaveLength(1);
+    expect(firstPage.body[0].id).toBe(newer.body.id);
+
+    const secondPage = await request(app.getHttpServer())
+      .get(`/experiments/${experimentA.id}/training-runs?limit=1&offset=1`)
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .expect(200);
+
+    expect(secondPage.body).toHaveLength(1);
+    expect(secondPage.body[0].id).toBe(older.body.id);
+
+    await trainingRunRepository.delete([older.body.id, newer.body.id]);
+  });
+
   it('does not allow another user to list training runs for a project they do not own', async () => {
     await request(app.getHttpServer())
       .get(`/experiments/${experimentA.id}/training-runs`)
@@ -513,6 +556,54 @@ describe('M6 Training run (e2e)', () => {
     expect(
       (response.body as Array<{ step: number }>).map((m) => m.step),
     ).toEqual([100, 200]);
+  });
+
+  it('paginates the training run metric list via limit/offset', async () => {
+    // Self-contained: creates its own training run and two metrics
+    // (ordered by step ASC) and cleans up both afterwards, since metrics
+    // RESTRICT-reference training runs on delete.
+    const created = await request(app.getHttpServer())
+      .post(`/experiments/${experimentA.id}/training-runs`)
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .send({
+        name: 'Pagination metrics run',
+        trainer: { name: 'yolo' },
+        parameters: {},
+      })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(`/training-runs/${created.body.id}/metrics`)
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .send({ step: 1, metrics: { loss: 0.9 } })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(`/training-runs/${created.body.id}/metrics`)
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .send({ step: 2, metrics: { loss: 0.7 } })
+      .expect(201);
+
+    const firstPage = await request(app.getHttpServer())
+      .get(`/training-runs/${created.body.id}/metrics?limit=1&offset=0`)
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .expect(200);
+
+    expect(firstPage.body).toHaveLength(1);
+    expect(firstPage.body[0].step).toBe(1);
+
+    const secondPage = await request(app.getHttpServer())
+      .get(`/training-runs/${created.body.id}/metrics?limit=1&offset=1`)
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .expect(200);
+
+    expect(secondPage.body).toHaveLength(1);
+    expect(secondPage.body[0].step).toBe(2);
+
+    await trainingRunMetricRepository.delete({
+      trainingRunId: created.body.id,
+    });
+    await trainingRunRepository.delete(created.body.id);
   });
 
   it('logs a batch of metrics in one request', async () => {

@@ -4,7 +4,9 @@ import {
   MaxLength,
 } from 'class-validator';
 
-export class ListGenerationsQueryDto {
+import { PaginationQueryDto } from '../../common/dto/pagination-query.dto.js';
+
+export class ListGenerationsQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsJSON()
   @MaxLength(2000)
