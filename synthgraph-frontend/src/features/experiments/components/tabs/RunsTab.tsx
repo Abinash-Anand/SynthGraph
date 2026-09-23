@@ -13,15 +13,13 @@ import { useState } from "react";
 import { CaptureStatusBadge } from "@/features/training-runs/components/CaptureStatusBadge";
 import { TrainingRunStatusBadge } from "@/features/training-runs/components/TrainingRunStatusBadge";
 import { cn } from "@/lib/utils";
-import { formatDateTime } from "@/shared/lib/format";
+import { formatDateTime, formatDurationSeconds } from "@/shared/lib/format";
 import type { EnrichedTrainingRun } from "../../types/experiment-workspace";
 
 function durationLabel(run: EnrichedTrainingRun["run"]): string {
   if (!run.startedAt || !run.completedAt) return "—";
   const seconds = (new Date(run.completedAt).getTime() - new Date(run.startedAt).getTime()) / 1000;
-  if (seconds < 60) return `${seconds.toFixed(0)}s`;
-  if (seconds < 3600) return `${(seconds / 60).toFixed(1)}m`;
-  return `${(seconds / 3600).toFixed(1)}h`;
+  return formatDurationSeconds(seconds);
 }
 
 const features = tableFeatures({

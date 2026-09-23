@@ -17,8 +17,18 @@ import type {
  * entirely — only dataset references are included — and omits
  * `metadata`/timestamps. Confirmed backend limitations, not a frontend gap.
  */
+export type ClassifiedField = { field: string; value: string };
+
+export type ReproductionClassification = {
+  known: ClassifiedField[];
+  supplied: ClassifiedField[];
+  missing: string[];
+  external: ClassifiedField[];
+};
+
 export type ReproductionManifest = {
   schemaVersion: string;
+  classification: ReproductionClassification;
   generation: {
     id: string;
     experimentId: string;

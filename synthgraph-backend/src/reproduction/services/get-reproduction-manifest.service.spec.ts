@@ -97,6 +97,21 @@ describe('GetReproductionManifestService', () => {
 
     expect(result).toEqual({
       schemaVersion: '1.0',
+      classification: {
+        known: [
+          { field: 'Generator', value: 'blender' },
+          { field: 'Generator version', value: '4.2' },
+          { field: 'Seed', value: '42' },
+          { field: 'Code version', value: 'abc123' },
+          { field: 'Configuration hash', value: 'config-hash' },
+        ],
+        supplied: [{ field: 'python', value: '3.12' }],
+        missing: [],
+        external: [
+          { field: 'input', value: 'dataset-version-1' },
+          { field: 'output', value: 'dataset-version-2' },
+        ],
+      },
       generation: {
         id: generation.id,
         experimentId: generation.experimentId,
@@ -172,5 +187,35 @@ describe('GetReproductionManifestService', () => {
     );
 
     expect(result.datasetReferences).toEqual([]);
+  });
+
+  it('classifies absent fields as missing rather than omitting them', async () => {
+    const generation = {
+      id: 'generation-1',
+      experimentId: 'experiment-1',
+      name: 'Sparse Generation',
+      description: null,
+      generator: { name: 'blender' },
+      parameters: {},
+      reproducibility: { seed: 42 },
+      status: GenerationStatus.Completed,
+      inputs: [],
+      outputs: [],
+    } as Generation;
+
+    generationRepository.findByIdForUser.mockResolvedValue(generation);
+    reproductionRepository.findDatasetReferences.mockResolvedValue([]);
+
+    const result = await service.execute(generation.id, 'user-1');
+
+    expect(result.classification).toEqual({
+      known: [
+        { field: 'Generator', value: 'blender' },
+        { field: 'Seed', value: '42' },
+      ],
+      supplied: [],
+      missing: ['Generator version', 'Code version', 'Configuration hash', 'Environment'],
+      external: [],
+    });
   });
 });

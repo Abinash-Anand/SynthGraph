@@ -349,6 +349,28 @@ describe('M7 Reproduction manifest (e2e)', () => {
     ]);
   });
 
+  it('classifies known/supplied/external fields from a fully-populated generation', async () => {
+    const response = await request(app.getHttpServer())
+      .get(
+        `/generations/${generationA.id}/reproduction-manifest`,
+      )
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .expect(200);
+
+    expect(response.body.classification).toEqual({
+      known: [
+        { field: 'Generator', value: 'blender' },
+        { field: 'Generator version', value: '4.2.0' },
+        { field: 'Seed', value: '42' },
+        { field: 'Code version', value: 'abc123' },
+        { field: 'Configuration hash', value: 'sha256:configuration' },
+      ],
+      supplied: [{ field: 'renderer', value: 'cycles' }],
+      missing: [],
+      external: [{ field: 'input', value: datasetVersion.id }],
+    });
+  });
+
   it('does not expose another user generation', async () => {
     await request(app.getHttpServer())
       .get(
