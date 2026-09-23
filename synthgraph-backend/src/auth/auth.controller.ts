@@ -6,6 +6,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 
 import { LoginDto } from './dto/login.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
@@ -18,11 +19,16 @@ import type { AuthenticatedRequest } from './types/authenticated-request.js';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  // Tighter than the global default (ThrottlerModule.forRoot in app.module.ts)
+  // - these are the account-creation/credential-guessing surface, not
+  // ordinary API traffic.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('register')
   register(@Body() input: RegisterDto) {
     return this.authService.register(input);
   }
 
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('login')
   login(@Body() input: LoginDto) {
     return this.authService.login(input);
