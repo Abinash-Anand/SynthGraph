@@ -1,18 +1,24 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 
 import { Generation } from '../../database/entities/generation.entity.js';
-import { TypeOrmExperimentRepository } from '../../experiments/repositories/typeorm-experiment.repository.js';
-import { TypeOrmGenerationRepository } from '../repositories/typeorm-generation.repository.js';
+import type { ExperimentRepository } from '../../experiments/repositories/experiment.repository.js';
+import { EXPERIMENT_REPOSITORY } from '../../experiments/repositories/experiment.tokens.js';
+import type { GenerationRepository } from '../repositories/generation.repository.js';
+import { GENERATION_REPOSITORY } from '../repositories/generation.tokens.js';
 
 @Injectable()
 export class ListGenerationsService {
   constructor(
-    private readonly generationRepository: TypeOrmGenerationRepository,
-    private readonly experimentRepository: TypeOrmExperimentRepository,
+    @Inject(GENERATION_REPOSITORY)
+    private readonly generationRepository: GenerationRepository,
+
+    @Inject(EXPERIMENT_REPOSITORY)
+    private readonly experimentRepository: ExperimentRepository,
   ) {}
 
   async execute(

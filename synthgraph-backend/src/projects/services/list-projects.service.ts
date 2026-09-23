@@ -1,10 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Project } from '../../database/entities/project.entity.js';
-import { TypeOrmProjectRepository } from '../repositories/typeorm-project.repository.js';
+import type { ProjectRepository } from '../repositories/project.repository.js';
+import { PROJECT_REPOSITORY } from '../repositories/project.tokens.js';
 
 @Injectable()
 export class ListProjectsService {
-  constructor(private readonly projectRepository: TypeOrmProjectRepository) {}
+  constructor(
+    @Inject(PROJECT_REPOSITORY)
+    private readonly projectRepository: ProjectRepository,
+  ) {}
 
   async execute(
     userId: string,

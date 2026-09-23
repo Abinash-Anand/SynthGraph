@@ -6,7 +6,7 @@ import { ApiKey } from '../../database/entities/api-key.entity.js';
 import { User } from '../../database/entities/user.entity.js';
 import { TypeOrmApiKeyRepository } from '../../users/repositories/typeorm-api-key.repository.js';
 import { TypeOrmUserRepository } from '../../users/repositories/typeorm-user.repository.js';
-import { ApiKeyCreationService } from '../../auth/services/api-key-creation.service.js';
+import { ApiKeyManagementService } from '../../api-keys/services/api-key-management.service.js';
 
 const dataSource = new DataSource({
   type: 'postgres',
@@ -38,12 +38,12 @@ async function main() {
   );
 }
 
-  const service = new ApiKeyCreationService(apiKeyRepository, userRepository);
+  const service = new ApiKeyManagementService(apiKeyRepository);
 
-  const apiKey = await service.create(user.id);
+  const { key } = await service.create(user.id);
 
   console.log(`User: ${user.email}`);
-  console.log(`API key: ${apiKey}`);
+  console.log(`API key: ${key}`);
 
   await dataSource.destroy();
 }

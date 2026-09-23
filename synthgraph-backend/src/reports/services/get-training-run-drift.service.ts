@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 
 import { TrainingRun } from '../../database/entities/training-run.entity.js';
-import { TypeOrmTrainingRunRepository } from '../../training-runs/repositories/typeorm-training-run.repository.js';
+import type { TrainingRunRepository } from '../../training-runs/repositories/training-run.repository.js';
+import { TRAINING_RUN_REPOSITORY } from '../../training-runs/repositories/training-run.tokens.js';
 import { ReportsRepository } from '../repositories/reports.repository.js';
 
 export type TrainingRunDriftEntry = {
@@ -42,7 +43,9 @@ function findConsensusValue(values: unknown[]): { value: unknown } | null {
 export class GetTrainingRunDriftService {
   constructor(
     private readonly reportsRepository: ReportsRepository,
-    private readonly trainingRunRepository: TypeOrmTrainingRunRepository,
+
+    @Inject(TRAINING_RUN_REPOSITORY)
+    private readonly trainingRunRepository: TrainingRunRepository,
   ) {}
 
   async execute(

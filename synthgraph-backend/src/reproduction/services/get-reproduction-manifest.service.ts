@@ -4,7 +4,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
-import { TypeOrmGenerationRepository } from '../../generations/repositories/typeorm-generation.repository.js';
+import type { GenerationRepository } from '../../generations/repositories/generation.repository.js';
+import { GENERATION_REPOSITORY } from '../../generations/repositories/generation.tokens.js';
 import type { Generation } from '../../database/entities/generation.entity.js';
 
 import type { ReproductionRepository } from '../repositories/reproduction.repository.js';
@@ -75,7 +76,8 @@ function classify(
 @Injectable()
 export class GetReproductionManifestService {
   constructor(
-    private readonly generationRepository: TypeOrmGenerationRepository,
+    @Inject(GENERATION_REPOSITORY)
+    private readonly generationRepository: GenerationRepository,
 
     @Inject(REPRODUCTION_REPOSITORY)
     private readonly reproductionRepository: ReproductionRepository,

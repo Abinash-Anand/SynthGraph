@@ -11,10 +11,10 @@ import { Generation } from '../database/entities/generation.entity.js';
 import { GenerationDatasetReference } from '../database/entities/generation-dataset-reference.entity.js';
 
 import { TypeOrmGenerationRepository } from '../generations/repositories/typeorm-generation.repository.js';
+import { GENERATION_REPOSITORY } from '../generations/repositories/generation.tokens.js';
 
 import { ReproductionController } from './reproduction.controller.js';
 
-import { ReproductionRepository } from './repositories/reproduction.repository.js';
 import { REPRODUCTION_REPOSITORY } from './repositories/reproduction.repository.token.js';
 import { TypeOrmReproductionRepository } from './repositories/typeorm-reproduction.repository.js';
 
@@ -35,7 +35,10 @@ import { GetReproductionManifestService } from './services/get-reproduction-mani
   ],
 
   providers: [
-    TypeOrmGenerationRepository,
+    {
+      provide: GENERATION_REPOSITORY,
+      useClass: TypeOrmGenerationRepository,
+    },
 
     {
       provide: REPRODUCTION_REPOSITORY,

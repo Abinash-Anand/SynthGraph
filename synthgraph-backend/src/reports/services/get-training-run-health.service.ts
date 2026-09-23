@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 
-import { TypeOrmTrainingRunRepository } from '../../training-runs/repositories/typeorm-training-run.repository.js';
+import type { TrainingRunRepository } from '../../training-runs/repositories/training-run.repository.js';
+import { TRAINING_RUN_REPOSITORY } from '../../training-runs/repositories/training-run.tokens.js';
 import { ReportsRepository } from '../repositories/reports.repository.js';
 
 const DEFAULT_WINDOW_SIZE = 5;
@@ -49,9 +50,10 @@ export class GetTrainingRunHealthService {
   constructor(
     private readonly reportsRepository: ReportsRepository,
     // Reused directly (mirrors GetParameterCorrelationReportService reusing
-    // TypeOrmExperimentRepository) for the same ownership-scoped lookup
-    // every training-run route already uses.
-    private readonly trainingRunRepository: TypeOrmTrainingRunRepository,
+    // the experiments module's repository) for the same ownership-scoped
+    // lookup every training-run route already uses.
+    @Inject(TRAINING_RUN_REPOSITORY)
+    private readonly trainingRunRepository: TrainingRunRepository,
   ) {}
 
   async execute(

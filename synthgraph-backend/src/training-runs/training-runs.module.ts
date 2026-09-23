@@ -14,14 +14,13 @@ import type { DatasetVersionRepository } from '../datasets/repositories/dataset-
 import { TypeOrmDatasetVersionRepository } from '../datasets/repositories/typeorm-dataset-version.repository.js';
 
 import { TypeOrmExperimentRepository } from '../experiments/repositories/typeorm-experiment.repository.js';
+import { EXPERIMENT_REPOSITORY } from '../experiments/repositories/experiment.tokens.js';
 
 import { TrainingRunsController } from './training-runs.controller.js';
 
-import type { TrainingRunDatasetReferenceRepository } from './repositories/training-run-dataset-reference.repository.js';
 import { TRAINING_RUN_DATASET_REFERENCE_REPOSITORY } from './repositories/training-run-dataset-reference.tokens.js';
 import { TypeOrmTrainingRunDatasetReferenceRepository } from './repositories/typeorm-training-run-dataset-reference.repository.js';
 
-import type { TrainingRunRepository } from './repositories/training-run.repository.js';
 import { TRAINING_RUN_REPOSITORY } from './repositories/training-run.tokens.js';
 import { TypeOrmTrainingRunRepository } from './repositories/typeorm-training-run.repository.js';
 
@@ -44,7 +43,10 @@ import { UpdateTrainingRunStatusService } from './services/update-training-run-s
   ],
   controllers: [TrainingRunsController],
   providers: [
-    TypeOrmExperimentRepository,
+    {
+      provide: EXPERIMENT_REPOSITORY,
+      useClass: TypeOrmExperimentRepository,
+    },
 
     {
       provide: TRAINING_RUN_REPOSITORY,

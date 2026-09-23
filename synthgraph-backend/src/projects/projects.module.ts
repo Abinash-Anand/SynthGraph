@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { Project } from '../database/entities/project.entity.js';
 import { TypeOrmProjectRepository } from './repositories/typeorm-project.repository.js';
+import { PROJECT_REPOSITORY } from './repositories/project.tokens.js';
 import { AuthModule } from '../auth/auth.module.js';
 import { GetProjectService } from './services/get-project.service.js';
 import { ProjectsController } from './projects.controller.js';
@@ -13,11 +14,14 @@ import { CreateProjectService } from './services/create-project.service.js';
   imports: [TypeOrmModule.forFeature([Project]), AuthModule],
   controllers: [ProjectsController],
   providers: [
-    TypeOrmProjectRepository,
+    {
+      provide: PROJECT_REPOSITORY,
+      useClass: TypeOrmProjectRepository,
+    },
     GetProjectService,
     CreateProjectService,
     ListProjectsService,
   ],
-  exports: [TypeOrmProjectRepository],
+  exports: [PROJECT_REPOSITORY],
 })
 export class ProjectsModule {}

@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 
 import { EvaluationResult } from '../../database/entities/evaluation-result.entity.js';
 import { TrainingRun } from '../../database/entities/training-run.entity.js';
-import { TypeOrmExperimentRepository } from '../../experiments/repositories/typeorm-experiment.repository.js';
+import type { ExperimentRepository } from '../../experiments/repositories/experiment.repository.js';
+import { EXPERIMENT_REPOSITORY } from '../../experiments/repositories/experiment.tokens.js';
 import { ReportsRepository } from '../repositories/reports.repository.js';
 
 export type ParameterCorrelationGroup = {
@@ -29,7 +30,8 @@ export class GetParameterCorrelationReportService {
     // Reaching into the experiments module's own repository directly,
     // mirroring the existing satellite-module pattern (Comparisons,
     // Reproduction do the same against generations/datasets).
-    private readonly experimentRepository: TypeOrmExperimentRepository,
+    @Inject(EXPERIMENT_REPOSITORY)
+    private readonly experimentRepository: ExperimentRepository,
   ) {}
 
   // Grouping/averaging happens in application code, not SQL: parameter
