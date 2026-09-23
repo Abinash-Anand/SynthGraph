@@ -8,6 +8,7 @@ export interface GenerationDatasetReferenceRepository {
   exists(
     generationId: string,
     datasetVersionId: string,
+    role: string,
   ): Promise<boolean>;
 
   findForGeneration(

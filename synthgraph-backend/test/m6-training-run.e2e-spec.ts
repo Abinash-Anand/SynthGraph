@@ -515,6 +515,65 @@ describe('M6 Training run (e2e)', () => {
     ).toEqual([100, 200]);
   });
 
+  it('logs a batch of metrics in one request', async () => {
+    const created = await request(app.getHttpServer())
+      .post(`/experiments/${experimentA.id}/training-runs`)
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .send({ name: 'Batch metrics run', trainer: { name: 'yolo' }, parameters: {} })
+      .expect(201);
+
+    const batchResponse = await request(app.getHttpServer())
+      .post(`/training-runs/${created.body.id}/metrics/batch`)
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .send({
+        metrics: [
+          { step: 1, metrics: { loss: 0.9 } },
+          { step: 2, metrics: { loss: 0.7 } },
+          { step: 3, metrics: { loss: 0.5 } },
+        ],
+      })
+      .expect(201);
+
+    expect(batchResponse.body).toHaveLength(3);
+
+    const response = await request(app.getHttpServer())
+      .get(`/training-runs/${created.body.id}/metrics`)
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .expect(200);
+
+    expect(
+      (response.body as Array<{ step: number }>).map((m) => m.step),
+    ).toEqual([1, 2, 3]);
+  });
+
+  it('rejects an empty batch', async () => {
+    const created = await request(app.getHttpServer())
+      .post(`/experiments/${experimentA.id}/training-runs`)
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .send({ name: 'Empty batch run', trainer: { name: 'yolo' }, parameters: {} })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(`/training-runs/${created.body.id}/metrics/batch`)
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .send({ metrics: [] })
+      .expect(400);
+  });
+
+  it('does not allow batch-logging metrics onto another user training run', async () => {
+    const created = await request(app.getHttpServer())
+      .post(`/experiments/${experimentB.id}/training-runs`)
+      .set('Authorization', `Bearer ${apiKeyB}`)
+      .send({ name: 'User B run', trainer: { name: 'yolo' }, parameters: {} })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(`/training-runs/${created.body.id}/metrics/batch`)
+      .set('Authorization', `Bearer ${apiKeyA}`)
+      .send({ metrics: [{ step: 1, metrics: { loss: 0.9 } }] })
+      .expect(404);
+  });
+
   describe('capture-status', () => {
     it('reports and reads back a complete capture status', async () => {
       const created = await request(app.getHttpServer())

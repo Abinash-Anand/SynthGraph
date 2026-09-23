@@ -57,11 +57,12 @@ export class CreateGenerationDatasetReferenceService {
     const exists = await this.referenceRepository.exists(
       generationId,
       input.datasetVersionId,
+      input.role,
     );
 
     if (exists) {
       throw new ConflictException(
-        'Dataset version is already referenced by this generation',
+        'Dataset version is already referenced by this generation under this role',
       );
     }
 

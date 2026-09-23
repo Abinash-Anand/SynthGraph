@@ -15,6 +15,7 @@ import { TRAINING_RUN_METRIC_REPOSITORY } from './repositories/training-run-metr
 import type { TrainingRunMetricRepository } from './repositories/training-run-metric.repository.js';
 import { TypeOrmTrainingRunMetricRepository } from './repositories/typeorm-training-run-metric.repository.js';
 import { CreateTrainingRunMetricService } from './services/create-training-run-metric.service.js';
+import { CreateTrainingRunMetricsBatchService } from './services/create-training-run-metrics-batch.service.js';
 import { ListTrainingRunMetricsService } from './services/list-training-run-metrics.service.js';
 
 @Module({
@@ -53,6 +54,7 @@ import { ListTrainingRunMetricsService } from './services/list-training-run-metr
     },
 
     CreateTrainingRunMetricService,
+    CreateTrainingRunMetricsBatchService,
     ListTrainingRunMetricsService,
   ],
 })

@@ -20,6 +20,12 @@ export class TypeOrmTrainingRunMetricRepository
     return this.repository.save(trainingRunMetric);
   }
 
+  async createMany(
+    trainingRunMetrics: TrainingRunMetric[],
+  ): Promise<TrainingRunMetric[]> {
+    return this.repository.save(trainingRunMetrics);
+  }
+
   async findAllForTrainingRun(
     trainingRunId: string,
   ): Promise<TrainingRunMetric[]> {
