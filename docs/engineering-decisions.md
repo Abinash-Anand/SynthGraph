@@ -55,3 +55,19 @@ SDK evolution is sequential:
 - v1.2: automatic instrumentation
 
 The backend should not assume automatic instrumentation exists in the current MVP.
+
+## API Versioning
+Decision: the API is unversioned (no `/v1` path prefix) for as long as every
+change to it stays backward compatible.
+Why: this project has no tagged releases yet and the CLI/SDK/frontend all
+track the backend directly - a version prefix buys nothing until there's an
+actual breaking change to isolate, and adding one now would just be a
+routing-level rename with no real benefit.
+Rule going forward: a change to an existing response shape, route, or field
+meaning must be additive (new field alongside the old, new route alongside
+the old) rather than replacing what's there - see how `NormalizedGeneration`
+was added in `synthgraph-backend/src/generations/responses/generation.response.ts`
+for the established pattern. The day a genuinely breaking change is
+unavoidable, every existing route moves under `/v1` in the same PR that
+introduces `/v2`, so old and new consumers can run against the same
+deployment during a migration window - not before, and not partially.
