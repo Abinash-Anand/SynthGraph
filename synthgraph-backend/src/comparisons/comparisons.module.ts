@@ -3,20 +3,26 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { AuthModule } from '../auth/auth.module.js';
 import { Generation } from '../database/entities/generation.entity.js';
+import { TrainingRun } from '../database/entities/training-run.entity.js';
 import { TypeOrmGenerationRepository } from '../generations/repositories/typeorm-generation.repository.js';
+import { TypeOrmTrainingRunRepository } from '../training-runs/repositories/typeorm-training-run.repository.js';
 
 import { ComparisonsController } from './comparisons.controller.js';
 import { CompareGenerationsService } from './services/compare-generations.service.js';
+import { CompareTrainingRunsService } from './services/compare-training-runs.service.js';
+import { TrainingRunComparisonsController } from './training-run-comparisons.controller.js';
 
 @Module({
   imports: [
     AuthModule,
-    TypeOrmModule.forFeature([Generation]),
+    TypeOrmModule.forFeature([Generation, TrainingRun]),
   ],
-  controllers: [ComparisonsController],
+  controllers: [ComparisonsController, TrainingRunComparisonsController],
   providers: [
     TypeOrmGenerationRepository,
     CompareGenerationsService,
+    TypeOrmTrainingRunRepository,
+    CompareTrainingRunsService,
   ],
 })
 export class ComparisonsModule {}

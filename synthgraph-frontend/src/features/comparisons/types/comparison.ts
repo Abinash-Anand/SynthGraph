@@ -49,3 +49,38 @@ export type GenerationComparison = {
   generations: ComparedGeneration[];
   differences: GenerationDifference[];
 };
+
+/**
+ * Unlike Generation, TrainingRun's own GET routes already return this exact
+ * raw camelCase entity shape (see training-runs/types/training-run.ts's own
+ * comment) - `POST /training-runs/compare` returns the same shape, just
+ * without the server-populated `datasets` field (confirmed against the live
+ * backend response, not assumed - the Generation compare endpoint's shape
+ * turned out to differ from what was assumed once before).
+ */
+export type ComparedTrainingRun = {
+  id: string;
+  experimentId: string;
+  name: string;
+  description: string | null;
+  trainer: { name: string; version?: string; type?: string };
+  parameters: Record<string, unknown>;
+  metrics: Record<string, unknown>;
+  status: "pending" | "running" | "completed" | "failed";
+  startedAt: string | null;
+  completedAt: string | null;
+  metadata: Record<string, unknown>;
+  captureStatus: unknown;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TrainingRunDifference = {
+  field: string;
+  values: Record<string, unknown>;
+};
+
+export type TrainingRunComparison = {
+  trainingRuns: ComparedTrainingRun[];
+  differences: TrainingRunDifference[];
+};

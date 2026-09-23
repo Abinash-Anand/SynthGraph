@@ -19,8 +19,10 @@ export function ExperimentHeader({
   experiment,
   generations,
   trainingRuns,
+  activeTab,
   onOpenReproduction,
   compareMode,
+  compareTarget,
   compareCount,
   onStartCompare,
   onCancelCompare,
@@ -29,15 +31,20 @@ export function ExperimentHeader({
   experiment: Experiment;
   generations: Generation[];
   trainingRuns: EnrichedTrainingRun[];
+  /** Decides what "Compare" offers to compare: training runs when already
+   * on the Runs tab, generations everywhere else (matching where each
+   * entity's own picker lives). */
+  activeTab: string;
   onOpenReproduction: () => void;
   compareMode: boolean;
+  compareTarget: "generation" | "trainingRun";
   compareCount: number;
   onStartCompare: () => void;
   onCancelCompare: () => void;
   onConfirmCompare: () => void;
 }) {
   const completed = trainingRuns.filter((r) => r.run.status === "completed").length;
-  const canCompare = generations.length >= 2;
+  const canCompare = activeTab === "runs" ? trainingRuns.length >= 2 : generations.length >= 2;
 
   return (
     <div className="flex flex-col gap-3 border-b border-research-border pb-5">
@@ -108,7 +115,9 @@ export function ExperimentHeader({
 
       {compareMode ? (
         <p className="text-[13px] text-research-accent-hover">
-          Select 2–10 generations on the Overview tab, then confirm above.
+          {compareTarget === "trainingRun"
+            ? "Select 2–10 training runs on the Runs tab, then confirm above."
+            : "Select 2–10 generations on the Overview tab, then confirm above."}
         </p>
       ) : (
         <div className="flex flex-wrap items-center gap-x-5 gap-y-1 font-mono text-[11.5px] text-research-ink-muted">

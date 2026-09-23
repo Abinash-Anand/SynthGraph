@@ -5,11 +5,11 @@ import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { TextArea } from "@/components/ui/Field";
 import {
-  compareGenerationsSchema,
+  compareTrainingRunsSchema,
   parseIdsInput,
 } from "@/features/comparisons/schemas/comparison-schemas";
 
-export function GenerationIdsForm({
+export function TrainingRunIdsForm({
   prefill,
   error: externalError,
 }: {
@@ -25,13 +25,13 @@ export function GenerationIdsForm({
     setError(null);
 
     const ids = parseIdsInput(raw);
-    const parsed = compareGenerationsSchema.safeParse({ generationIds: ids });
+    const parsed = compareTrainingRunsSchema.safeParse({ trainingRunIds: ids });
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "Check the IDs you entered.");
       return;
     }
 
-    router.push(`/dashboard/compare?ids=${parsed.data.generationIds.join(",")}`);
+    router.push(`/dashboard/compare/runs?ids=${parsed.data.trainingRunIds.join(",")}`);
   };
 
   return (
@@ -46,13 +46,13 @@ export function GenerationIdsForm({
       ) : null}
 
       <TextArea
-        label="Generation IDs"
-        hint="Paste generation IDs — one per line, or comma-separated. 2 to 10 generations."
+        label="Training run IDs"
+        hint="Paste training run IDs — one per line, or comma-separated. 2 to 10 runs."
         required
         rows={5}
         value={raw}
         onChange={setRaw}
-        placeholder={"generation-id-1\ngeneration-id-2"}
+        placeholder={"training-run-id-1\ntraining-run-id-2"}
       />
 
       <Button type="submit" size="lg" className="self-start">

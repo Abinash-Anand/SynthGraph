@@ -71,6 +71,7 @@ const COMMANDS: CommandEntry[] = [
     group: "Reports",
   },
   { id: "compare", label: "Compare generations", href: "/dashboard/compare", group: "Tools" },
+  { id: "compare-runs", label: "Compare training runs", href: "/dashboard/compare/runs", group: "Tools" },
   { id: "api-keys", label: "API Keys", href: "/dashboard/settings/api-keys", group: "Settings" },
 ];
 

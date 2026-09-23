@@ -72,10 +72,20 @@ export function RunsTab({
   runs,
   selectedId,
   onSelect,
+  compareMode = false,
+  compareSelection,
+  onToggleCompareSelection,
 }: {
   runs: EnrichedTrainingRun[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  /** When true, the table is replaced by a checkbox picker - the multi-
+   * select entry point for Compare, mirroring OverviewTab's own generations
+   * picker (there's no fleet-wide "list all training runs" endpoint to
+   * build a standalone picker from either). */
+  compareMode?: boolean;
+  compareSelection?: Set<string>;
+  onToggleCompareSelection?: (id: string) => void;
 }) {
   const [sorting, setSorting] = useState<SortingState>([{ id: "created", desc: true }]);
 
@@ -90,6 +100,36 @@ export function RunsTab({
 
   if (runs.length === 0) {
     return <p className="text-[13.5px] text-research-ink-muted">No training runs yet.</p>;
+  }
+
+  if (compareMode) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        {runs.map(({ run }) => {
+          const checked = compareSelection?.has(run.id) ?? false;
+          return (
+            <label
+              key={run.id}
+              className={cn(
+                "flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 transition-colors",
+                checked
+                  ? "border-research-accent bg-research-accent-subtle/10"
+                  : "border-research-border bg-research-panel hover:border-research-accent-subtle",
+              )}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => onToggleCompareSelection?.(run.id)}
+                className="accent-[var(--color-research-accent)]"
+              />
+              <span className="min-w-0 flex-1 truncate text-[13.5px] text-research-ink">{run.name}</span>
+              <TrainingRunStatusBadge status={run.status} />
+            </label>
+          );
+        })}
+      </div>
+    );
   }
 
   return (
