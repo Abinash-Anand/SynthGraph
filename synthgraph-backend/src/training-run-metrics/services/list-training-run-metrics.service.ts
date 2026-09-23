@@ -23,6 +23,8 @@ export class ListTrainingRunMetricsService {
   async execute(
     trainingRunId: string,
     userId: string,
+    limit: number,
+    offset: number,
   ): Promise<TrainingRunMetric[]> {
     const trainingRun = await this.trainingRunRepository.findByIdForUser(
       trainingRunId,
@@ -35,6 +37,8 @@ export class ListTrainingRunMetricsService {
 
     return this.trainingRunMetricRepository.findAllForTrainingRun(
       trainingRun.id,
+      limit,
+      offset,
     );
   }
 }

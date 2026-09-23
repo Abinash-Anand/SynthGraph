@@ -28,6 +28,8 @@ export class TypeOrmTrainingRunMetricRepository
 
   async findAllForTrainingRun(
     trainingRunId: string,
+    limit: number,
+    offset: number,
   ): Promise<TrainingRunMetric[]> {
     return this.repository.find({
       where: {
@@ -37,6 +39,8 @@ export class TypeOrmTrainingRunMetricRepository
         step: 'ASC',
         createdAt: 'ASC',
       },
+      take: limit,
+      skip: offset,
     });
   }
 }

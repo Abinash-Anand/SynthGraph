@@ -11,7 +11,11 @@ export class ListDatasetsService {
     private readonly datasetRepository: DatasetRepository,
   ) {}
 
-  async execute(userId: string): Promise<Dataset[]> {
-    return this.datasetRepository.findAllForUser(userId);
+  async execute(
+    userId: string,
+    limit: number,
+    offset: number,
+  ): Promise<Dataset[]> {
+    return this.datasetRepository.findAllForUser(userId, limit, offset);
   }
 }

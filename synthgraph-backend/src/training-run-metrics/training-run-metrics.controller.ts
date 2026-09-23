@@ -4,11 +4,13 @@ import {
   Get,
   Param,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
 
 import { ApiKeyGuard } from '../auth/guards/api-key.guard.js';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto.js';
 import { CreateTrainingRunMetricDto } from './dto/create-training-run-metric.dto.js';
 import { CreateTrainingRunMetricsBatchDto } from './dto/create-training-run-metrics-batch.dto.js';
 import { CreateTrainingRunMetricService } from './services/create-training-run-metric.service.js';
@@ -54,11 +56,14 @@ export class TrainingRunMetricsController {
   @Get('training-runs/:trainingRunId/metrics')
   async list(
     @Param('trainingRunId') trainingRunId: string,
+    @Query() query: PaginationQueryDto,
     @Req() request: any,
   ) {
     return this.listTrainingRunMetricsService.execute(
       trainingRunId,
       request.user.id,
+      query.limit,
+      query.offset,
     );
   }
 }

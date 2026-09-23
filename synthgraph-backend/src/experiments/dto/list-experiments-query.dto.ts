@@ -1,6 +1,8 @@
 import { IsOptional, IsString, MaxLength } from 'class-validator';
 
-export class ListExperimentsQueryDto {
+import { PaginationQueryDto } from '../../common/dto/pagination-query.dto.js';
+
+export class ListExperimentsQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsString()
   @MaxLength(100)

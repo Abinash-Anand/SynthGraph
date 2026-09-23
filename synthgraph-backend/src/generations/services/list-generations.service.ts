@@ -18,7 +18,9 @@ export class ListGenerationsService {
   async execute(
     experimentId: string,
     userId: string,
-    parameters?: string,
+    parameters: string | undefined,
+    limit: number,
+    offset: number,
   ): Promise<Generation[]> {
     const experiment = await this.experimentRepository.findByIdForUser(
       experimentId,
@@ -32,6 +34,8 @@ export class ListGenerationsService {
     if (parameters === undefined) {
       return this.generationRepository.findAllForExperiment(
         experiment.id,
+        limit,
+        offset,
       );
     }
 
@@ -58,6 +62,8 @@ export class ListGenerationsService {
     return this.generationRepository.findByParameters(
       experiment.id,
       parsedParameters as Record<string, unknown>,
+      limit,
+      offset,
     );
   }
 }

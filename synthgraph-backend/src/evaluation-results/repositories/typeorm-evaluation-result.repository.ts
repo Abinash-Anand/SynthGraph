@@ -40,6 +40,8 @@ export class TypeOrmEvaluationResultRepository
 
   async findAllForTrainingRun(
     trainingRunId: string,
+    limit: number,
+    offset: number,
   ): Promise<EvaluationResult[]> {
     return this.repository.find({
       where: {
@@ -48,6 +50,8 @@ export class TypeOrmEvaluationResultRepository
       order: {
         createdAt: 'DESC',
       },
+      take: limit,
+      skip: offset,
     });
   }
 }

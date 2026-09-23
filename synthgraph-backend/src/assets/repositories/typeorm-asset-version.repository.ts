@@ -29,6 +29,8 @@ export class TypeOrmAssetVersionRepository
   async findAllForAsset(
     assetId: string,
     userId: string,
+    limit: number,
+    offset: number,
   ): Promise<AssetVersion[]> {
     return this.repository
       .createQueryBuilder('version')
@@ -36,6 +38,8 @@ export class TypeOrmAssetVersionRepository
       .where('version.asset_id = :assetId', { assetId })
       .andWhere('asset.user_id = :userId', { userId })
       .orderBy('version.created_at', 'DESC')
+      .take(limit)
+      .skip(offset)
       .getMany();
   }
 

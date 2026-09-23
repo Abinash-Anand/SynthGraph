@@ -4,12 +4,14 @@ import {
   Get,
   Param,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
 
 import { ApiKeyGuard } from '../auth/guards/api-key.guard.js';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request.js';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto.js';
 import { CreateProjectDto } from './dto/create-project.dto.js';
 import { CreateProjectService } from './services/create-project.service.js';
 import { GetProjectService } from './services/get-project.service.js';
@@ -37,8 +39,15 @@ export class ProjectsController {
   }
 
   @Get()
-  async listProjects(@Req() request: AuthenticatedRequest) {
-    return this.listProjectsService.execute(request.user.id);
+  async listProjects(
+    @Query() query: PaginationQueryDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.listProjectsService.execute(
+      request.user.id,
+      query.limit,
+      query.offset,
+    );
   }
 
   @Get(':projectId')

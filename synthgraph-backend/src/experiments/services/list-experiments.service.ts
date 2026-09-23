@@ -14,7 +14,9 @@ export class ListExperimentsService {
   async execute(
     projectId: string,
     userId: string,
-    search?: string,
+    search: string | undefined,
+    limit: number,
+    offset: number,
   ): Promise<Experiment[]> {
     const project = await this.projectRepository.findByIdForUser(
       projectId,
@@ -29,9 +31,15 @@ export class ListExperimentsService {
       return this.experimentRepository.searchForProject(
         projectId,
         search,
+        limit,
+        offset,
       );
     }
 
-    return this.experimentRepository.findAllForProject(projectId);
+    return this.experimentRepository.findAllForProject(
+      projectId,
+      limit,
+      offset,
+    );
   }
 }

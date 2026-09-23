@@ -8,5 +8,9 @@ export interface AssetRepository {
     userId: string,
   ): Promise<Asset | null>;
 
-  findAllForUser(userId: string): Promise<Asset[]>;
+  findAllForUser(
+    userId: string,
+    limit: number,
+    offset: number,
+  ): Promise<Asset[]>;
 }
