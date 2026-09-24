@@ -8,6 +8,7 @@ import type {
   ParameterCorrelationReport,
   TrainingRunDriftReport,
   TrainingRunHealthReport,
+  TrainingRunKeysReport,
   TrainingRunSearchField,
   TrainingRunSearchOperator,
   TrainingRunSearchResult,
@@ -90,4 +91,13 @@ export function getDatasetImpact(
   return backendFetch(`/reports/dataset-impact?datasetVersionId=${datasetVersionId}`, {
     token: apiKey,
   });
+}
+
+export function getTrainingRunKeys(
+  apiKey: string,
+  field: TrainingRunSearchField,
+  projectId?: string,
+): Promise<TrainingRunKeysReport> {
+  const query = new URLSearchParams({ field, ...(projectId ? { projectId } : {}) });
+  return backendFetch(`/reports/training-run-keys?${query.toString()}`, { token: apiKey });
 }

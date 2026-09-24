@@ -11,6 +11,7 @@ export type SearchResult = {
   id: string;
   name: string;
   projectId: string | null;
+  projectName: string | null;
   experimentId: string | null;
   createdAt: string;
 };
