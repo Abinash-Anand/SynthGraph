@@ -126,14 +126,17 @@ function ComparisonRowView({ row }: { row: ComparisonRow }) {
   const baseline = row.values[0];
   return (
     <tr className={cn("border-b border-research-border last:border-b-0", row.differs && "bg-research-warning/[0.04]")}>
-      <td className="px-3 py-2.5 font-mono text-[11px] text-research-ink-muted">{row.label}</td>
+      <td className="max-w-[200px] truncate px-3 py-2.5 font-mono text-[11px] text-research-ink-muted" title={row.label}>
+        {row.label}
+      </td>
       {row.values.map((value, index) => {
         const outlier = row.differs && value !== baseline;
         return (
           <td
             key={index}
+            title={value}
             className={cn(
-              "px-3 py-2.5",
+              "max-w-[280px] truncate px-3 py-2.5",
               outlier ? "font-medium text-research-warning" : "text-research-ink",
             )}
           >

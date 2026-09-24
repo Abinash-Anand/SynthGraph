@@ -56,20 +56,30 @@ function ParametersAcrossRuns({
                   varying && "bg-research-accent-subtle/[0.06]",
                 )}
               >
-                <td className={cn("px-3 py-2.5 font-mono", varying ? "text-research-ink" : "text-research-ink-muted")}>
+                <td
+                  className={cn(
+                    "max-w-[200px] truncate px-3 py-2.5 font-mono",
+                    varying ? "text-research-ink" : "text-research-ink-muted",
+                  )}
+                  title={key}
+                >
                   {key}
                 </td>
-                {runs.map((r) => (
-                  <td
-                    key={r.run.id}
-                    className={cn(
-                      "px-3 py-2.5 font-mono tabular-nums",
-                      varying ? "text-research-ink" : "text-research-ink-muted",
-                    )}
-                  >
-                    {formatValue(r.run.parameters[key])}
-                  </td>
-                ))}
+                {runs.map((r) => {
+                  const value = formatValue(r.run.parameters[key]);
+                  return (
+                    <td
+                      key={r.run.id}
+                      title={value}
+                      className={cn(
+                        "max-w-[240px] truncate px-3 py-2.5 font-mono tabular-nums",
+                        varying ? "text-research-ink" : "text-research-ink-muted",
+                      )}
+                    >
+                      {value}
+                    </td>
+                  );
+                })}
               </tr>
             );
           })}

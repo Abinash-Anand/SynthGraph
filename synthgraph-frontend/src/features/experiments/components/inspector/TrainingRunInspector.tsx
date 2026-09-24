@@ -1,15 +1,15 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { CaptureStatusBadge } from "@/features/training-runs/components/CaptureStatusBadge";
 import { CaptureStatusControl } from "@/features/training-runs/components/CaptureStatusControl";
 import { TrainingRunStatusBadge } from "@/features/training-runs/components/TrainingRunStatusBadge";
 import { TrainingRunStatusControl } from "@/features/training-runs/components/TrainingRunStatusControl";
 import { useLiveTrainingRun } from "@/features/training-runs/hooks/useLiveTrainingRun";
+import type { TrainingRun } from "@/features/training-runs/types/training-run";
+import type { TrainingRunMetric } from "@/features/training-runs/types/training-run-metric";
 import type { TrainingRunHealthMetric } from "@/features/reports/types/report";
 import { cn } from "@/lib/utils";
-import { formatDateTime } from "@/shared/lib/format";
-import { MetricKeyPicker, extractMetricKeys, useMetricKeySelection } from "@/shared/charts/MetricKeyPicker";
+import { formatDateTime, formatMetricValue } from "@/shared/lib/format";
 import { KeyValueList } from "@/shared/ui/KeyValueList";
 import type { EnrichedTrainingRun } from "../../types/experiment-workspace";
 
@@ -31,17 +31,28 @@ const TREND_TONE: Record<TrainingRunHealthMetric["trend"], string> = {
   insufficient_data: "text-research-ink-muted",
 };
 
-const MetricsLineChart = dynamic(
-  () => import("@/shared/charts/MetricsLineChart").then((m) => m.MetricsLineChart),
-  { ssr: false, loading: () => <div className="h-[200px] animate-pulse rounded-lg bg-research-subtle" /> },
-);
+// Prefer the run's own author-supplied summary metrics (a distinct field
+// from per-step telemetry - see TrainingRun's own type comment); fall back
+// to the last logged step when the run never reports a summary itself.
+function getFinalMetrics(run: TrainingRun, metrics: TrainingRunMetric[]): Record<string, unknown> {
+  if (Object.keys(run.metrics).length > 0) return run.metrics;
+  if (metrics.length === 0) return {};
+  const last = [...metrics].sort((a, b) => a.step - b.step).at(-1)!;
+  return last.metrics;
+}
 
 export function TrainingRunInspector({
   enriched,
   onSelectEvaluation,
+  onOpenMetrics,
 }: {
   enriched: EnrichedTrainingRun;
   onSelectEvaluation: (id: string) => void;
+  /** Jumps to the Metrics tab (with this run still selected) for full
+   * multi-series analysis - the inspector itself only shows a compact
+   * final-values summary, not a chart, so it doesn't compete with Metrics
+   * as the place to actually study a training curve. */
+  onOpenMetrics: () => void;
 }) {
   const { health, drift } = enriched;
   // Server-prefetched props are the baseline; polling only overrides once
@@ -51,9 +62,7 @@ export function TrainingRunInspector({
   const run = live?.run ?? enriched.run;
   const metrics = live?.metrics ?? enriched.metrics;
   const evaluations = live?.evaluations ?? enriched.evaluations;
-
-  const allMetricKeys = extractMetricKeys(metrics);
-  const [selectedMetricKeys, toggleMetricKey] = useMetricKeySelection(allMetricKeys);
+  const finalMetrics = getFinalMetrics(run, metrics);
 
   return (
     <div className="flex flex-col gap-6 p-5">
@@ -104,13 +113,24 @@ export function TrainingRunInspector({
         />
       </div>
 
-      {metrics.length > 0 ? (
+      {Object.keys(finalMetrics).length > 0 ? (
         <div>
-          <p className="mono-label mb-2 text-research-ink-muted">Metrics</p>
-          <div className="mb-2">
-            <MetricKeyPicker keys={allMetricKeys} selected={selectedMetricKeys} onToggle={toggleMetricKey} />
-          </div>
-          <MetricsLineChart metrics={metrics} selectedKeys={selectedMetricKeys} height={200} />
+          <p className="mono-label mb-2 text-research-ink-muted">Final metrics</p>
+          <KeyValueList
+            rows={Object.entries(finalMetrics).map(([key, value]) => ({
+              label: key,
+              value: typeof value === "number" ? formatMetricValue(value) : String(value),
+            }))}
+          />
+          {metrics.length > 0 ? (
+            <button
+              type="button"
+              onClick={onOpenMetrics}
+              className="mt-2 font-mono text-[11px] tracking-[0.08em] text-research-accent-hover uppercase transition-colors hover:text-research-accent"
+            >
+              Open metrics →
+            </button>
+          ) : null}
         </div>
       ) : null}
 
