@@ -11,6 +11,7 @@ import type { Experiment } from "@/features/experiments/types/experiment";
 import type { Generation } from "@/features/generations/types/generation";
 import { formatDateTime } from "@/shared/lib/format";
 import { toFieldErrors } from "@/shared/lib/validation";
+import { CompareSelectionBar } from "@/shared/ui/CompareSelectionBar";
 import type { EnrichedTrainingRun } from "../types/experiment-workspace";
 
 function downloadJson(filename: string, data: unknown) {
@@ -246,25 +247,7 @@ export function ExperimentHeader({
                 {pending ? "Archiving…" : "Confirm"}
               </button>
             </>
-          ) : compareMode ? (
-            <>
-              <button
-                type="button"
-                onClick={onCancelCompare}
-                className="rounded-md border border-research-border bg-research-panel px-3.5 py-2 text-[13px] font-medium text-research-ink transition-colors hover:border-research-accent-subtle"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={compareCount < 2}
-                onClick={onConfirmCompare}
-                className="rounded-md bg-research-accent px-3.5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-research-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Compare ({compareCount})
-              </button>
-            </>
-          ) : (
+          ) : compareMode ? null : (
             <>
               {canCompare ? (
                 <button
@@ -315,8 +298,8 @@ export function ExperimentHeader({
       {compareMode ? (
         <p className="text-[13px] text-research-accent-hover">
           {compareTarget === "trainingRun"
-            ? "Select 2–10 training runs on the Runs tab, then confirm above."
-            : "Select 2–10 generations on the Overview tab, then confirm above."}
+            ? "Select 2–10 training runs on the Runs tab."
+            : "Select 2–10 generations on the Overview tab."}
         </p>
       ) : (
         <div className="flex flex-wrap items-center gap-x-5 gap-y-1 font-mono text-[11.5px] text-research-ink-muted">
@@ -327,6 +310,15 @@ export function ExperimentHeader({
           <span>Created {formatDateTime(experiment.createdAt)}</span>
         </div>
       )}
+
+      {compareMode ? (
+        <CompareSelectionBar
+          count={compareCount}
+          label={compareTarget === "trainingRun" ? "training runs" : "generations"}
+          onCancel={onCancelCompare}
+          onConfirm={onConfirmCompare}
+        />
+      ) : null}
     </div>
   );
 }

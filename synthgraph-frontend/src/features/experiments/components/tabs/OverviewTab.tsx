@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { GenerationStatusBadge } from "@/features/generations/components/GenerationStatusBadge";
 import { TRAINING_RUN_STATUS_TONE, TrainingRunStatusBadge } from "@/features/training-runs/components/TrainingRunStatusBadge";
@@ -277,6 +278,12 @@ export function OverviewTab({
 }) {
   const completedRuns = trainingRuns.filter((r) => r.run.status === "completed").length;
   const totalEvaluations = trainingRuns.reduce((sum, r) => sum + r.evaluations.length, 0);
+  const [generationFilter, setGenerationFilter] = useState("");
+  const filteredGenerations = useMemo(() => {
+    const query = generationFilter.trim().toLowerCase();
+    if (!query) return generations;
+    return generations.filter((g) => g.generation.name.toLowerCase().includes(query));
+  }, [generations, generationFilter]);
   const lastActivity = [
     ...generations.map((g) => g.generation.created_at),
     ...trainingRuns.map((r) => r.run.createdAt),
@@ -313,8 +320,22 @@ export function OverviewTab({
         {generations.length === 0 ? (
           <p className="text-[13.5px] text-research-ink-muted">No generations yet.</p>
         ) : (
-          <div className="flex flex-col gap-1.5">
-            {(compareMode ? generations : generations.slice(0, 5)).map(({ generation }) => {
+          <div className="flex flex-col gap-3">
+            {compareMode ? (
+              <input
+                type="text"
+                value={generationFilter}
+                onChange={(event) => setGenerationFilter(event.target.value)}
+                placeholder="Filter by name..."
+                aria-label="Filter generations by name"
+                className="w-full max-w-[280px] rounded-md border border-research-border bg-research-bg px-3 py-2 text-[13.5px] text-research-ink placeholder:text-research-ink-muted focus:border-research-accent-subtle focus:outline-none"
+              />
+            ) : null}
+            {compareMode && filteredGenerations.length === 0 ? (
+              <p className="text-[13.5px] text-research-ink-muted">No generations match &ldquo;{generationFilter}&rdquo;.</p>
+            ) : null}
+            <div className="flex flex-col gap-1.5">
+            {(compareMode ? filteredGenerations : generations.slice(0, 5)).map(({ generation }) => {
               const checked = compareSelection?.has(generation.id) ?? false;
               if (compareMode) {
                 return (
@@ -352,6 +373,7 @@ export function OverviewTab({
                 </button>
               );
             })}
+            </div>
           </div>
         )}
       </div>

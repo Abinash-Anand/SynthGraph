@@ -25,10 +25,15 @@ export function GenerationInspector({
   enriched,
   projectId,
   experimentId,
+  onCompareWithParent,
 }: {
   enriched: EnrichedGeneration;
   projectId: string;
   experimentId: string;
+  /** Undefined (not just a no-op) when no parent could be inferred - lets
+   * the button hide itself instead of rendering disabled with no
+   * explanation (see findParentGeneration for what "parent" means here). */
+  onCompareWithParent?: () => void;
 }) {
   const { generation } = enriched;
 
@@ -37,8 +42,17 @@ export function GenerationInspector({
       <div>
         <p className="mono-label text-research-ink-muted">Generation</p>
         <h3 className="mt-1 text-[16px] font-medium text-research-ink">{generation.name}</h3>
-        <div className="mt-2">
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           <GenerationStatusBadge status={generation.status} />
+          {onCompareWithParent ? (
+            <button
+              type="button"
+              onClick={onCompareWithParent}
+              className="rounded-full border border-research-border px-2.5 py-1 font-mono text-[11px] text-research-ink-muted transition-colors hover:border-research-accent-subtle hover:text-research-ink"
+            >
+              Compare with parent
+            </button>
+          ) : null}
         </div>
       </div>
 
