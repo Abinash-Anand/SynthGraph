@@ -97,6 +97,16 @@ export function ExperimentHeader({
     setEntityMode("editing");
   };
 
+  const startArchiving = () => {
+    setFormError(null);
+    setEntityMode("archiving");
+  };
+
+  const cancelArchiving = () => {
+    setFormError(null);
+    setEntityMode("view");
+  };
+
   const onSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError(null);
@@ -227,7 +237,7 @@ export function ExperimentHeader({
               <button
                 type="button"
                 disabled={pending}
-                onClick={() => setEntityMode("view")}
+                onClick={cancelArchiving}
                 className={secondaryButtonClass}
               >
                 Cancel
@@ -288,17 +298,19 @@ export function ExperimentHeader({
               <button type="button" onClick={startEditing} className={secondaryButtonClass}>
                 Rename
               </button>
-              <button
-                type="button"
-                onClick={() => setEntityMode("archiving")}
-                className={secondaryButtonClass}
-              >
+              <button type="button" onClick={startArchiving} className={secondaryButtonClass}>
                 Archive
               </button>
             </>
           )}
         </div>
       </div>
+
+      {formError ? (
+        <p className="text-[13px] text-bad" role="alert">
+          {formError}
+        </p>
+      ) : null}
 
       {compareMode ? (
         <p className="text-[13px] text-research-accent-hover">

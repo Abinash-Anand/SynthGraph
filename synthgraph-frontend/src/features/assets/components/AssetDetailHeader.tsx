@@ -47,6 +47,16 @@ export function AssetDetailHeader({ asset: initialAsset }: { asset: Asset }) {
     setMode("editing");
   };
 
+  const startArchiving = () => {
+    setFormError(null);
+    setMode("archiving");
+  };
+
+  const cancelArchiving = () => {
+    setFormError(null);
+    setMode("view");
+  };
+
   const onSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError(null);
@@ -150,7 +160,7 @@ export function AssetDetailHeader({ asset: initialAsset }: { asset: Asset }) {
         {mode === "archiving" ? (
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[13px] text-research-ink-muted">Archive this asset?</span>
-            <Button size="sm" variant="secondary" onClick={() => setMode("view")} disabled={pending}>
+            <Button size="sm" variant="secondary" onClick={cancelArchiving} disabled={pending}>
               Cancel
             </Button>
             <Button size="sm" onClick={onArchive} disabled={pending}>
@@ -162,13 +172,13 @@ export function AssetDetailHeader({ asset: initialAsset }: { asset: Asset }) {
             <Button size="sm" variant="ghost" onClick={startEditing}>
               Rename
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setMode("archiving")}>
+            <Button size="sm" variant="ghost" onClick={startArchiving}>
               Archive
             </Button>
           </div>
         )}
       </div>
-      {mode === "view" && formError ? (
+      {formError ? (
         <div role="alert" className="mt-3 rounded-lg border border-bad/40 bg-bad/[0.05] p-3 text-[13.5px] text-ink">
           {formError}
         </div>
