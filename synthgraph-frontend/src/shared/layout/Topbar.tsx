@@ -16,7 +16,7 @@ export function Topbar({
             onClick={onOpenMenu}
             aria-label="Open menu"
             aria-controls="dashboard-sidebar"
-            className="grid size-8 shrink-0 place-items-center rounded-md text-ink-muted hover:text-ink lg:hidden"
+            className="grid size-8 shrink-0 place-items-center rounded-md text-ink-muted hover:text-ink xl:hidden"
           >
             <MenuIcon />
           </button>
