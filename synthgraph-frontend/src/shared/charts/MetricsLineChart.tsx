@@ -5,17 +5,8 @@ import { useMemo } from "react";
 import type { TrainingRunMetric } from "@/features/training-runs/types/training-run-metric";
 import { EChart } from "./EChart";
 import { extractMetricKeys } from "./MetricKeyPicker";
-
-// Cycles through the app's existing design tokens rather than inventing new
-// chart colors (same reasoning as the hand-rolled MetricsChart it replaces).
-const SERIES_COLORS = [
-  "#37c9de", // cyan
-  "#8b5cf6", // research accent
-  "#46b97e", // ok
-  "#d9a441", // warn
-  "#5b8dfb", // blue
-  "#d9584c", // bad
-];
+import { MetricsLegend } from "./MetricsLegend";
+import { SERIES_COLORS } from "./series-colors";
 
 export function MetricsLineChart({
   metrics,
@@ -51,7 +42,21 @@ export function MetricsLineChart({
     return <p className="text-[13.5px] text-research-ink-muted">No metrics selected.</p>;
   }
 
-  return <EChart option={option} height={height} />;
+  const sorted = [...metrics].sort((a, b) => a.step - b.step);
+  const allKeys = extractMetricKeys(sorted);
+  const chartedKeys = selectedKeys ? allKeys.filter((key) => selectedKeys.has(key)) : allKeys;
+
+  return (
+    <div className="flex flex-col gap-2">
+      {/* Rendered above the canvas, not as the chart's own legend - with
+          15+ series selected, ECharts' built-in legend wraps to several
+          rows and collides into the plot area's axis labels. An external
+          legend can't do that; it just grows the page, and is itself
+          capped (MetricsLegend) so it doesn't sprawl unboundedly either. */}
+      <MetricsLegend keys={chartedKeys} />
+      <EChart option={option} height={height} />
+    </div>
+  );
 }
 
 const SMOOTHING_ALPHA = 0.2;
@@ -101,14 +106,12 @@ function buildOption(
   return {
     backgroundColor: "transparent",
     textStyle: { fontFamily: "var(--font-sans)" },
-    grid: { left: 48, right: 16, top: 36, bottom: 32 },
-    legend: {
-      top: 0,
-      textStyle: { color: "#a1a1aa", fontSize: 11 },
-      icon: "roundRect",
-      itemWidth: 10,
-      itemHeight: 10,
-    },
+    // Legend rendered externally by <MetricsLegend> instead (see
+    // MetricsLineChart) - ECharts' own legend lives inside this grid box
+    // and would collide with the axis labels once it wraps to more than a
+    // row or two of series names.
+    legend: { show: false },
+    grid: { left: 48, right: 16, top: 16, bottom: 32 },
     tooltip: {
       trigger: "axis",
       backgroundColor: "#18181b",
@@ -129,7 +132,10 @@ function buildOption(
       type: useLogAxis ? "log" : "value",
       axisLine: { show: false },
       splitLine: { lineStyle: { color: "#1f1f23" } },
-      axisLabel: { color: "#71717a", fontSize: 11 },
+      // Padding on the right side pushes tick numbers off the axis line
+      // and away from the plot area's left edge - previously flush enough
+      // to visually collide with whatever sat just outside the canvas.
+      axisLabel: { color: "#71717a", fontSize: 11, padding: [0, 12, 0, 0] },
     },
     series,
   };

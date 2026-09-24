@@ -98,7 +98,11 @@ export function ResearchWorkspace({
                   initial={reducedMotion ? false : { x: "100%" }}
                   animate={{ x: 0 }}
                   exit={{ x: "100%" }}
-                  transition={{ duration, ease: [0.22, 1, 0.36, 1] }}
+                  transition={
+                    reducedMotion
+                      ? { duration: 0 }
+                      : { type: "spring", stiffness: 380, damping: 32 }
+                  }
                 >
                   <div className="flex items-center justify-between border-b border-research-border px-4 py-3">
                     <p className="mono-label text-research-ink-secondary">{inspectorTitle}</p>
