@@ -24,7 +24,7 @@ export default async function ComparePage({
             Compare generations
           </h1>
           <p className="mt-1 text-[13.5px] text-research-ink-muted">
-            Paste IDs below, or select generations to compare from an experiment&rsquo;s Overview tab.{" "}
+            Search for generations below, or select them to compare from an experiment&rsquo;s Overview tab.{" "}
             <Link
               href="/dashboard/compare/runs"
               className="underline underline-offset-2 hover:text-research-accent-hover"
@@ -58,12 +58,17 @@ export default async function ComparePage({
     );
   }
 
+  const prefillNames = result
+    ? Object.fromEntries(result.generations.map((g) => [g.id, g.name]))
+    : undefined;
+
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-[22px] font-medium tracking-[-0.01em] text-research-ink">Compare generations</h1>
       <div className="max-w-[640px]">
         <GenerationIdsForm
           prefill={requested}
+          prefillNames={prefillNames}
           error={result ? undefined : "Could not load that comparison. Check the IDs and try again."}
         />
       </div>

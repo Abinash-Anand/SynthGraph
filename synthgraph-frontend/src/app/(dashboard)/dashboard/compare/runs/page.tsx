@@ -24,7 +24,7 @@ export default async function CompareTrainingRunsPage({
             Compare training runs
           </h1>
           <p className="mt-1 text-[13.5px] text-research-ink-muted">
-            Paste IDs below, or select training runs to compare from an experiment&rsquo;s Runs tab.{" "}
+            Search for training runs below, or select them to compare from an experiment&rsquo;s Runs tab.{" "}
             <Link href="/dashboard/compare" className="underline underline-offset-2 hover:text-research-accent-hover">
               Compare generations instead
             </Link>
@@ -55,12 +55,17 @@ export default async function CompareTrainingRunsPage({
     );
   }
 
+  const prefillNames = result
+    ? Object.fromEntries(result.trainingRuns.map((r) => [r.id, r.name]))
+    : undefined;
+
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-[22px] font-medium tracking-[-0.01em] text-research-ink">Compare training runs</h1>
       <div className="max-w-[640px]">
         <TrainingRunIdsForm
           prefill={requested}
+          prefillNames={prefillNames}
           error={result ? undefined : "Could not load that comparison. Check the IDs and try again."}
         />
       </div>
