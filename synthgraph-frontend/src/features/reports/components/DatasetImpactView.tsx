@@ -34,10 +34,12 @@ export function DatasetImpactView({ report }: { report: DatasetImpactReport }) {
             {report.trainingRuns.map((run) => (
               <li
                 key={run.trainingRunId}
-                className="flex items-center justify-between rounded-md border border-research-border bg-research-subtle/40 px-3 py-2"
+                className="flex items-center justify-between gap-3 rounded-md border border-research-border bg-research-subtle/40 px-3 py-2"
               >
-                <span className="truncate text-[13px] text-research-ink">{run.name}</span>
-                <span className="font-mono text-[11px] text-research-ink-muted">{run.status}</span>
+                <span className="min-w-0 truncate text-[13px] text-research-ink">{run.name}</span>
+                <span className="shrink-0 whitespace-nowrap font-mono text-[11px] text-research-ink-muted">
+                  {run.status}
+                </span>
               </li>
             ))}
           </ul>

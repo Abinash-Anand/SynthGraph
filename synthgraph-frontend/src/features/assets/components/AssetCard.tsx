@@ -9,8 +9,10 @@ export function AssetCard({ asset }: { asset: Asset }) {
     <Link href={`/dashboard/assets/${asset.id}`}>
       <ResearchCard interactive className="p-5">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="truncate text-[16px] font-medium text-research-ink">{asset.name}</h3>
-          {asset.type ? <ResearchBadge>{asset.type}</ResearchBadge> : null}
+          <h3 className="min-w-0 truncate text-[16px] font-medium text-research-ink">{asset.name}</h3>
+          {asset.type ? (
+            <ResearchBadge className="shrink-0 whitespace-nowrap">{asset.type}</ResearchBadge>
+          ) : null}
         </div>
         {asset.description ? (
           <p className="mt-1.5 line-clamp-2 text-[13.5px] text-research-ink-muted">
