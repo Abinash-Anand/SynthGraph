@@ -46,7 +46,14 @@ export function Tabs({
   };
 
   return (
-    <div role="tablist" aria-orientation="horizontal" className={cn("flex gap-1 border-b border-research-border", className)}>
+    // Scrolls internally on narrow viewports instead of wrapping (a tab
+    // strip that wraps to a second line reads as two separate rows of
+    // navigation) or forcing the whole page wider.
+    <div
+      role="tablist"
+      aria-orientation="horizontal"
+      className={cn("flex gap-1 overflow-x-auto border-b border-research-border", className)}
+    >
       {tabs.map((tab, index) => {
         const active = tab.id === activeId;
         return (
@@ -62,7 +69,7 @@ export function Tabs({
             onClick={() => selectTab(tab.id)}
             onKeyDown={(event) => handleKeyDown(event, index)}
             className={cn(
-              "relative px-3 py-2.5 text-[13.5px] font-medium transition-colors duration-150",
+              "relative shrink-0 px-3 py-2.5 text-[13.5px] font-medium whitespace-nowrap transition-colors duration-150",
               active ? "text-research-ink" : "text-research-ink-muted hover:text-research-ink-secondary",
             )}
           >
