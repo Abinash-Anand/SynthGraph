@@ -101,6 +101,7 @@ export function ExperimentWorkspace({
       <TrainingRunInspector
         enriched={selectedRun}
         onSelectEvaluation={(id) => setSelected({ type: "evaluation", id })}
+        onOpenMetrics={() => setTab("metrics")}
       />
     );
   } else if (selectedGeneration) {

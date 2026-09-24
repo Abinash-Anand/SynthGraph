@@ -13,7 +13,7 @@ import {
   type Node,
   type NodeProps,
 } from "@xyflow/react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 
 export type LineageNodeKind = "dataset" | "asset" | "generation" | "training-run" | "evaluation";
@@ -42,6 +42,96 @@ const NODE_COLOR_VAR: Record<LineageNodeKind, string> = {
 const COLUMN_WIDTH = 260;
 const ROW_HEIGHT = 76;
 const NODE_WIDTH = 200;
+
+const KIND_LABEL: Record<LineageNodeKind, string> = {
+  dataset: "dataset",
+  asset: "asset",
+  generation: "generation",
+  "training-run": "training run",
+  evaluation: "evaluation",
+};
+
+// Beyond this many nodes of the same kind in one layer, a lineage graph
+// stops communicating structure and becomes a wall of identical-looking
+// boxes (the audit's literal "16 generations" complaint) - those groups
+// collapse into one summary node by default, expandable on click.
+const COLLAPSE_THRESHOLD = 6;
+
+function groupKey(layer: number, kind: LineageNodeKind): string {
+  return `${layer}:${kind}`;
+}
+
+/**
+ * Collapses any (layer, kind) group over the threshold into one synthetic
+ * summary node, redirecting edges to/from its members onto that node and
+ * dropping resulting duplicate edges. Kept as a pre-pass over plain
+ * (nodes, edges) so layoutNodes/connectedNodeIds/edge-building below don't
+ * need to know collapsing exists at all - they just see a smaller graph.
+ */
+function applyCollapse(
+  nodes: LineageGraphNode[],
+  edges: LineageGraphEdge[],
+  collapsedGroups: Set<string>,
+  selectedId: string | null,
+): { nodes: LineageGraphNode[]; edges: LineageGraphEdge[]; idRemap: Map<string, string>; selectedId: string | null } {
+  const byGroup = new Map<string, LineageGraphNode[]>();
+  for (const node of nodes) {
+    const key = groupKey(node.layer, node.kind);
+    const list = byGroup.get(key) ?? [];
+    list.push(node);
+    byGroup.set(key, list);
+  }
+
+  // Never hide the node the user actually has selected - force its group
+  // open regardless of the (possibly stale) manual/default collapse state.
+  const selectedGroupKey = selectedId
+    ? groupKey(
+        nodes.find((n) => n.id === selectedId)?.layer ?? -1,
+        nodes.find((n) => n.id === selectedId)?.kind ?? "generation",
+      )
+    : null;
+
+  const idRemap = new Map<string, string>();
+  const outNodes: LineageGraphNode[] = [];
+  for (const [key, members] of byGroup) {
+    const collapse = collapsedGroups.has(key) && key !== selectedGroupKey;
+    if (!collapse) {
+      for (const member of members) {
+        idRemap.set(member.id, member.id);
+        outNodes.push(member);
+      }
+      continue;
+    }
+    const groupId = `group:${key}`;
+    for (const member of members) idRemap.set(member.id, groupId);
+    const [{ layer, kind }] = members;
+    outNodes.push({
+      id: groupId,
+      kind,
+      label: `${members.length} ${KIND_LABEL[kind]}s`,
+      layer,
+    });
+  }
+
+  const seenEdges = new Set<string>();
+  const outEdges: LineageGraphEdge[] = [];
+  for (const edge of edges) {
+    const source = idRemap.get(edge.source) ?? edge.source;
+    const target = idRemap.get(edge.target) ?? edge.target;
+    if (source === target) continue;
+    const key = `${source}->${target}`;
+    if (seenEdges.has(key)) continue;
+    seenEdges.add(key);
+    outEdges.push({ id: key, source, target });
+  }
+
+  return {
+    nodes: outNodes,
+    edges: outEdges,
+    idRemap,
+    selectedId: selectedId ? (idRemap.get(selectedId) ?? selectedId) : null,
+  };
+}
 
 /**
  * Orders nodes within each layer by the average row-position of their
@@ -104,7 +194,14 @@ function layoutNodes(
         id: node.id,
         type: "lineageNode",
         position: { x: layer * COLUMN_WIDTH, y: index * ROW_HEIGHT },
-        data: { label: node.label, sublabel: node.sublabel, kind: node.kind, muted, selected: node.id === selectedId },
+        data: {
+          label: node.label,
+          sublabel: node.sublabel,
+          kind: node.kind,
+          muted,
+          selected: node.id === selectedId,
+          isGroup: node.id.startsWith("group:"),
+        },
         draggable: false,
       });
     });
@@ -118,6 +215,7 @@ function LineageNodeRenderer({ data }: NodeProps) {
   const sublabel = data.sublabel as string | undefined;
   const muted = data.muted as boolean;
   const selected = data.selected as boolean;
+  const isGroup = data.isGroup as boolean;
   const colorVar = NODE_COLOR_VAR[kind];
 
   return (
@@ -125,7 +223,11 @@ function LineageNodeRenderer({ data }: NodeProps) {
       role="button"
       tabIndex={0}
       aria-pressed={selected}
-      aria-label={`${kind.replace("-", " ")}: ${label}${sublabel ? `, ${sublabel}` : ""}`}
+      aria-label={
+        isGroup
+          ? `${label}, collapsed - click to expand`
+          : `${kind.replace("-", " ")}: ${label}${sublabel ? `, ${sublabel}` : ""}`
+      }
       // React Flow's own click handling is wired at the <ReactFlow>
       // level (onNodeClick), not per-node - dispatching a real click via
       // .click() on Enter/Space runs through that same pipeline rather
@@ -138,19 +240,29 @@ function LineageNodeRenderer({ data }: NodeProps) {
       }}
       className={cn(
         "cursor-pointer rounded-lg border bg-research-surface px-3 py-2.5 transition-opacity duration-200",
+        isGroup && "border-dashed",
         muted ? "opacity-30" : "opacity-100",
       )}
       style={{
         width: NODE_WIDTH,
         borderColor: selected
           ? `var(${colorVar})`
-          : `color-mix(in oklab, var(${colorVar}) 45%, transparent)`,
+          : `color-mix(in oklab, var(${colorVar}) ${isGroup ? "70%" : "45%"}, transparent)`,
         boxShadow: selected ? `0 0 0 1px var(${colorVar})` : undefined,
       }}
     >
       <Handle type="target" position={Position.Left} style={{ background: `var(${colorVar})`, border: "none" }} />
-      <p className="truncate text-[13px] text-research-ink">{label}</p>
-      {sublabel ? (
+      {isGroup ? (
+        <p className="truncate text-[13px] text-research-ink">
+          <span aria-hidden>+ </span>
+          {label}
+        </p>
+      ) : (
+        <p className="truncate text-[13px] text-research-ink">{label}</p>
+      )}
+      {isGroup ? (
+        <p className="mt-0.5 truncate font-mono text-[10.5px] text-research-ink-muted">click to expand</p>
+      ) : sublabel ? (
         <p className="mt-0.5 truncate font-mono text-[10.5px] text-research-ink-muted">{sublabel}</p>
       ) : null}
       <Handle type="source" position={Position.Right} style={{ background: `var(${colorVar})`, border: "none" }} />
@@ -193,6 +305,15 @@ function connectedNodeIds(
   return visited;
 }
 
+function defaultCollapsedGroups(nodes: LineageGraphNode[]): Set<string> {
+  const counts = new Map<string, number>();
+  for (const node of nodes) {
+    const key = groupKey(node.layer, node.kind);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return new Set([...counts].filter(([, count]) => count > COLLAPSE_THRESHOLD).map(([key]) => key));
+}
+
 export function LineageGraph({
   nodes,
   edges,
@@ -204,19 +325,32 @@ export function LineageGraph({
   selectedId: string | null;
   onNodeSelect: (id: string, kind: LineageNodeKind) => void;
 }) {
-  const connectedIds = useMemo(() => connectedNodeIds(selectedId, edges), [selectedId, edges]);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => defaultCollapsedGroups(nodes));
+
+  const collapsed = useMemo(
+    () => applyCollapse(nodes, edges, collapsedGroups, selectedId),
+    [nodes, edges, collapsedGroups, selectedId],
+  );
+  const graphNodes = collapsed.nodes;
+  const graphEdges = collapsed.edges;
+  const effectiveSelectedId = collapsed.selectedId;
+
+  const connectedIds = useMemo(
+    () => connectedNodeIds(effectiveSelectedId, graphEdges),
+    [effectiveSelectedId, graphEdges],
+  );
 
   const flowNodes = useMemo(
-    () => layoutNodes(nodes, edges, selectedId, connectedIds),
-    [nodes, edges, selectedId, connectedIds],
+    () => layoutNodes(graphNodes, graphEdges, effectiveSelectedId, connectedIds),
+    [graphNodes, graphEdges, effectiveSelectedId, connectedIds],
   );
 
   const flowEdges = useMemo<Edge[]>(
     () =>
-      edges.map((edge) => {
+      graphEdges.map((edge) => {
         const isConnected = connectedIds.has(edge.source) && connectedIds.has(edge.target);
-        const muted = selectedId !== null && !isConnected;
-        const highlighted = selectedId !== null && isConnected;
+        const muted = effectiveSelectedId !== null && !isConnected;
+        const highlighted = effectiveSelectedId !== null && isConnected;
         const color = highlighted ? "#8b5cf6" : "#52525b";
         return {
           id: edge.id,
@@ -228,19 +362,19 @@ export function LineageGraph({
           animated: false,
         };
       }),
-    [edges, selectedId, connectedIds],
+    [graphEdges, effectiveSelectedId, connectedIds],
   );
 
-  // A fixed height squashes/clips a layer with many nodes (e.g. a
-  // generation batch); scale with the densest layer instead, capped so a
-  // huge graph still fits in a bounded card - ReactFlow's own pan/zoom
-  // (via fitView + Controls) handles anything beyond that.
+  // A fixed height squashes/clips a layer with many nodes; scale with the
+  // densest layer of the (post-collapse) graph instead, capped so a huge
+  // graph still fits in a bounded card - ReactFlow's own pan/zoom (via
+  // fitView + Controls) handles anything beyond that.
   const canvasHeight = useMemo(() => {
     const perLayerCount = new Map<number, number>();
-    for (const node of nodes) perLayerCount.set(node.layer, (perLayerCount.get(node.layer) ?? 0) + 1);
+    for (const node of graphNodes) perLayerCount.set(node.layer, (perLayerCount.get(node.layer) ?? 0) + 1);
     const maxInLayer = Math.max(1, ...Array.from(perLayerCount.values()));
     return Math.min(720, Math.max(320, maxInLayer * ROW_HEIGHT + 80));
-  }, [nodes]);
+  }, [graphNodes]);
 
   if (nodes.length === 0) {
     return <p className="text-[13.5px] text-research-ink-muted">Nothing to show lineage for yet.</p>;
@@ -256,6 +390,15 @@ export function LineageGraph({
         edges={flowEdges}
         nodeTypes={nodeTypes}
         onNodeClick={(_, node) => {
+          if (node.id.startsWith("group:")) {
+            const key = node.id.slice("group:".length);
+            setCollapsedGroups((prev) => {
+              const next = new Set(prev);
+              next.delete(key);
+              return next;
+            });
+            return;
+          }
           const original = nodes.find((n) => n.id === node.id);
           if (original) onNodeSelect(original.id, original.kind);
         }}

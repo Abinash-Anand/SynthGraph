@@ -34,3 +34,10 @@ export function formatDurationSeconds(seconds: number): string {
   if (seconds < 3600) return `${(seconds / 60).toFixed(1)}m`;
   return `${(seconds / 3600).toFixed(1)}h`;
 }
+
+// Shared by the Overview cockpit's result panel and the inspector's final-
+// metrics summary - one definition of "how many decimals" for an arbitrary
+// numeric metric value.
+export function formatMetricValue(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(3);
+}
