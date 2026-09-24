@@ -9,9 +9,9 @@ import type { EnrichedGeneration, EnrichedTrainingRun } from "../../types/experi
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-xl border border-research-border bg-research-panel p-4">
+    <div className="min-w-0 overflow-x-hidden rounded-xl border border-research-border bg-research-panel p-4">
       <p className="mono-label text-research-ink-muted">{label}</p>
-      <p className="mt-2 text-[24px] font-medium tabular-nums text-research-ink">{value}</p>
+      <p className="mt-2 truncate text-[24px] font-medium tabular-nums text-research-ink">{value}</p>
     </div>
   );
 }
@@ -20,9 +20,13 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
 // they read as one connected "what happened here" surface rather than three
 // unrelated cards - matches the audit's Overview mockup, which groups these
 // under one bordered block separated by rules rather than as scattered tiles.
+// `min-w-0` matters here specifically because these are CSS Grid children
+// (the grid below) - grid items default to `min-width: auto`, so a long
+// unbroken value (a metric key, a run name) would otherwise force the whole
+// column wider instead of truncating inside it.
 function CockpitPanel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-research-border bg-research-panel p-4">
+    <div className="flex min-w-0 flex-col gap-3 overflow-x-hidden rounded-xl border border-research-border bg-research-panel p-4">
       <p className="mono-label text-research-ink-muted">{title}</p>
       {children}
     </div>
@@ -159,22 +163,28 @@ function ResultPanel({ trainingRuns }: { trainingRuns: EnrichedTrainingRun[] }) 
   return (
     <CockpitPanel title="Result">
       <div className="flex flex-col gap-2">
-        {/* Mean/range, not a single "best" value - this app has no way to
-            know whether higher or lower is better for an arbitrary metric
-            key (same reasoning as TrainingRunInspector's health trends). */}
-        {metrics.map((metric) => (
-          <div key={metric.key} className="flex items-center justify-between gap-3">
-            <span className="min-w-0 truncate font-mono text-[12.5px] text-research-ink-secondary">
-              {metric.key}
-            </span>
-            <span className="shrink-0 tabular-nums text-[13px] text-research-ink">
-              {formatMetricValue(metric.mean)}{" "}
-              <span className="text-research-ink-muted">
-                ({formatMetricValue(metric.min)}–{formatMetricValue(metric.max)})
+        {/* Fixed-height + scroll - an evaluation can report dozens of
+            metric keys (e.g. one row per per-limb reward term), which would
+            otherwise push this card's height far past its RunStatus/
+            Provenance siblings and crowd the rest of the tab. */}
+        <div className="flex max-h-[420px] flex-col gap-2 overflow-y-auto pr-1">
+          {/* Mean/range, not a single "best" value - this app has no way to
+              know whether higher or lower is better for an arbitrary metric
+              key (same reasoning as TrainingRunInspector's health trends). */}
+          {metrics.map((metric) => (
+            <div key={metric.key} className="flex items-center justify-between gap-3">
+              <span className="min-w-0 truncate font-mono text-[12.5px] text-research-ink-secondary">
+                {metric.key}
               </span>
-            </span>
-          </div>
-        ))}
+              <span className="shrink-0 tabular-nums text-[13px] text-research-ink">
+                {formatMetricValue(metric.mean)}{" "}
+                <span className="text-research-ink-muted">
+                  ({formatMetricValue(metric.min)}–{formatMetricValue(metric.max)})
+                </span>
+              </span>
+            </div>
+          ))}
+        </div>
         {totalSeconds > 0 ? (
           <div className="flex items-center justify-between">
             <span className="text-[13.5px] text-research-ink-secondary">Training time</span>
@@ -224,7 +234,7 @@ function AttentionPanel({
   return (
     <div
       className={cn(
-        "flex flex-col gap-3 rounded-xl border p-4",
+        "flex min-w-0 flex-col gap-3 overflow-x-hidden rounded-xl border p-4",
         entries.length > 0
           ? "border-research-warning/30 bg-research-warning/[0.04]"
           : "border-research-border bg-research-panel",
@@ -368,7 +378,7 @@ export function OverviewTab({
                   onClick={() => onSelectGeneration(generation.id)}
                   className="flex items-center justify-between gap-3 rounded-lg border border-research-border bg-research-panel px-4 py-3 text-left transition-colors hover:border-research-accent-subtle"
                 >
-                  <span className="truncate text-[13.5px] text-research-ink">{generation.name}</span>
+                  <span className="min-w-0 flex-1 truncate text-[13.5px] text-research-ink">{generation.name}</span>
                   <GenerationStatusBadge status={generation.status} />
                 </button>
               );
@@ -391,7 +401,7 @@ export function OverviewTab({
                 onClick={() => onSelectRun(run.id)}
                 className="flex items-center justify-between gap-3 rounded-lg border border-research-border bg-research-panel px-4 py-3 text-left transition-colors hover:border-research-accent-subtle"
               >
-                <span className="truncate text-[13.5px] text-research-ink">{run.name}</span>
+                <span className="min-w-0 flex-1 truncate text-[13.5px] text-research-ink">{run.name}</span>
                 <TrainingRunStatusBadge status={run.status} />
               </button>
             ))}
