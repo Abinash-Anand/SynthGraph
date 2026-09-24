@@ -4,28 +4,40 @@ import { useState, type ReactNode } from "react";
 import { Logo } from "@/components/navigation/Logo";
 import { cn } from "@/lib/utils";
 import { CommandPalette } from "@/shared/command-palette/CommandPalette";
+import { OverflowWatcher } from "./OverflowWatcher";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 
 /**
- * Below `lg`, the sidebar becomes an off-canvas drawer (fixed, slides in
+ * Below `xl`, the sidebar becomes an off-canvas drawer (fixed, slides in
  * over a backdrop) instead of squeezing a 240px column into a narrow
  * viewport. Extracted into its own client component so the surrounding
  * (dashboard)/layout.tsx can stay an async Server Component for the
  * session/redirect check.
+ *
+ * Breakpoint deliberately matches ResearchWorkspace's inspector rail
+ * (also `xl`), not an earlier one like `lg` - the two used to switch
+ * independently, so a 1024-1279px viewport got a static sidebar *and*
+ * the mobile floating-inspector-button at the same time. A static
+ * sidebar plus the inspector rail (380px) would leave very little width
+ * for the actual canvas content below `xl` anyway, so keeping the
+ * sidebar in drawer mode through that range - rather than moving the
+ * inspector rail down to `lg` - is the one that doesn't reintroduce a
+ * cramped-canvas version of the same overflow problem.
  */
 export function DashboardShell({ email, children }: { email: string; children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[240px_1fr]">
+    <div className="min-h-screen xl:grid xl:grid-cols-[240px_1fr]">
       <CommandPalette />
+      <OverflowWatcher />
       {mobileOpen ? (
         <button
           type="button"
           aria-label="Close menu"
           onClick={() => setMobileOpen(false)}
-          className="fixed inset-0 z-40 bg-void/70 lg:hidden"
+          className="fixed inset-0 z-40 bg-void/70 xl:hidden"
         />
       ) : null}
 
@@ -34,7 +46,7 @@ export function DashboardShell({ email, children }: { email: string; children: R
         className={cn(
           "fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-line bg-void",
           "transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]",
-          "lg:static lg:z-auto lg:w-auto lg:translate-x-0",
+          "xl:static xl:z-auto xl:w-auto xl:translate-x-0",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
@@ -44,7 +56,7 @@ export function DashboardShell({ email, children }: { email: string; children: R
             type="button"
             onClick={() => setMobileOpen(false)}
             aria-label="Close menu"
-            className="grid size-8 place-items-center rounded-md text-ink-muted hover:text-ink lg:hidden"
+            className="grid size-8 place-items-center rounded-md text-ink-muted hover:text-ink xl:hidden"
           >
             <CloseIcon />
           </button>
