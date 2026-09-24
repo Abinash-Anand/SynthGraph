@@ -188,7 +188,7 @@ export function ExperimentHeader({
             />
             {errors.description ? <p className="text-[12px] text-bad">{errors.description}</p> : null}
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button type="submit" disabled={pending} className={accentButtonClass}>
               {pending ? "Saving…" : "Save"}
             </button>
@@ -218,7 +218,7 @@ export function ExperimentHeader({
           ) : null}
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {entityMode === "archiving" ? (
             <>
               <span className="self-center text-[13px] text-research-ink-muted">

@@ -57,9 +57,14 @@ export function DashboardShell({ email, children }: { email: string; children: R
         </div>
       </aside>
 
-      <div className="flex flex-col">
+      {/* min-w-0: without it, a CSS grid item won't shrink below its
+          content's intrinsic width - a wide child anywhere in the page
+          (a button row, a tab bar, a table) would otherwise widen this
+          entire grid track and force the whole page to scroll
+          horizontally, instead of that one child scrolling internally. */}
+      <div className="flex min-w-0 flex-col">
         <Topbar email={email} onOpenMenu={() => setMobileOpen(true)} />
-        <main id="main" className="flex-1 p-6 sm:p-8">
+        <main id="main" className="min-w-0 flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8">
           {children}
         </main>
       </div>

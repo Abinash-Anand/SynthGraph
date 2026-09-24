@@ -118,7 +118,7 @@ export function DatasetDetailHeader({ dataset: initialDataset }: { dataset: Data
           onChange={set("description")}
           error={errors.description}
         />
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button type="submit" size="sm" disabled={pending}>
             {pending ? "Saving…" : "Save"}
           </Button>
@@ -144,7 +144,7 @@ export function DatasetDetailHeader({ dataset: initialDataset }: { dataset: Data
         </div>
 
         {mode === "archiving" ? (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-[13px] text-research-ink-muted">Archive this dataset?</span>
             <Button size="sm" variant="secondary" onClick={() => setMode("view")} disabled={pending}>
               Cancel
@@ -154,7 +154,7 @@ export function DatasetDetailHeader({ dataset: initialDataset }: { dataset: Data
             </Button>
           </div>
         ) : (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="ghost" onClick={startEditing}>
               Rename
             </Button>
