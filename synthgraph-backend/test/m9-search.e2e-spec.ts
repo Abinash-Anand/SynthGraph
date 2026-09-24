@@ -224,42 +224,54 @@ describe('M9 Search (e2e)', () => {
       id: projectA.id,
       name: `${NEEDLE} Project`,
       projectId: projectA.id,
+      projectName: `${NEEDLE} Project`,
       experimentId: null,
+      createdAt: expect.any(String),
     });
     expect(byType.experiment).toEqual({
       type: 'experiment',
       id: experimentA.id,
       name: `${NEEDLE} Experiment`,
       projectId: projectA.id,
+      projectName: `${NEEDLE} Project`,
       experimentId: experimentA.id,
+      createdAt: expect.any(String),
     });
     expect(byType.dataset).toEqual({
       type: 'dataset',
       id: datasetA.id,
       name: `${NEEDLE} Dataset`,
       projectId: null,
+      projectName: null,
       experimentId: null,
+      createdAt: expect.any(String),
     });
     expect(byType.asset).toEqual({
       type: 'asset',
       id: assetA.id,
       name: `${NEEDLE} Asset`,
       projectId: null,
+      projectName: null,
       experimentId: null,
+      createdAt: expect.any(String),
     });
     expect(byType.generation).toEqual({
       type: 'generation',
       id: generationA.id,
       name: `${NEEDLE} Generation`,
       projectId: projectA.id,
+      projectName: `${NEEDLE} Project`,
       experimentId: experimentA.id,
+      createdAt: expect.any(String),
     });
     expect(byType.trainingRun).toEqual({
       type: 'trainingRun',
       id: trainingRunA.id,
       name: `${NEEDLE} Training Run`,
       projectId: projectA.id,
+      projectName: `${NEEDLE} Project`,
       experimentId: experimentA.id,
+      createdAt: expect.any(String),
     });
 
     // Exactly one project row - userB's identically-named project must not

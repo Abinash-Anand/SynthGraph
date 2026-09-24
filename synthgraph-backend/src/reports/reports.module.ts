@@ -21,6 +21,7 @@ import { GetEfficiencyLeaderboardService } from './services/get-efficiency-leade
 import { GetParameterCorrelationReportService } from './services/get-parameter-correlation-report.service.js';
 import { GetTrainingRunDriftService } from './services/get-training-run-drift.service.js';
 import { GetTrainingRunHealthService } from './services/get-training-run-health.service.js';
+import { GetTrainingRunKeysService } from './services/get-training-run-keys.service.js';
 import { SearchTrainingRunsService } from './services/search-training-runs.service.js';
 
 @Module({
@@ -66,6 +67,7 @@ import { SearchTrainingRunsService } from './services/search-training-runs.servi
     GetBestRunsReportService,
     GetTrainingRunDriftService,
     GetDatasetImpactReportService,
+    GetTrainingRunKeysService,
   ],
 })
 export class ReportsModule {}

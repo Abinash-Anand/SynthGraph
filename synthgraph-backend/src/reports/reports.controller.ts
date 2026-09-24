@@ -10,6 +10,7 @@ import { EfficiencyLeaderboardQueryDto } from './dto/efficiency-leaderboard-quer
 import { ParameterCorrelationQueryDto } from './dto/parameter-correlation-query.dto.js';
 import { TrainingRunDriftQueryDto } from './dto/training-run-drift-query.dto.js';
 import { TrainingRunHealthQueryDto } from './dto/training-run-health-query.dto.js';
+import { TrainingRunKeysQueryDto } from './dto/training-run-keys-query.dto.js';
 import { TrainingRunSearchQueryDto } from './dto/training-run-search-query.dto.js';
 import { GetBestRunsReportService } from './services/get-best-runs-report.service.js';
 import { GetCaptureCompletenessReportService } from './services/get-capture-completeness-report.service.js';
@@ -18,6 +19,7 @@ import { GetEfficiencyLeaderboardService } from './services/get-efficiency-leade
 import { GetParameterCorrelationReportService } from './services/get-parameter-correlation-report.service.js';
 import { GetTrainingRunDriftService } from './services/get-training-run-drift.service.js';
 import { GetTrainingRunHealthService } from './services/get-training-run-health.service.js';
+import { GetTrainingRunKeysService } from './services/get-training-run-keys.service.js';
 import { SearchTrainingRunsService } from './services/search-training-runs.service.js';
 
 @Controller('reports')
@@ -32,6 +34,7 @@ export class ReportsController {
     private readonly bestRunsReportService: GetBestRunsReportService,
     private readonly trainingRunDriftService: GetTrainingRunDriftService,
     private readonly datasetImpactReportService: GetDatasetImpactReportService,
+    private readonly trainingRunKeysService: GetTrainingRunKeysService,
   ) {}
 
   @Get('capture-completeness')
@@ -121,6 +124,18 @@ export class ReportsController {
     return this.datasetImpactReportService.execute(
       query.datasetVersionId,
       request.user.id,
+    );
+  }
+
+  @Get('training-run-keys')
+  async trainingRunKeys(
+    @Query() query: TrainingRunKeysQueryDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.trainingRunKeysService.execute(
+      request.user.id,
+      query.field,
+      query.projectId,
     );
   }
 }

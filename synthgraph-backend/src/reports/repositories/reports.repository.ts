@@ -46,6 +46,10 @@ export type IntegrationBreakdownRow = {
   closedCount: string;
 };
 
+export type TrainingRunKeyRow = {
+  key: string;
+};
+
 // New satellite module (mirrors Comparisons/Reproduction/Documentation's
 // existing "reach into other entities directly" pattern) rather than
 // modifying TrainingRunRepository/EvaluationResultRepository - keeps every
@@ -117,6 +121,33 @@ export class ReportsRepository {
         AND ($2::uuid IS NULL OR p.id = $2)
       GROUP BY kv.key
       ORDER BY "totalCount" DESC
+      `,
+      [userId, projectId ?? null],
+    );
+  }
+
+  // Backs the training-run-search Key field's autocomplete - `field` is
+  // restricted to a fixed enum by the DTO one layer up (never a raw user
+  // string) and is used to pick the column name here via a whitelist, same
+  // discipline as findTrainingRunsByNumericFilter's own `column` variable;
+  // it is never interpolated from user input directly.
+  async findDistinctTrainingRunKeys(
+    userId: string,
+    field: NumericFilterField,
+    projectId?: string,
+  ): Promise<TrainingRunKeyRow[]> {
+    const column = field === 'parameters' ? 'tr.parameters' : 'tr.metrics';
+
+    return this.dataSource.query<TrainingRunKeyRow[]>(
+      `
+      SELECT DISTINCT kv.key
+      FROM training_runs tr
+      INNER JOIN experiments e ON e.id = tr.experiment_id
+      INNER JOIN projects p ON p.id = e.project_id
+      CROSS JOIN LATERAL jsonb_object_keys(COALESCE(${column}, '{}'::jsonb)) AS kv(key)
+      WHERE p.user_id = $1
+        AND ($2::uuid IS NULL OR p.id = $2)
+      ORDER BY kv.key
       `,
       [userId, projectId ?? null],
     );

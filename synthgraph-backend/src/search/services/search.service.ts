@@ -14,4 +14,13 @@ export class SearchService {
     const results = await this.searchRepository.search(userId, query);
     return { results };
   }
+
+  async getRecent(
+    userId: string,
+    type: 'generation' | 'trainingRun',
+    limit?: number,
+  ): Promise<{ results: SearchResultRow[] }> {
+    const results = await this.searchRepository.findRecent(userId, type, limit);
+    return { results };
+  }
 }
