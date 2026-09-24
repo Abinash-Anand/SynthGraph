@@ -7,7 +7,7 @@ import type { ParameterCorrelationReport } from "@/features/reports/types/report
 import { ResearchWorkspace } from "@/shared/layout/ResearchWorkspace";
 import { Tabs } from "@/shared/ui/Tabs";
 import type { EnrichedGeneration, EnrichedTrainingRun, SelectedEntity } from "../types/experiment-workspace";
-import { parseSelectedEntity, serializeSelectedEntity } from "../types/experiment-workspace";
+import { findParentGeneration, parseSelectedEntity, serializeSelectedEntity } from "../types/experiment-workspace";
 import { ExperimentHeader } from "./ExperimentHeader";
 import { EvaluationInspector } from "./inspector/EvaluationInspector";
 import { GenerationInspector } from "./inspector/GenerationInspector";
@@ -106,8 +106,18 @@ export function ExperimentWorkspace({
     );
   } else if (selectedGeneration) {
     inspectorTitle = "Generation";
+    const parentGeneration = findParentGeneration(selectedGeneration, generations);
     inspector = (
-      <GenerationInspector enriched={selectedGeneration} projectId={projectId} experimentId={experimentId} />
+      <GenerationInspector
+        enriched={selectedGeneration}
+        projectId={projectId}
+        experimentId={experimentId}
+        onCompareWithParent={
+          parentGeneration
+            ? () => router.push(`/dashboard/compare?ids=${parentGeneration.generation.id},${selectedGeneration.generation.id}`)
+            : undefined
+        }
+      />
     );
   } else if (selectedEvaluation && selectedEvaluationRun) {
     inspectorTitle = "Evaluation";
