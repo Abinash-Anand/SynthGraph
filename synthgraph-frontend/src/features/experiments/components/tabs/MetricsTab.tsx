@@ -9,6 +9,20 @@ import type { EnrichedTrainingRun } from "../../types/experiment-workspace";
 
 type MetricsView = "chart" | "table";
 
+// "No metrics" isn't one state - a run that's still running hasn't failed
+// to report anything, and a failed run was never going to. Distinguishing
+// these (audit item #17) uses data already on the run, not a new field.
+function emptyMetricsMessage(runs: EnrichedTrainingRun[]): string {
+  if (runs.length === 0) return "No training runs yet.";
+  if (runs.some((r) => r.run.status === "pending" || r.run.status === "running")) {
+    return "Still collecting - no step metrics reported yet.";
+  }
+  if (runs.every((r) => r.run.status === "failed")) {
+    return "No step metrics were captured - every run failed before producing any.";
+  }
+  return "No step metrics were captured for these runs.";
+}
+
 // ECharts is heavy - split out of the main bundle, only loaded when the
 // Metrics tab actually renders (per the Phase 4 plan's performance rules).
 const MetricsLineChart = dynamic(
@@ -38,9 +52,11 @@ export function MetricsTab({
   const allMetricKeys = extractMetricKeys(active?.metrics ?? []);
   const [selectedKeys, toggleKey] = useMetricKeySelection(allMetricKeys);
   const [view, setView] = useState<MetricsView>("chart");
+  const [logScale, setLogScale] = useState(false);
+  const [smoothing, setSmoothing] = useState(false);
 
   if (runsWithMetrics.length === 0 || !active) {
-    return <p className="text-[13.5px] text-research-ink-muted">No training runs have step metrics yet.</p>;
+    return <p className="text-[13.5px] text-research-ink-muted">{emptyMetricsMessage(runs)}</p>;
   }
 
   return (
@@ -82,8 +98,49 @@ export function MetricsTab({
       </div>
       {view === "chart" ? (
         <>
-          <MetricKeyPicker keys={allMetricKeys} selected={selectedKeys} onToggle={toggleKey} />
-          <MetricsLineChart metrics={active.metrics} selectedKeys={selectedKeys} />
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <MetricKeyPicker keys={allMetricKeys} selected={selectedKeys} onToggle={toggleKey} />
+            <div className="flex gap-1.5">
+              <label
+                className={cn(
+                  "flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[11px] transition-colors",
+                  smoothing
+                    ? "border-research-accent bg-research-accent-subtle/15 text-research-ink"
+                    : "border-research-border text-research-ink-muted hover:border-research-accent-subtle",
+                )}
+              >
+                <input
+                  type="checkbox"
+                  checked={smoothing}
+                  onChange={(event) => setSmoothing(event.target.checked)}
+                  className="sr-only"
+                />
+                Smoothed
+              </label>
+              <label
+                className={cn(
+                  "flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[11px] transition-colors",
+                  logScale
+                    ? "border-research-accent bg-research-accent-subtle/15 text-research-ink"
+                    : "border-research-border text-research-ink-muted hover:border-research-accent-subtle",
+                )}
+              >
+                <input
+                  type="checkbox"
+                  checked={logScale}
+                  onChange={(event) => setLogScale(event.target.checked)}
+                  className="sr-only"
+                />
+                Log scale
+              </label>
+            </div>
+          </div>
+          <MetricsLineChart
+            metrics={active.metrics}
+            selectedKeys={selectedKeys}
+            logScale={logScale}
+            smoothing={smoothing}
+          />
         </>
       ) : (
         <MetricsTable metrics={active.metrics} />
