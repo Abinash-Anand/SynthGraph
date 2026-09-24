@@ -130,7 +130,7 @@ export function CaptureCompletenessView({ report }: { report: CaptureCompletenes
               <tbody>
                 {integrations.map(([name, counts]) => (
                   <tr key={name} className="border-b border-line last:border-b-0">
-                    <td className="px-3 py-2 text-ink">{name}</td>
+                    <td className="px-3 py-2 font-medium text-ink">{name}</td>
                     <td className="px-3 py-2 text-ink-muted">{counts.total}</td>
                     <td className="px-3 py-2 text-ink-muted">{counts.attached}</td>
                     <td className="px-3 py-2 text-ink-muted">{counts.closed}</td>

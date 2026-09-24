@@ -30,7 +30,7 @@ export function TrainingRunSearchResults({
             const projectId = projectIdByExperimentId[match.experimentId];
             return (
               <tr key={match.trainingRunId} className="border-b border-research-border last:border-b-0">
-                <td className="px-3 py-2.5 text-research-ink">
+                <td className="px-3 py-2.5 font-medium text-research-ink">
                   {projectId ? (
                     <Link
                       href={`/dashboard/projects/${projectId}/experiments/${match.experimentId}?entity=run:${match.trainingRunId}`}

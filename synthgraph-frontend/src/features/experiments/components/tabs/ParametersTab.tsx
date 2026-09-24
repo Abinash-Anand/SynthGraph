@@ -59,7 +59,7 @@ function ParametersAcrossRuns({
                 <td
                   className={cn(
                     "max-w-[200px] truncate px-3 py-2.5 font-mono",
-                    varying ? "text-research-ink" : "text-research-ink-muted",
+                    varying ? "font-medium text-research-ink" : "text-research-ink-muted",
                   )}
                   title={key}
                 >
@@ -98,17 +98,26 @@ export function ParametersTab({
 }) {
   return (
     <div className="flex flex-col gap-8">
+      {/* Leads with the answer, not the raw data: which parameter values
+          track with which outcomes is the actual research question this
+          tab exists to answer, so it gets top billing and a visually
+          distinct treatment instead of reading as "yet another table" with
+          the same weight as the plain parameter dump below it. */}
+      <div className="rounded-xl border border-research-accent-subtle/40 bg-research-accent-subtle/[0.04] p-5">
+        <h2 className="text-[15px] font-medium text-research-ink">Correlation with outcomes</h2>
+        <p className="mt-1 mb-4 max-w-[62ch] text-[13px] text-research-ink-muted">
+          Which values of each varying parameter tend to produce which results, averaged across the
+          runs that used them.
+        </p>
+        <ParameterCorrelationView report={correlationReport} />
+      </div>
       <div>
-        <h2 className="mono-label mb-3 text-research-ink-muted">Parameters across runs</h2>
+        <h2 className="mono-label mb-3 text-research-ink-muted">All parameters</h2>
         {runs.length === 0 ? (
           <p className="text-[13.5px] text-research-ink-muted">No training runs yet.</p>
         ) : (
           <ParametersAcrossRuns runs={runs} correlationReport={correlationReport} />
         )}
-      </div>
-      <div>
-        <h2 className="mono-label mb-3 text-research-ink-muted">Correlation with outcomes</h2>
-        <ParameterCorrelationView report={correlationReport} />
       </div>
     </div>
   );
