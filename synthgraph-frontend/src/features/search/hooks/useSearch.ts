@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import type { SearchResult } from "@/features/search/types/search";
+import type { SearchResult, SearchResultType } from "@/features/search/types/search";
 
 const DEBOUNCE_MS = 200;
 const MIN_QUERY_LENGTH = 2;
@@ -14,6 +14,35 @@ async function fetchSearch(query: string): Promise<SearchResult[]> {
     throw new Error(body.error ?? "Search failed.");
   }
   return body.results ?? [];
+}
+
+async function fetchRecent(
+  type: Extract<SearchResultType, "generation" | "trainingRun">,
+): Promise<SearchResult[]> {
+  const response = await fetch(`/api/search/recent?type=${type}`, { cache: "no-store" });
+  const body = (await response.json()) as { ok: boolean; results?: SearchResult[]; error?: string };
+  if (!response.ok || !body.ok) {
+    throw new Error(body.error ?? "Search failed.");
+  }
+  return body.results ?? [];
+}
+
+/**
+ * Powers a combobox's "show something before the user has typed enough to
+ * search" state - fetched once (short staleTime, not live-polled) and
+ * reused for client-side filtering below MIN_QUERY_LENGTH.
+ */
+export function useRecentEntities(type: Extract<SearchResultType, "generation" | "trainingRun">) {
+  const result = useQuery({
+    queryKey: ["search-recent", type],
+    queryFn: () => fetchRecent(type),
+    staleTime: 30_000,
+  });
+
+  return {
+    recent: result.data ?? [],
+    isLoadingRecent: result.isLoading,
+  };
 }
 
 /**

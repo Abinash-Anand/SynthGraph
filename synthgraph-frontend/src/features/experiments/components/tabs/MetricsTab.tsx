@@ -98,9 +98,9 @@ export function MetricsTab({
       </div>
       {view === "chart" ? (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <MetricKeyPicker keys={allMetricKeys} selected={selectedKeys} onToggle={toggleKey} />
-            <div className="flex gap-1.5">
+            <div className="flex shrink-0 gap-1.5">
               <label
                 className={cn(
                   "flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[11px] transition-colors",

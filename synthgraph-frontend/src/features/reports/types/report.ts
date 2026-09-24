@@ -117,3 +117,7 @@ export type DatasetImpactReport = {
   trainingRuns: Array<{ trainingRunId: string; name: string; status: string }>;
   metrics: DatasetImpactMetric[];
 };
+
+export type TrainingRunKeysReport = {
+  keys: string[];
+};

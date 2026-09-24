@@ -1,24 +1,28 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import type { SearchResultType } from "@/features/search/types/search";
-import { useSearch } from "@/features/search/hooks/useSearch";
+import type { SearchResult, SearchResultType } from "@/features/search/types/search";
+import { useRecentEntities, useSearch } from "@/features/search/hooks/useSearch";
 import { cn } from "@/lib/utils";
 import { formatDateTime } from "@/shared/lib/format";
 
 const MIN_SELECTION = 2;
 const MAX_SELECTION = 10;
 const MIN_QUERY_LENGTH = 2;
+const NO_PROJECT_GROUP = "__no_project__";
 
 /**
  * Replaces the raw generation-ID/training-run-ID textarea with a live
- * search-and-check picker, backed by the existing global `/search`
- * endpoint (name substring match, top 5 per type - it backs the command
- * palette, not a paginated browse view, so this is "type to find it," not
- * "browse everything," which is the honest limit of reusing that endpoint
- * rather than building a dedicated one for this single form).
+ * auto-suggest combobox, shared by both generation and training-run
+ * comparison entry points. Below MIN_QUERY_LENGTH (including on focus with
+ * nothing typed yet) it shows the `/search/recent` list grouped by project,
+ * filtered client-side by whatever's been typed so far; at MIN_QUERY_LENGTH+
+ * it switches to the real `/search` endpoint (name substring match, top 5
+ * per type - it backs the command palette, not a paginated browse view, so
+ * this is still "type to find it," not "browse everything," for a longer
+ * query the recent list wouldn't cover).
  */
 export function EntitySearchPicker({
   entityType,
@@ -28,7 +32,7 @@ export function EntitySearchPicker({
   error: externalError,
   label,
 }: {
-  entityType: SearchResultType;
+  entityType: Extract<SearchResultType, "generation" | "trainingRun">;
   targetPath: string;
   prefillIds?: string[];
   /** id -> name for IDs already selected via the URL (a shared link, or a
@@ -39,13 +43,46 @@ export function EntitySearchPicker({
   label: string;
 }) {
   const router = useRouter();
+  const containerRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
   const [selected, setSelected] = useState<Map<string, string>>(
     () => new Map((prefillIds ?? []).map((id) => [id, prefillNames?.[id] ?? id])),
   );
   const { results, isSearching } = useSearch(query);
-  const matches = results.filter((result) => result.type === entityType);
+  const { recent, isLoadingRecent } = useRecentEntities(entityType);
   const trimmedQuery = query.trim();
+  const usingRecent = trimmedQuery.length < MIN_QUERY_LENGTH;
+
+  useEffect(() => {
+    const onClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
+
+  const displayed = useMemo<SearchResult[]>(() => {
+    if (usingRecent) {
+      if (!trimmedQuery) return recent;
+      const needle = trimmedQuery.toLowerCase();
+      return recent.filter((item) => item.name.toLowerCase().includes(needle));
+    }
+    return results.filter((result) => result.type === entityType);
+  }, [usingRecent, trimmedQuery, recent, results, entityType]);
+
+  const grouped = useMemo(() => {
+    const groups = new Map<string, { projectName: string | null; items: SearchResult[] }>();
+    for (const item of displayed) {
+      const key = item.projectId ?? NO_PROJECT_GROUP;
+      const group = groups.get(key);
+      if (group) group.items.push(item);
+      else groups.set(key, { projectName: item.projectName, items: [item] });
+    }
+    return Array.from(groups.values());
+  }, [displayed]);
 
   const toggle = (id: string, name: string) => {
     setSelected((current) => {
@@ -60,6 +97,8 @@ export function EntitySearchPicker({
     router.push(`${targetPath}?ids=${Array.from(selected.keys()).join(",")}`);
   };
 
+  const isLoading = usingRecent ? isLoadingRecent : isSearching;
+
   return (
     <div className="flex flex-col gap-4">
       {externalError ? (
@@ -73,25 +112,28 @@ export function EntitySearchPicker({
           <p className="mono-label text-research-ink-muted">
             Selected ({selected.size}/{MAX_SELECTION})
           </p>
-          {Array.from(selected.entries()).map(([id, name]) => (
-            <div
-              key={id}
-              className="flex items-center justify-between gap-3 rounded-lg border border-research-accent bg-research-accent-subtle/10 px-4 py-2.5"
-            >
-              <span className="min-w-0 flex-1 truncate text-[13.5px] text-research-ink">{name}</span>
-              <button
-                type="button"
-                onClick={() => toggle(id, name)}
-                className="shrink-0 font-mono text-[11px] tracking-[0.06em] text-research-ink-muted uppercase transition-colors hover:text-research-accent-hover"
+          <div className="flex flex-wrap gap-2">
+            {Array.from(selected.entries()).map(([id, name]) => (
+              <span
+                key={id}
+                className="inline-flex max-w-full items-center gap-2 rounded-full border border-research-accent bg-research-accent-subtle/10 py-1 pl-3 pr-1.5"
               >
-                Remove
-              </button>
-            </div>
-          ))}
+                <span className="min-w-0 truncate text-[13px] text-research-ink">{name}</span>
+                <button
+                  type="button"
+                  onClick={() => toggle(id, name)}
+                  aria-label={`Remove ${name}`}
+                  className="flex size-5 shrink-0 items-center justify-center rounded-full text-[13px] leading-none text-research-ink-muted transition-colors hover:bg-research-accent/20 hover:text-research-accent-hover"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-2">
+      <div ref={containerRef} className="flex flex-col gap-2">
         <label className="text-[13px] text-research-ink-muted" htmlFor={`${entityType}-search`}>
           Search {label} by name
         </label>
@@ -100,48 +142,68 @@ export function EntitySearchPicker({
           type="text"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Type at least 2 characters..."
+          onFocus={() => setIsOpen(true)}
+          placeholder="Start typing, or click to browse recent…"
+          autoComplete="off"
           className="w-full rounded-md border border-research-border bg-research-bg px-3.5 py-2.5 text-[14.5px] text-research-ink placeholder:text-research-ink-muted focus:border-research-accent-subtle focus:outline-none"
         />
-      </div>
 
-      {trimmedQuery.length >= MIN_QUERY_LENGTH ? (
-        <div className="flex flex-col gap-1.5">
-          {isSearching ? (
-            <p className="text-[13px] text-research-ink-muted">Searching…</p>
-          ) : matches.length === 0 ? (
-            <p className="text-[13px] text-research-ink-muted">
-              No {label} match &ldquo;{trimmedQuery}&rdquo;.
-            </p>
-          ) : (
-            matches.map((result) => {
-              const checked = selected.has(result.id);
-              return (
-                <label
-                  key={result.id}
-                  className={cn(
-                    "flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 transition-colors",
-                    checked
-                      ? "border-research-accent bg-research-accent-subtle/10"
-                      : "border-research-border bg-research-panel hover:border-research-accent-subtle",
-                  )}
-                >
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => toggle(result.id, result.name)}
-                    className="accent-[var(--color-research-accent)]"
-                  />
-                  <span className="min-w-0 flex-1 truncate text-[13.5px] text-research-ink">{result.name}</span>
-                  <span className="shrink-0 font-mono text-[11px] text-research-ink-muted">
-                    {formatDateTime(result.createdAt)}
-                  </span>
-                </label>
-              );
-            })
-          )}
-        </div>
-      ) : null}
+        {/* Normal document flow, not an absolute overlay - an overlay here
+            would visually cover (and intercept clicks intended for) the
+            Compare button that sits right below this picker. */}
+        {isOpen ? (
+          <div className="max-h-[360px] overflow-y-auto rounded-lg border border-research-border bg-research-panel p-1.5 shadow-lg">
+            {usingRecent && !trimmedQuery ? (
+              <p className="mono-label px-2.5 pb-1.5 pt-1 text-research-ink-muted">Recent</p>
+            ) : null}
+
+            {isLoading ? (
+              <p className="px-2.5 py-3 text-[13px] text-research-ink-muted">Searching…</p>
+            ) : grouped.length === 0 ? (
+              <p className="px-2.5 py-3 text-[13px] text-research-ink-muted">
+                {trimmedQuery
+                  ? `No ${label} match "${trimmedQuery}".`
+                  : `No ${label} yet — create one to see it here.`}
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2.5">
+                {grouped.map((group, index) => (
+                  <div key={group.projectName ?? `group-${index}`} className="flex flex-col gap-0.5">
+                    <p className="mono-label px-2.5 pb-0.5 text-research-ink-muted">
+                      {group.projectName ?? "No project"}
+                    </p>
+                    {group.items.map((result) => {
+                      const checked = selected.has(result.id);
+                      return (
+                        <label
+                          key={result.id}
+                          className={cn(
+                            "flex cursor-pointer items-center gap-3 rounded-md px-2.5 py-2 transition-colors",
+                            checked ? "bg-research-accent-subtle/10" : "hover:bg-research-elevated",
+                          )}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggle(result.id, result.name)}
+                            className="accent-[var(--color-research-accent)]"
+                          />
+                          <span className="min-w-0 flex-1 truncate text-[13.5px] text-research-ink">
+                            {result.name}
+                          </span>
+                          <span className="shrink-0 font-mono text-[11px] text-research-ink-muted">
+                            {formatDateTime(result.createdAt)}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : null}
+      </div>
 
       <Button
         type="button"
