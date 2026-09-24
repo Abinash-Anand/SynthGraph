@@ -1,11 +1,13 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import type { EChartsCoreOption } from "echarts/core";
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { SelectField } from "@/components/ui/Field";
 import { formatDurationSeconds } from "@/shared/lib/format";
+import type { RunLink } from "../server/resolve-run-links";
 import type { EfficiencyLeaderboard } from "../types/report";
 
 const EChart = dynamic(() => import("@/shared/charts/EChart").then((m) => m.EChart), {
@@ -16,7 +18,13 @@ const EChart = dynamic(() => import("@/shared/charts/EChart").then((m) => m.ECha
 // Deliberately client-side: which metric matters and whether higher is
 // "better" is a per-researcher, per-metric judgment call the backend
 // can't make - it just hands over duration + every evaluation.
-export function EfficiencyLeaderboardView({ leaderboard }: { leaderboard: EfficiencyLeaderboard }) {
+export function EfficiencyLeaderboardView({
+  leaderboard,
+  linksByRunId = {},
+}: {
+  leaderboard: EfficiencyLeaderboard;
+  linksByRunId?: Record<string, RunLink>;
+}) {
   const metricKeys = useMemo(() => {
     const keys = new Set<string>();
     for (const run of leaderboard.runs) {
@@ -129,10 +137,21 @@ export function EfficiencyLeaderboardView({ leaderboard }: { leaderboard: Effici
       {activeMetricKey ? <EChart option={scatterOption} height={280} /> : null}
 
       <div className="flex flex-col gap-2">
-        {rows.map(({ run, bestValue, perHour }) => (
+        {rows.map(({ run, bestValue, perHour }) => {
+          const link = linksByRunId[run.trainingRunId];
+          return (
           <Card key={run.trainingRunId} className="flex items-center justify-between gap-4 p-4">
             <div className="min-w-0">
-              <p className="truncate text-[14.5px] font-medium text-ink">{run.name}</p>
+              {link ? (
+                <Link
+                  href={`/dashboard/projects/${link.projectId}/experiments/${link.experimentId}?entity=run:${run.trainingRunId}`}
+                  className="truncate text-[14.5px] font-medium text-ink underline underline-offset-2 hover:text-research-accent-hover"
+                >
+                  {run.name}
+                </Link>
+              ) : (
+                <p className="truncate text-[14.5px] font-medium text-ink">{run.name}</p>
+              )}
               <p className="mt-0.5 font-mono text-[11px] text-ink-faint">
                 {formatDurationSeconds(run.durationSeconds)} training time
               </p>
@@ -154,7 +173,8 @@ export function EfficiencyLeaderboardView({ leaderboard }: { leaderboard: Effici
               )}
             </div>
           </Card>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

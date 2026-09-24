@@ -4,6 +4,7 @@ import { listProjects } from "@/features/projects/server/projects-api";
 import { BestRunsView } from "@/features/reports/components/BestRunsView";
 import { ProjectFilterField } from "@/features/reports/components/ProjectFilterField";
 import { getBestRuns } from "@/features/reports/server/reports-api";
+import { resolveRunLinks } from "@/features/reports/server/resolve-run-links";
 
 export const metadata: Metadata = { title: "Best Runs" };
 
@@ -19,6 +20,8 @@ export default async function BestRunsPage({
     getBestRuns(session.apiKey, projectId),
     listProjects(session.apiKey),
   ]);
+  const runIds = report.records.flatMap((record) => [record.maxTrainingRunId, record.minTrainingRunId]);
+  const linksByRunId = await resolveRunLinks(session.apiKey, runIds);
 
   return (
     <div className="flex flex-col gap-6">
@@ -35,7 +38,7 @@ export default async function BestRunsPage({
         <ProjectFilterField projects={projects} />
       </div>
 
-      <BestRunsView report={report} />
+      <BestRunsView report={report} linksByRunId={linksByRunId} />
     </div>
   );
 }
