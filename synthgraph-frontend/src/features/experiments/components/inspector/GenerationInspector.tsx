@@ -2,6 +2,7 @@ import Link from "next/link";
 import { GenerationStatusBadge } from "@/features/generations/components/GenerationStatusBadge";
 import type { GenerationDataReference } from "@/features/generations/types/generation";
 import { formatDateTime } from "@/shared/lib/format";
+import { ConfigSummary } from "@/shared/ui/ConfigSummary";
 import { KeyValueList } from "@/shared/ui/KeyValueList";
 import type { EnrichedGeneration } from "../../types/experiment-workspace";
 
@@ -66,13 +67,7 @@ export function GenerationInspector({
 
       <div>
         <p className="mono-label mb-2 text-research-ink-muted">Configuration</p>
-        <KeyValueList
-          rows={Object.entries(generation.parameters).map(([key, value]) => ({
-            label: key,
-            value: typeof value === "object" ? JSON.stringify(value) : String(value),
-          }))}
-          raw={generation.parameters}
-        />
+        <ConfigSummary data={generation.parameters} />
       </div>
 
       <div>
