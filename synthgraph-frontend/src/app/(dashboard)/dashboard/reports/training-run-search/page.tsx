@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { requireSession } from "@/features/auth/server/session";
 import { getExperiment } from "@/features/experiments/server/experiments-api";
 import { listProjects } from "@/features/projects/server/projects-api";
-import { ProjectFilterField } from "@/features/reports/components/ProjectFilterField";
 import { TrainingRunSearchForm } from "@/features/reports/components/TrainingRunSearchForm";
 import { TrainingRunSearchResults } from "@/features/reports/components/TrainingRunSearchResults";
 import { searchTrainingRuns } from "@/features/reports/server/reports-api";
@@ -61,12 +60,7 @@ export default async function TrainingRunSearchPage({
         </p>
       </div>
 
-      <div className="flex flex-col gap-3">
-        <TrainingRunSearchForm />
-        <div className="max-w-[280px]">
-          <ProjectFilterField projects={projects} />
-        </div>
-      </div>
+      <TrainingRunSearchForm projects={projects} />
 
       {result ? (
         <TrainingRunSearchResults result={result} projectIdByExperimentId={projectIdByExperimentId} />

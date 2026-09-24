@@ -1,12 +1,14 @@
 "use client";
 
+import { FloatingPortal } from "@floating-ui/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import type { SearchResult, SearchResultType } from "@/features/search/types/search";
 import { useRecentEntities, useSearch } from "@/features/search/hooks/useSearch";
 import { cn } from "@/lib/utils";
 import { formatDateTime } from "@/shared/lib/format";
+import { useFloatingDropdown } from "@/shared/ui/useFloatingDropdown";
 
 const MIN_SELECTION = 2;
 const MAX_SELECTION = 10;
@@ -43,7 +45,6 @@ export function EntitySearchPicker({
   label: string;
 }) {
   const router = useRouter();
-  const containerRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [selected, setSelected] = useState<Map<string, string>>(
@@ -54,15 +55,10 @@ export function EntitySearchPicker({
   const trimmedQuery = query.trim();
   const usingRecent = trimmedQuery.length < MIN_QUERY_LENGTH;
 
-  useEffect(() => {
-    const onClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
-  }, []);
+  const { refs, floatingStyles, getReferenceProps, getFloatingProps } = useFloatingDropdown({
+    isOpen,
+    onOpenChange: setIsOpen,
+  });
 
   const displayed = useMemo<SearchResult[]>(() => {
     if (usingRecent) {
@@ -133,75 +129,89 @@ export function EntitySearchPicker({
         </div>
       ) : null}
 
-      <div ref={containerRef} className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2">
         <label className="text-[13px] text-research-ink-muted" htmlFor={`${entityType}-search`}>
           Search {label} by name
         </label>
         <input
           id={`${entityType}-search`}
+          ref={refs.setReference}
           type="text"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          onFocus={() => setIsOpen(true)}
           placeholder="Start typing, or click to browse recent…"
           autoComplete="off"
           className="w-full rounded-md border border-research-border bg-research-bg px-3.5 py-2.5 text-[14.5px] text-research-ink placeholder:text-research-ink-muted focus:border-research-accent-subtle focus:outline-none"
+          {...getReferenceProps({ onFocus: () => setIsOpen(true) })}
         />
 
-        {/* Normal document flow, not an absolute overlay - an overlay here
-            would visually cover (and intercept clicks intended for) the
-            Compare button that sits right below this picker. */}
+        {/* Portaled via Floating UI, not a `position: absolute` child of
+            this form cell - an absolute menu here could only ever render
+            where this DOM node happens to sit, which is exactly what let
+            it visually cover (and intercept clicks meant for) the Compare
+            button directly below. A floating, viewport-positioned menu
+            can't collide with page layout the same way. */}
         {isOpen ? (
-          <div className="max-h-[360px] overflow-y-auto rounded-lg border border-research-border bg-research-panel p-1.5 shadow-lg">
-            {usingRecent && !trimmedQuery ? (
-              <p className="mono-label px-2.5 pb-1.5 pt-1 text-research-ink-muted">Recent</p>
-            ) : null}
+          <FloatingPortal>
+            <div
+              // refs.setFloating is Floating UI's documented callback ref
+              // setter, not a `.current` read - nothing to memoize here.
+              // eslint-disable-next-line react-hooks/refs
+              ref={refs.setFloating}
+              style={floatingStyles}
+              className="z-50 overflow-y-auto rounded-lg border border-research-border bg-research-panel p-1.5 shadow-lg"
+              {...getFloatingProps()}
+            >
+              {usingRecent && !trimmedQuery ? (
+                <p className="mono-label px-2.5 pb-1.5 pt-1 text-research-ink-muted">Recent</p>
+              ) : null}
 
-            {isLoading ? (
-              <p className="px-2.5 py-3 text-[13px] text-research-ink-muted">Searching…</p>
-            ) : grouped.length === 0 ? (
-              <p className="px-2.5 py-3 text-[13px] text-research-ink-muted">
-                {trimmedQuery
-                  ? `No ${label} match "${trimmedQuery}".`
-                  : `No ${label} yet — create one to see it here.`}
-              </p>
-            ) : (
-              <div className="flex flex-col gap-2.5">
-                {grouped.map((group, index) => (
-                  <div key={group.projectName ?? `group-${index}`} className="flex flex-col gap-0.5">
-                    <p className="mono-label px-2.5 pb-0.5 text-research-ink-muted">
-                      {group.projectName ?? "No project"}
-                    </p>
-                    {group.items.map((result) => {
-                      const checked = selected.has(result.id);
-                      return (
-                        <label
-                          key={result.id}
-                          className={cn(
-                            "flex cursor-pointer items-center gap-3 rounded-md px-2.5 py-2 transition-colors",
-                            checked ? "bg-research-accent-subtle/10" : "hover:bg-research-elevated",
-                          )}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggle(result.id, result.name)}
-                            className="accent-[var(--color-research-accent)]"
-                          />
-                          <span className="min-w-0 flex-1 truncate text-[13.5px] text-research-ink">
-                            {result.name}
-                          </span>
-                          <span className="shrink-0 font-mono text-[11px] text-research-ink-muted">
-                            {formatDateTime(result.createdAt)}
-                          </span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+              {isLoading ? (
+                <p className="px-2.5 py-3 text-[13px] text-research-ink-muted">Searching…</p>
+              ) : grouped.length === 0 ? (
+                <p className="px-2.5 py-3 text-[13px] text-research-ink-muted">
+                  {trimmedQuery
+                    ? `No ${label} match "${trimmedQuery}".`
+                    : `No ${label} yet — create one to see it here.`}
+                </p>
+              ) : (
+                <div className="flex flex-col gap-2.5">
+                  {grouped.map((group, index) => (
+                    <div key={group.projectName ?? `group-${index}`} className="flex flex-col gap-0.5">
+                      <p className="mono-label px-2.5 pb-0.5 text-research-ink-muted">
+                        {group.projectName ?? "No project"}
+                      </p>
+                      {group.items.map((result) => {
+                        const checked = selected.has(result.id);
+                        return (
+                          <label
+                            key={result.id}
+                            className={cn(
+                              "flex cursor-pointer items-center gap-3 rounded-md px-2.5 py-2 transition-colors",
+                              checked ? "bg-research-accent-subtle/10" : "hover:bg-research-elevated",
+                            )}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggle(result.id, result.name)}
+                              className="accent-[var(--color-research-accent)]"
+                            />
+                            <span className="min-w-0 flex-1 truncate text-[13.5px] text-research-ink">
+                              {result.name}
+                            </span>
+                            <span className="shrink-0 font-mono text-[11px] text-research-ink-muted">
+                              {formatDateTime(result.createdAt)}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </FloatingPortal>
         ) : null}
       </div>
 

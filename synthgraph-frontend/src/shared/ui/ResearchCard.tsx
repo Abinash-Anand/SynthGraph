@@ -1,4 +1,8 @@
+"use client";
+
+import { motion } from "motion/react";
 import type { ReactNode } from "react";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { cn } from "@/lib/utils";
 
 /**
@@ -16,8 +20,12 @@ export function ResearchCard({
   className?: string;
   interactive?: boolean;
 }) {
+  const reducedMotion = useReducedMotion();
+
   return (
-    <div
+    <motion.div
+      whileHover={interactive && !reducedMotion ? { y: -2 } : undefined}
+      transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
       className={cn(
         "relative overflow-hidden rounded-xl border border-research-border bg-research-panel",
         interactive &&
@@ -26,6 +34,6 @@ export function ResearchCard({
       )}
     >
       {children}
-    </div>
+    </motion.div>
   );
 }

@@ -1,9 +1,11 @@
 "use client";
 
+import { AnimatePresence, motion } from "motion/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 import type { Experiment } from "@/features/experiments/types/experiment";
 import type { ParameterCorrelationReport } from "@/features/reports/types/report";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { ResearchWorkspace } from "@/shared/layout/ResearchWorkspace";
 import { Tabs } from "@/shared/ui/Tabs";
 import type { EnrichedGeneration, EnrichedTrainingRun, SelectedEntity } from "../types/experiment-workspace";
@@ -47,6 +49,7 @@ export function ExperimentWorkspace({
   const searchParams = useSearchParams();
   const activeTab = searchParams.get("tab") ?? "overview";
   const selected = parseSelectedEntity(searchParams.get("entity"));
+  const reducedMotion = useReducedMotion();
 
   const [compareMode, setCompareMode] = useState(false);
   const [compareTarget, setCompareTarget] = useState<"generation" | "trainingRun">("generation");
@@ -207,15 +210,31 @@ export function ExperimentWorkspace({
       <Tabs tabs={TABS} />
       <ResearchWorkspace
         canvas={
-          <div key={activeTab} className="research-fade-in">
-            {canvas}
-          </div>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={activeTab}
+              initial={reducedMotion ? false : { opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reducedMotion ? undefined : { opacity: 0, y: -4 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            >
+              {canvas}
+            </motion.div>
+          </AnimatePresence>
         }
         inspector={
           inspector ? (
-            <div key={serializeSelectedEntity(selected) ?? "none"} className="research-fade-in">
-              {inspector}
-            </div>
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={serializeSelectedEntity(selected) ?? "none"}
+                initial={reducedMotion ? false : { opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reducedMotion ? undefined : { opacity: 0, y: -4 }}
+                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              >
+                {inspector}
+              </motion.div>
+            </AnimatePresence>
           ) : null
         }
         inspectorTitle={inspectorTitle}

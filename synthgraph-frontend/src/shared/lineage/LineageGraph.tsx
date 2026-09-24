@@ -13,8 +13,28 @@ import {
   type Node,
   type NodeProps,
 } from "@xyflow/react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { cn } from "@/lib/utils";
+import { cubicBezierEasing } from "./cubic-bezier-easing";
+
+// ReactFlow's fitViewOptions.ease wants a raw easing function, not a CSS
+// cubic-bezier string/array (that's what Motion's `ease` prop takes
+// instead) - built once so fitView doesn't recompute it on every render.
+const FIT_VIEW_EASE = cubicBezierEasing(0.16, 1, 0.3, 1);
+
+// The Controls buttons' background/color/border come from a CSS custom
+// property (`--xy-controls-button-*`, ReactFlow's own documented theming
+// hooks), not a class the panel's own `background` shorthand can be beaten
+// with via Tailwind's `!important` - a `!bg-transparent` class on the
+// button loses that fight since it's overriding a variable's fallback, not
+// a plain declaration. Set through `style` instead.
+const CONTROLS_BUTTON_VARS = {
+  "--xy-controls-button-background-color": "transparent",
+  "--xy-controls-button-background-color-hover": "rgba(255, 255, 255, 0.1)",
+  "--xy-controls-button-color": "#cbd5e1",
+  "--xy-controls-button-color-hover": "#f1f5f9",
+  "--xy-controls-button-border-color": "rgba(255, 255, 255, 0.1)",
+} as CSSProperties;
 
 export type LineageNodeKind = "dataset" | "asset" | "generation" | "training-run" | "evaluation";
 
@@ -403,12 +423,18 @@ export function LineageGraph({
           if (original) onNodeSelect(original.id, original.kind);
         }}
         fitView
+        fitViewOptions={{ duration: 800, ease: FIT_VIEW_EASE }}
+        defaultViewport={{ x: 0, y: 0, zoom: 1 }}
         nodesConnectable={false}
         elementsSelectable
         proOptions={{ hideAttribution: true }}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#1f1f23" />
-        <Controls showInteractive={false} />
+        <Controls
+          showInteractive={false}
+          className="!rounded-lg !border !border-white/10 !bg-slate-900/60 !shadow-lg backdrop-blur-md"
+          style={CONTROLS_BUTTON_VARS}
+        />
       </ReactFlow>
     </div>
   );
