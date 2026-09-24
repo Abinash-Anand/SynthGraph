@@ -143,10 +143,12 @@ export function TrainingRunInspector({
             {health.metrics.map((metric) => (
               <div
                 key={metric.metricKey}
-                className="flex items-center justify-between rounded-md border border-research-border bg-research-subtle/40 px-3 py-2"
+                className="flex items-center justify-between gap-3 rounded-md border border-research-border bg-research-subtle/40 px-3 py-2"
               >
-                <span className="font-mono text-[12.5px] text-research-ink">{metric.metricKey}</span>
-                <span className={cn("text-[12px]", TREND_TONE[metric.trend])}>
+                <span className="min-w-0 truncate font-mono text-[12.5px] text-research-ink">
+                  {metric.metricKey}
+                </span>
+                <span className={cn("shrink-0 whitespace-nowrap text-[12px]", TREND_TONE[metric.trend])}>
                   {TREND_LABEL[metric.trend]}
                 </span>
               </div>
