@@ -2,12 +2,17 @@ import type { Metadata } from "next";
 import { requireSession } from "@/features/auth/server/session";
 import { EfficiencyLeaderboardView } from "@/features/reports/components/EfficiencyLeaderboardView";
 import { getEfficiencyLeaderboard } from "@/features/reports/server/reports-api";
+import { resolveRunLinks } from "@/features/reports/server/resolve-run-links";
 
 export const metadata: Metadata = { title: "Efficiency Leaderboard" };
 
 export default async function EfficiencyLeaderboardPage() {
   const session = await requireSession();
   const leaderboard = await getEfficiencyLeaderboard(session.apiKey);
+  const linksByRunId = await resolveRunLinks(
+    session.apiKey,
+    leaderboard.runs.map((run) => run.trainingRunId),
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -19,7 +24,7 @@ export default async function EfficiencyLeaderboardPage() {
         </p>
       </div>
 
-      <EfficiencyLeaderboardView leaderboard={leaderboard} />
+      <EfficiencyLeaderboardView leaderboard={leaderboard} linksByRunId={linksByRunId} />
     </div>
   );
 }

@@ -187,6 +187,72 @@ function ResultPanel({ trainingRuns }: { trainingRuns: EnrichedTrainingRun[] }) 
   );
 }
 
+type AttentionEntry = { runId: string; runName: string; reasons: string[] };
+
+// Deliberately limited to objective, domain-agnostic signals - never "this
+// run underperformed" (this app has no way to know whether higher or lower
+// is better for an arbitrary metric, same reasoning as the Result panel's
+// mean/range instead of "best"). Failed status, an explicitly reported
+// capture problem, and detected drift are all true regardless of what the
+// experiment is measuring - this is what turns the cockpit from "here are
+// some counts" into "here's what to look at next."
+function computeAttentionEntries(trainingRuns: EnrichedTrainingRun[]): AttentionEntry[] {
+  const entries: AttentionEntry[] = [];
+  for (const { run, drift } of trainingRuns) {
+    const reasons: string[] = [];
+    if (run.status === "failed") reasons.push("run failed");
+    if (run.captureStatus?.status === "partial") reasons.push("capture incomplete");
+    if (run.captureStatus?.status === "unknown") reasons.push("capture status unknown");
+    if (drift.drift.length > 0) {
+      reasons.push(`drift in ${drift.drift.length} field${drift.drift.length === 1 ? "" : "s"}`);
+    }
+    if (reasons.length > 0) entries.push({ runId: run.id, runName: run.name, reasons });
+  }
+  return entries;
+}
+
+function AttentionPanel({
+  trainingRuns,
+  onSelectRun,
+}: {
+  trainingRuns: EnrichedTrainingRun[];
+  onSelectRun: (id: string) => void;
+}) {
+  const entries = computeAttentionEntries(trainingRuns);
+
+  return (
+    <div
+      className={cn(
+        "flex flex-col gap-3 rounded-xl border p-4",
+        entries.length > 0
+          ? "border-research-warning/30 bg-research-warning/[0.04]"
+          : "border-research-border bg-research-panel",
+      )}
+    >
+      <p className="mono-label text-research-ink-muted">Needs attention</p>
+      {entries.length === 0 ? (
+        <p className="text-[13px] text-research-success">
+          Nothing needs attention - no failed runs, capture problems, or detected drift.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          {entries.map((entry) => (
+            <button
+              key={entry.runId}
+              type="button"
+              onClick={() => onSelectRun(entry.runId)}
+              className="flex items-center justify-between gap-3 rounded-lg border border-research-warning/20 bg-research-panel px-4 py-3 text-left transition-colors hover:border-research-warning/50"
+            >
+              <span className="min-w-0 truncate text-[13.5px] text-research-ink">{entry.runName}</span>
+              <span className="shrink-0 text-[12px] text-research-warning">{entry.reasons.join(", ")}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function OverviewTab({
   generations,
   trainingRuns,
@@ -231,6 +297,8 @@ export function OverviewTab({
           Last activity <span className="text-research-ink">{formatDateTime(lastActivity)}</span>
         </p>
       ) : null}
+
+      <AttentionPanel trainingRuns={trainingRuns} onSelectRun={onSelectRun} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <RunStatusPanel trainingRuns={trainingRuns} />

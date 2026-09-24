@@ -34,7 +34,7 @@ const columns = columnHelper.columns([
   columnHelper.accessor((row) => row.run.name, {
     id: "name",
     header: "Name",
-    cell: (info) => <span className="text-research-ink">{info.getValue()}</span>,
+    cell: (info) => <span className="font-medium text-research-ink">{info.getValue()}</span>,
   }),
   columnHelper.accessor((row) => row.run.status, {
     id: "status",

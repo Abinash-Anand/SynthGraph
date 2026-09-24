@@ -127,7 +127,7 @@ function CorrelationTable({ correlation }: { correlation: ParameterCorrelation }
           <tbody>
             {correlation.groups.map((group) => (
               <tr key={group.value} className="border-b border-line last:border-b-0">
-                <td className="px-3 py-2 text-ink">{group.value}</td>
+                <td className="px-3 py-2 font-medium text-ink">{group.value}</td>
                 <td className="px-3 py-2 text-ink-muted">{group.runCount}</td>
                 {metricKeys.map((metricKey) => (
                   <td key={metricKey} className="px-3 py-2 text-ink">
