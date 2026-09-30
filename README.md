@@ -1,10 +1,28 @@
 # SynthGraph
 
-SynthGraph is a platform for tracking, understanding, and reproducing
-synthetic-data research experiments: a Python SDK that captures what a
-generation or training run actually did (parameters, seeds, environment,
-dataset lineage), a backend that stores and reports on that provenance, and
-a dashboard for exploring it.
+[![CI](https://github.com/Abinash-Anand/SynthGraph/actions/workflows/ci.yml/badge.svg)](https://github.com/Abinash-Anand/SynthGraph/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+**A data lineage system for synthetic training data.**
+
+SynthGraph connects the parts of a synthetic-data pipeline that most tooling never links together: which generator produced a dataset, with which seed and parameters, which training run consumed that dataset, and which evaluation scored the result. When a model misbehaves, you trace it back through that chain instead of guessing.
+
+## Why
+
+Weights & Biases and MLflow track training runs and metrics well. Neither has a concept of what happened *before* the dataset — the procedural generator, the domain-randomization bounds, the seed that produced the data a model trained on. For synthetic-data and simulation-to-real pipelines (robotics, 3D computer vision, procedural generation), that upstream step is often exactly where a sim-to-real failure originates, and it's the gap SynthGraph fills.
+
+## What it does
+
+- **Lineage graph** — generation → dataset version → training run → evaluation, as one connected, queryable graph instead of scattered logs.
+- **Generation comparison** — diff two generations' parameters side by side to see exactly what changed between a working run and a broken one.
+- **Reproduction manifest** — records the git commit, working-tree dirty state, and environment (OS, Python version, installed packages) a generation ran under.
+- **Reports** — capture-completeness, parameter/metric correlation, best-runs leaderboard, and drift detection across training runs.
+
+## What it deliberately doesn't do (yet)
+
+- **No engine integration.** The SDK doesn't hook into Blender, MuJoCo, Isaac Sim, or any other engine — it's a thin client. Your script calls `log_generation(generator=..., parameters={...})` with whatever it wants; SynthGraph never reaches into a running process.
+- **No fixed parameter schema.** `parameters` is a free-form JSON object today, not typed fields for things like camera distortion or physics variables.
+- **No data storage.** SynthGraph never touches dataset bytes, render frames, or model weights. It stores lightweight metadata, caller-supplied checksums, and URIs — where those URIs point (S3, R2, a local disk) is entirely up to you.
 
 ## Repository structure
 
