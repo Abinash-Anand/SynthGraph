@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "title": "SynthGraph",
+  "summary": "A data lineage system that links synthetic-data generators, datasets, training runs and evaluations into one traceable graph.",
+  "year": "2026",
+  "category": "Data lineage platform",
+  "role": "Builder & core maintainer",
+  "stack": [
+    "TypeScript",
+    "NestJS",
+    "PostgreSQL",
+    "Next.js",
+    "Python"
+  ],
+  "highlights": [
+    "230+ automated tests gated by CI/CD",
+    "Hashed-key authentication, strict domain boundaries and migration discipline",
+    "Python SDK and CLI for zero-friction metadata capture"
+  ],
+  "links": [
+    {
+      "kind": "repository",
+      "label": "Source on GitHub",
+      "href": "https://github.com/Abinash-Anand/SynthGraph"
+    },
+    {
+      "kind": "demo",
+      "label": "synthgraph.dev",
+      "href": "https://synthgraph.dev"
+    }
+  ],
+  "visual": {
+    "kind": "pipeline",
+    "labels": [
+      "GENERATION",
+      "TRAINING",
+      "EVALUATION"
+    ]
+  },
+  "narrative": {
+    "problem": "When a model trained on synthetic data misbehaves, the cause often lies upstream of the dataset, in the generator, its seed and its parameters, a step that run-tracking tools such as Weights & Biases and MLflow have no concept of.",
+    "constraints": "It stores only lightweight metadata, caller-supplied checksums and URIs, never dataset bytes, frames or model weights, and it stays engine-agnostic: the SDK is a thin client with free-form JSON parameters.",
+    "decision": "Model generation, dataset version, training run and evaluation as one connected, queryable lineage graph behind a NestJS and PostgreSQL API, with a Python SDK and CLI that capture metadata from any script.",
+    "result": "A traceable chain from generator to evaluation, with generation comparison, reproduction manifests and reports. The backend is covered by 230+ automated tests gated by CI/CD.",
+    "architecture": [
+      "Python SDK / CLI",
+      "NestJS API",
+      "PostgreSQL",
+      "Next.js dashboard"
+    ]
+  },
+  "implementation": {
+    "lines": [
+      "log_generation(generator=…, parameters={…})",
+      "api → persist generation · dataset · run · evaluation",
+      "graph → query lineage across the chain"
+    ],
+    "summary": "A thin Python SDK reports metadata to a NestJS API, and PostgreSQL stores the metadata that the dashboard and reports query."
+  }
+}
