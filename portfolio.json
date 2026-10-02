@@ -9,13 +9,17 @@
     "TypeScript",
     "NestJS",
     "PostgreSQL",
+    "TypeORM",
     "Next.js",
-    "Python"
+    "Python",
+    "Docker"
   ],
   "highlights": [
     "230+ automated tests gated by CI/CD",
     "Hashed-key authentication, strict domain boundaries and migration discipline",
-    "Python SDK and CLI for zero-friction metadata capture"
+    "Python SDK and CLI for zero-friction metadata capture",
+    "Lineage graph, generation comparison, reproduction manifests and reports across the generator, dataset, training run and evaluation chain",
+    "Designed during Hack-Nation Venture Labs and maintained as an independent open-source initiative"
   ],
   "links": [
     {
@@ -27,6 +31,11 @@
       "kind": "demo",
       "label": "synthgraph.dev",
       "href": "https://synthgraph.dev"
+    },
+    {
+      "kind": "documentation",
+      "label": "Architecture notes",
+      "href": "https://github.com/Abinash-Anand/SynthGraph/blob/main/docs/architecture.md"
     }
   ],
   "visual": {
@@ -40,7 +49,7 @@
   "narrative": {
     "problem": "When a model trained on synthetic data misbehaves, the cause often lies upstream of the dataset, in the generator, its seed and its parameters, a step that run-tracking tools such as Weights & Biases and MLflow have no concept of.",
     "constraints": "It stores only lightweight metadata, caller-supplied checksums and URIs, never dataset bytes, frames or model weights, and it stays engine-agnostic: the SDK is a thin client with free-form JSON parameters.",
-    "decision": "Model generation, dataset version, training run and evaluation as one connected, queryable lineage graph behind a NestJS and PostgreSQL API, with a Python SDK and CLI that capture metadata from any script.",
+    "decision": "Model generation, dataset version, training run and evaluation as one queryable lineage, stored relationally in PostgreSQL behind a NestJS API, with a Python SDK and CLI that capture metadata from any script.",
     "result": "A traceable chain from generator to evaluation, with generation comparison, reproduction manifests and reports. The backend is covered by 230+ automated tests gated by CI/CD.",
     "architecture": [
       "Python SDK / CLI",
@@ -56,5 +65,225 @@
       "graph → query lineage across the chain"
     ],
     "summary": "A thin Python SDK reports metadata to a NestJS API, and PostgreSQL stores the metadata that the dashboard and reports query."
+  },
+  "caseStudyContent": {
+    "projectSlug": "synthgraph",
+    "overview": {
+      "paragraphs": [
+        "SynthGraph is a data lineage system for synthetic training data. It connects the generator that produced a dataset, the seed and parameters it ran with, the training run that consumed the dataset and the evaluation that scored the result, so that a model that misbehaves can be traced back through that chain instead of guessed at."
+      ]
+    },
+    "context": {
+      "paragraphs": [
+        "SynthGraph was designed and built during the Hack-Nation Venture Labs incubator program and is now maintained as an independent open-source research and development initiative."
+      ]
+    },
+    "problem": {
+      "paragraphs": [
+        "Weights & Biases and MLflow track training runs and metrics well, but neither has a concept of what happened before the dataset: the procedural generator, the domain-randomization bounds and the seed behind the data a model trained on.",
+        "For synthetic-data and simulation-to-real pipelines, that upstream step is often exactly where a failure originates."
+      ]
+    },
+    "role": {
+      "paragraphs": [
+        "Builder and core maintainer. Owned the system design end to end: domain modeling, API contracts and engineering guardrails across the backend, the frontend and the Python tooling."
+      ]
+    },
+    "constraints": [
+      {
+        "title": "Metadata, not data",
+        "paragraphs": [
+          "SynthGraph never touches dataset bytes, render frames or model weights. It stores lightweight metadata, caller-supplied checksums and URIs, and where those URIs point is entirely up to the researcher."
+        ]
+      },
+      {
+        "title": "Engine-agnostic by design",
+        "paragraphs": [
+          "The SDK is a thin client: it does not hook into Blender, MuJoCo, Isaac Sim or any other engine, and generator parameters are a free-form JSON object rather than a fixed schema."
+        ]
+      }
+    ],
+    "architecture": {
+      "paragraphs": [
+        "The backend is a modular monolith: one NestJS application with explicit feature modules for projects, experiments, generations, datasets, assets, training runs, evaluation results, comparisons, reproduction, reports, search and documentation.",
+        "Requests flow from the SDK over HTTPS and JSON through a controller, an application service and a repository to PostgreSQL via TypeORM. Controllers handle HTTP concerns, application services hold use-case behavior and repositories isolate persistence."
+      ],
+      "visualIds": [
+        "system-overview"
+      ]
+    },
+    "technicalDecisions": [
+      {
+        "id": "modular-monolith",
+        "title": "A modular monolith instead of distributed services",
+        "decision": {
+          "paragraphs": [
+            "One NestJS application with clear module boundaries serves the whole API."
+          ]
+        },
+        "rationale": {
+          "paragraphs": [
+            "The current scale and product stage do not justify distributed services, so the design deliberately avoids microservices, event buses, Kubernetes, CQRS and event sourcing until a concrete workload requires them."
+          ]
+        },
+        "alternatives": [
+          {
+            "approach": "Separate services per domain area",
+            "tradeOff": "Distribution adds operational and consistency complexity that the current requirements do not repay."
+          }
+        ]
+      },
+      {
+        "id": "relational-lineage",
+        "title": "Lineage as relational data in PostgreSQL",
+        "decision": {
+          "paragraphs": [
+            "Lineage is represented with foreign keys and junction tables, and JSONB is used only where provenance is genuinely flexible."
+          ]
+        },
+        "rationale": {
+          "paragraphs": [
+            "The domain has strong relational lineage, ownership, versioning and integrity requirements. JSONB for generator parameters means a new parameter never needs a migration."
+          ]
+        },
+        "alternatives": [
+          {
+            "approach": "A graph database",
+            "tradeOff": "Not required while the relationship graph stays manageable with PostgreSQL foreign keys and junction tables."
+          }
+        ]
+      },
+      {
+        "id": "hashed-keys-and-ownership-chain",
+        "title": "Hashed API keys and ownership-chain authorization",
+        "decision": {
+          "paragraphs": [
+            "SDK requests authenticate with API keys that are stored only as hashes, and authorization follows the ownership chain from user to project to experiment to generation or training run."
+          ]
+        },
+        "rationale": {
+          "paragraphs": [
+            "An identifier alone never proves authorization: every query verifies that the resource belongs to the authenticated user's chain, and multi-tenant isolation is covered by automated tests."
+          ]
+        }
+      },
+      {
+        "id": "additive-api-changes",
+        "title": "An unversioned API kept additive",
+        "decision": {
+          "paragraphs": [
+            "The API stays unversioned as long as every change is additive: a new field or route is added beside the old one rather than replacing it."
+          ]
+        },
+        "rationale": {
+          "paragraphs": [
+            "The CLI, SDK and frontend all track the backend directly, so a version prefix buys nothing until a genuinely breaking change exists. If one becomes unavoidable, every route moves under a version prefix in the same change."
+          ]
+        }
+      }
+    ],
+    "implementation": {
+      "paragraphs": [
+        "The backend is NestJS and TypeScript on PostgreSQL, with TypeORM migrations and schema synchronization disabled. A Python SDK captures provenance from inside a research workflow and a CLI queries, compares and exports it afterwards.",
+        "A Next.js dashboard and product site sit on top of the same API, using route-based lazy loading with ECharts and @xyflow/react for charts and graphs. Docker Compose starts PostgreSQL, the backend and the frontend with one command; in production the backend runs on Render with PostgreSQL on Supabase."
+      ]
+    },
+    "results": {
+      "status": "documented",
+      "summary": {
+        "paragraphs": [
+          "The backend is covered by more than 230 automated unit and end-to-end tests, run in GitHub Actions together with linting and builds for the backend and the frontend on every pull request."
+        ]
+      }
+    },
+    "learnings": [
+      {
+        "title": "Architecture first",
+        "paragraphs": [
+          "Designing the system architecture, domain model and boundaries upfront kept the system coherent as it evolved."
+        ]
+      },
+      {
+        "title": "Engineering with agentic AI",
+        "paragraphs": [
+          "Building software effectively with agentic AI while keeping architecture, system design, domain modeling and engineering decisions intentional."
+        ]
+      },
+      {
+        "title": "Guardrails matter",
+        "paragraphs": [
+          "Clear API contracts and engineering constraints prevent design drift and enable rapid iteration."
+        ]
+      },
+      {
+        "title": "Design compounds",
+        "paragraphs": [
+          "Strong foundations and additive API rules enabled rapid iteration without continuously breaking existing functionality."
+        ]
+      }
+    ],
+    "visuals": [
+      {
+        "id": "system-overview",
+        "kind": "architecture-diagram",
+        "description": "How the Python SDK and CLI, the Next.js dashboard, the NestJS API and PostgreSQL connect.",
+        "nodes": [
+          {
+            "id": "sdk",
+            "label": "Python SDK / CLI",
+            "responsibility": "Captures and queries provenance from a researcher's own scripts"
+          },
+          {
+            "id": "dashboard",
+            "label": "Next.js dashboard",
+            "responsibility": "Browses lineage, comparisons and reports"
+          },
+          {
+            "id": "api",
+            "label": "NestJS API",
+            "responsibility": "Controllers, application services and repositories behind one modular monolith"
+          },
+          {
+            "id": "database",
+            "label": "PostgreSQL",
+            "responsibility": "Relational source of truth, with JSONB for flexible provenance"
+          }
+        ],
+        "connections": [
+          {
+            "from": "sdk",
+            "to": "api",
+            "label": "HTTPS / JSON"
+          },
+          {
+            "from": "dashboard",
+            "to": "api",
+            "label": "REST"
+          },
+          {
+            "from": "api",
+            "to": "database",
+            "label": "TypeORM"
+          }
+        ]
+      }
+    ],
+    "links": [
+      {
+        "kind": "repository",
+        "label": "Source on GitHub",
+        "href": "https://github.com/Abinash-Anand/SynthGraph"
+      },
+      {
+        "kind": "demo",
+        "label": "synthgraph.dev",
+        "href": "https://synthgraph.dev"
+      },
+      {
+        "kind": "documentation",
+        "label": "Architecture notes",
+        "href": "https://github.com/Abinash-Anand/SynthGraph/blob/main/docs/architecture.md"
+      }
+    ]
   }
 }
