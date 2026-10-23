@@ -31,6 +31,8 @@ export type ReproAssessment = {
   counts: { known: number; supplied: number; external: number; missing: number };
   /** Things that stop an exact rebuild regardless of the score. */
   blockers: string[];
+  /** Short labels for `blockers`, for places that can't fit a sentence (e.g. a chip). */
+  blockerTags: string[];
   notes: string[];
 };
 
@@ -57,6 +59,7 @@ export function assessReproducibility(
       score: null,
       counts: { known: 0, supplied: 0, external: 0, missing: 0 },
       blockers: [],
+      blockerTags: [],
       notes: ["The reproduction manifest couldn't be loaded, so nothing can be said about this generation."],
     };
   }
@@ -73,18 +76,22 @@ export function assessReproducibility(
   const score = total === 0 ? null : (counts.known + counts.supplied + counts.external * 0.5) / total;
 
   const blockers: string[] = [];
+  const blockerTags: string[] = [];
   const notes: string[] = [];
   const environment = reproducibility?.environment;
 
   const dirty = environment?.dirty === true;
   if (dirty) {
     blockers.push("The code had uncommitted changes when this ran, so it can't be rebuilt from the recorded commit.");
+    blockerTags.push("uncommitted code");
   }
   if (reproducibility?.seed === undefined || reproducibility.seed === null) {
     blockers.push("No random seed was recorded, so the same inputs won't necessarily give the same output.");
+    blockerTags.push("no seed");
   }
   if (!reproducibility?.code_version) {
     blockers.push("No code version (commit) was recorded, so there's no way to know which code produced this.");
+    blockerTags.push("no code version");
   }
   if (counts.external > 0) {
     notes.push(
@@ -108,7 +115,7 @@ export function assessReproducibility(
   if (dirty) grade = capAt(grade, "partial");
   else if (blockers.length > 0) grade = capAt(grade, "mostly");
 
-  return { grade, score, counts, blockers, notes };
+  return { grade, score, counts, blockers, blockerTags, notes };
 }
 
 export type ReproSummary = {

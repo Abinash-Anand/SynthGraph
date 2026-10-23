@@ -42,7 +42,10 @@ function GradeChip({ assessment }: { assessment: ReproAssessment }) {
   return (
     <span className={cn("shrink-0 rounded-full border px-2 py-0.5 font-mono text-[10.5px]", GRADE_TONE[assessment.grade])}>
       {GRADE_LABEL[assessment.grade]}
-      {assessment.score !== null ? ` · ${Math.round(assessment.score * 100)}%` : ""}
+      {assessment.score !== null ? ` · ${Math.round(assessment.score * 100)}% recorded` : ""}
+      {assessment.grade !== "reproducible" && assessment.blockerTags.length > 0
+        ? ` · ${assessment.blockerTags.join(", ")}`
+        : ""}
     </span>
   );
 }

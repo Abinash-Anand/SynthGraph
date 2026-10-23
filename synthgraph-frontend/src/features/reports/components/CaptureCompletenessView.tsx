@@ -151,8 +151,11 @@ export function CaptureCompletenessView({
                     </ul>
                   ) : (
                     <p className="mt-3 text-[13px] text-research-ink-muted">
-                      No specific integration problem was recorded - the run simply didn&apos;t finish reporting its
-                      capture status.
+                      {run.captureStatus?.status === "complete"
+                        ? "Every integration this run reported was attached and closed."
+                        : run.captureStatus?.status === "partial"
+                          ? "Marked partial, but no specific integration problem was recorded."
+                          : "This run never reported whether its capture finished."}
                     </p>
                   )}
                 </li>

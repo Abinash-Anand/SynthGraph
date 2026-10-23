@@ -87,3 +87,13 @@ describe("compareByRisk", () => {
     assert.deepEqual([good, weak, none].sort(compareByRisk).map((a) => a.grade), ["unknown", "partial", "reproducible"]);
   });
 });
+
+describe("blocker tags", () => {
+  it("gives a short tag per blocker, in the same order", () => {
+    const dirtyNoSeed = assessReproducibility(classification(10), { code_version: "abc", environment: { dirty: true } });
+    assert.deepEqual(dirtyNoSeed.blockerTags, ["uncommitted code", "no seed"]);
+    assert.equal(dirtyNoSeed.blockers.length, dirtyNoSeed.blockerTags.length);
+    assert.deepEqual(assessReproducibility(classification(10), clean).blockerTags, []);
+    assert.deepEqual(assessReproducibility(null, clean).blockerTags, []);
+  });
+});
