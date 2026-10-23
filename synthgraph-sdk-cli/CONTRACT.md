@@ -1153,3 +1153,71 @@ error). All affected command files
 updated to call the matching resolver. `mypy` and `ruff` clean; full suite
 green apart from the two pre-existing, unrelated Windows path-separator
 failures.
+
+
+### 2.40 Linking helpers and opt-in checksums - closing the gap that left lineage graphs empty
+
+**The finding.** A dashboard built on this SDK showed generations, training
+runs and evaluations with no connection between them. Reading the SDK against
+the backend showed why: every link is a separate call the researcher has to
+remember (`generation.dataset(...)`, then `training(datasets=[...])`), none of
+the framework integrations makes either call (they only turn a config object
+into a dict), and `generation.dataset(...)` writes the backend's
+generation-dataset link table - not the generation's `inputs`/`outputs` fields -
+so consumers have to know to read both.
+
+**What changed (SDK only; no backend change, no wire-format change):**
+
+* `GenerationHandle` remembers the `DatasetVersion`s recorded through it in
+  this process, with the role each was attached under (`datasets`,
+  `produced_datasets`).
+* `experiment.training(datasets=[generation])` / `dataset=generation` expands a
+  generation into the datasets it produced. A generation with none recorded is
+  a `SynthGraphValidationError` raised *before* the training run is created -
+  silently linking nothing is exactly how a lineage graph ends up with no
+  edges. The same version reachable two ways is attached once.
+* `TrainingHandle.use(*sources)` links an existing run to datasets, dataset
+  ids or generations, skipping anything already attached so it is idempotent.
+* `TrainingHandle.evaluation(dataset_version_id=...)` accepts the
+  `DatasetVersion` itself.
+* `datasets.create(..., compute_checksum=True)` / `generation.dataset(...,
+  compute_checksum=True)` hashes a **local** file or directory and fills in
+  `checksum` (and `size`, if not given). See `synthgraph/checksum.py`.
+
+**Decisions and why:**
+
+* **Hashing is opt-in, never default.** The SDK's rule (spec 6, 38) is that it
+  never reads the data behind a URI, so a hundred-gigabyte render costs one
+  small request. Hashing is the one operation that reads everything, so it
+  needs an explicit flag, and the cost is documented.
+* **A remote URI is an error, not a silent skip.** Hashing it would mean
+  downloading it. Someone who asked for a checksum and silently got none would
+  believe their data was verified when it was not.
+* **Hashing happens before any request.** A failure (remote URI, missing path,
+  unreadable file) must not leave an orphan `Dataset` behind, so it runs ahead
+  of the first POST.
+* **Two labelled algorithms.** A file is `sha256:<hex>` and matches
+  `sha256sum`, so anyone can check it with standard tools. A directory is
+  `sha256-tree:<hex>` - a hash over sorted relative paths and per-file hashes -
+  deliberately not labelled plain `sha256`, because no standard tool produces
+  it and presenting it as one would be a false claim of independent
+  verifiability. Both fit the backend's 255-character `checksum` limit.
+* **Generation handles only remember this process.** Datasets recorded in an
+  earlier script are not rediscovered; the caller passes the `DatasetVersion`s
+  or ids. Rediscovery would need a backend read the SDK does not currently make
+  on this path, and guessing from names would reintroduce the silent-wrong-link
+  problem this entry exists to remove.
+* **Still explicit, still SDK-side.** Nothing here makes the backend infer or
+  trigger anything. Every link is one the researcher stated; these helpers only
+  make stating it a one-liner.
+
+**Not done:** the framework integrations still only extract configuration. They
+could accept a generation and link it, but each framework exposes its dataset
+differently (or not at all), and doing that per framework is a larger change
+than this entry.
+
+**Verification.** `tests/test_checksum.py` (hash correctness against
+`hashlib`, order-independence, rename and content sensitivity, remote-URI and
+missing-path errors, no request sent on failure) and `tests/test_linking.py`
+(expansion, dedupe, idempotent `use()`, error before create). The idempotence
+tests were confirmed to fail when the skip-if-attached guard is removed.

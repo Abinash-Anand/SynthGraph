@@ -88,7 +88,10 @@ with SynthGraph() as sg:                      # api_key from the environment
         config={"epochs": 50, "batch_size": 32, "learning_rate": 0.001},
     )
 
-    training.evaluation(metrics={"mAP": 0.724, "precision": 0.78, "recall": 0.69})
+    training.evaluation(
+        metrics={"mAP": 0.724, "precision": 0.78, "recall": 0.69},
+        dataset_version_id=dataset,           # required: what it was evaluated on
+    )
 ```
 
 ### Generation lifecycle
@@ -113,6 +116,47 @@ generation.complete()
 ```
 
 Failed generations stay in the record. A failed experiment is still a result.
+
+### Linking data to results
+
+A lineage graph is only as connected as the links you record. The SDK never
+guesses them, so say which data a run was trained on:
+
+```python
+with experiment.generation(generator="blender", parameters={...}) as generation:
+    run_my_blender_pipeline()
+    generation.dataset(name="rain_v1", uri="/data/rain_v1", compute_checksum=True)
+
+# Any of these links the training run to what the generation produced:
+training = experiment.training(model="yolo", framework="pytorch", datasets=[generation])
+training.use(generation)                  # same thing, after the fact; never links twice
+
+training.evaluation(metrics={"mAP": 0.724}, dataset_version_id=generation.datasets[0])
+```
+
+A generation remembers the datasets recorded through it *in this process*. If you
+recorded them in an earlier script, pass the `DatasetVersion` objects (or their
+ids) instead; handing `use()` a generation that has none recorded is an error, not
+a silent no-op.
+
+Without these links the dashboard can still show your generations, runs and
+evaluations, but the connections between them are dashed guesses from timing,
+not provenance.
+
+### Checksums (opt-in)
+
+By default the SDK never reads your data, so a dataset version records *where*
+it is and *what you called it*, but cannot later prove the bytes are unchanged.
+Pass `compute_checksum=True` to hash a **local** file or directory when you record it:
+
+* a file gets `sha256:<hex>`, identical to `sha256sum`;
+* a directory gets `sha256-tree:<hex>`, a hash over every file's relative path and
+  content, independent of the order the filesystem lists files in. It is this SDK's
+  own scheme, so only the SDK can recompute it.
+
+The cost is proportional to the size of the data, and a remote URI (`s3://`,
+`gs://`, `https://`) is an error: the SDK will not download data to hash it. Hash it
+where it lives and pass `checksum="..."` yourself.
 
 ### Training runs: metrics and resource capture
 
