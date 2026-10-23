@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { TrainingRunMetric } from "@/features/training-runs/types/training-run-metric";
 import { cn } from "@/lib/utils";
+import { preferredSeriesKeys } from "./metric-series";
 
 // Deliberately has no dependency on EChart/MetricsLineChart - this file is
 // statically imported by tab/inspector components so the metric-key list and
@@ -23,19 +24,21 @@ export function extractMetricKeys(metrics: TrainingRunMetric[]): string[] {
 }
 
 /**
- * Tracks which metric keys are selected, defaulting to the first 3 - resets
- * whenever the available key set actually changes (e.g. switching to a
- * different run), via React's documented "adjust state during render when a
- * prop changes" pattern rather than an effect.
+ * Tracks which metric keys are selected, defaulting to the most meaningful 3
+ * (outcomes before machine telemetry - the first three in logging order used
+ * to be cpu_count, cpu_percent and memory_percent) - resets whenever the
+ * available key set actually changes (e.g. switching to a different run),
+ * via React's documented "adjust state during render when a prop changes"
+ * pattern rather than an effect.
  */
 export function useMetricKeySelection(allKeys: string[]): [Set<string>, (key: string) => void] {
   const signature = allKeys.join("\u0000");
   const [prevSignature, setPrevSignature] = useState(signature);
-  const [selected, setSelected] = useState<Set<string>>(() => new Set(allKeys.slice(0, 3)));
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(preferredSeriesKeys(allKeys)));
 
   if (signature !== prevSignature) {
     setPrevSignature(signature);
-    setSelected(new Set(allKeys.slice(0, 3)));
+    setSelected(new Set(preferredSeriesKeys(allKeys)));
   }
 
   const toggle = (key: string) => {

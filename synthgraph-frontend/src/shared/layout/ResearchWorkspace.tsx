@@ -19,15 +19,28 @@ export function ResearchWorkspace({
   canvas,
   inspector,
   inspectorTitle = "Inspector",
+  inspectorKey,
 }: {
   canvas: ReactNode;
   inspector: ReactNode | null;
   inspectorTitle?: string;
+  /** Identifies what the inspector is showing; when it changes the panel
+   * scrolls back to the top. The scroll container outlives its content, so
+   * without this a new selection opened part-way down the previous one's
+   * scroll position - header off-screen, landing mid-list. */
+  inspectorKey?: string;
 }) {
   const [mobileInspectorOpen, setMobileInspectorOpen] = useState(false);
   const reducedMotion = useReducedMotion();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const desktopScrollRef = useRef<HTMLDivElement>(null);
+  const mobileScrollRef = useRef<HTMLDivElement>(null);
   const duration = reducedMotion ? 0 : 0.25;
+
+  useEffect(() => {
+    desktopScrollRef.current?.scrollTo({ top: 0 });
+    mobileScrollRef.current?.scrollTo({ top: 0 });
+  }, [inspectorKey]);
 
   // Same pattern as MobileMenu.tsx: lock page scroll behind the overlay,
   // close on Escape, move focus into the panel per basic dialog practice.
@@ -57,7 +70,10 @@ export function ResearchWorkspace({
             aria-label={inspectorTitle}
             className="hidden w-[380px] shrink-0 xl:block"
           >
-            <div className="sticky top-8 max-h-[calc(100vh-4rem)] overflow-y-auto rounded-xl border border-research-border bg-research-panel">
+            <div
+              ref={desktopScrollRef}
+              className="sticky top-8 max-h-[calc(100vh-4rem)] overflow-y-auto rounded-xl border border-research-border bg-research-panel"
+            >
               {inspector}
             </div>
           </aside>
@@ -116,7 +132,9 @@ export function ResearchWorkspace({
                       <CloseIcon />
                     </button>
                   </div>
-                  <div className="flex-1 overflow-y-auto">{inspector}</div>
+                  <div ref={mobileScrollRef} className="flex-1 overflow-y-auto">
+                    {inspector}
+                  </div>
                 </motion.div>
               </motion.div>
             ) : null}
