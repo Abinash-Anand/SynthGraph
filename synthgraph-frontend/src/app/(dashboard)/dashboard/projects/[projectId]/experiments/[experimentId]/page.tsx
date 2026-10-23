@@ -40,38 +40,45 @@ export default async function ExperimentDetailPage({ params }: { params: Promise
   const { projectId, experimentId } = await params;
   const session = await requireSession();
 
-  const experiment = await getExperimentForProject(session.apiKey, projectId, experimentId).catch(
-    (error) => {
-      if (error instanceof NotFoundError) notFound();
-      throw error;
-    },
-  );
-
-  const [generations, trainingRuns, correlationReport] = await Promise.all([
-    listGenerations(session.apiKey, experimentId),
-    listTrainingRunsForExperiment(session.apiKey, experimentId),
-    getParameterCorrelationReport(session.apiKey, experimentId),
-  ]);
-
   // Everything the workspace needs is prefetched once here (experiment-
   // scoped, small N) rather than fetched on demand per inspector selection
   // - see EnrichedTrainingRun/EnrichedGeneration's own comment on why.
-  const enrichedTrainingRuns = await Promise.all(
-    trainingRuns.map(async (run) => ({
-      run,
-      metrics: await listTrainingRunMetrics(session.apiKey, run.id),
-      evaluations: await listEvaluationResults(session.apiKey, run.id),
-      health: await getTrainingRunHealth(session.apiKey, run.id),
-      drift: await getTrainingRunDrift(session.apiKey, run.id),
-    })),
-  );
-
-  const enrichedGenerations = await Promise.all(
-    generations.map(async (generation) => ({
-      generation,
-      manifest: await getReproductionManifest(session.apiKey, generation.id).catch(() => null),
-    })),
-  );
+  //
+  // Nothing below depends on anything else's result, so it all goes out at
+  // once: two network round trips in total instead of one per call. Any
+  // NotFoundError (experiment missing or not the user's) still becomes a 404.
+  let data;
+  try {
+    data = await Promise.all([
+      getExperimentForProject(session.apiKey, projectId, experimentId),
+      getParameterCorrelationReport(session.apiKey, experimentId),
+      listTrainingRunsForExperiment(session.apiKey, experimentId).then((trainingRuns) =>
+        Promise.all(
+          trainingRuns.map(async (run) => {
+            const [metrics, evaluations, health, drift] = await Promise.all([
+              listTrainingRunMetrics(session.apiKey, run.id),
+              listEvaluationResults(session.apiKey, run.id),
+              getTrainingRunHealth(session.apiKey, run.id),
+              getTrainingRunDrift(session.apiKey, run.id),
+            ]);
+            return { run, metrics, evaluations, health, drift };
+          }),
+        ),
+      ),
+      listGenerations(session.apiKey, experimentId).then((generations) =>
+        Promise.all(
+          generations.map(async (generation) => ({
+            generation,
+            manifest: await getReproductionManifest(session.apiKey, generation.id).catch(() => null),
+          })),
+        ),
+      ),
+    ]);
+  } catch (error) {
+    if (error instanceof NotFoundError) notFound();
+    throw error;
+  }
+  const [experiment, correlationReport, enrichedTrainingRuns, enrichedGenerations] = data;
 
   // Only worth touring once there is something to tour - an experiment with
   // no generations or runs yet has an empty canvas for every step to point at.
