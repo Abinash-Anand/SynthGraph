@@ -2,17 +2,33 @@
 
 import dynamic from "next/dynamic";
 import type { EChartsCoreOption } from "echarts/core";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { SelectField } from "@/components/ui/Field";
+import { classifyParameter } from "@/features/experiments/parameter-model";
+import { formatMetricValue } from "@/shared/lib/format";
+import { compareMetricKeys, metricDirection } from "@/shared/lib/metric-semantics";
 import type { ParameterCorrelation, ParameterCorrelationReport } from "../types/report";
 
 const EChart = dynamic(() => import("@/shared/charts/EChart").then((m) => m.EChart), {
   ssr: false,
-  loading: () => <div className="h-[220px] animate-pulse rounded-lg bg-surface-2" />,
+  loading: () => <div className="h-[200px] animate-pulse rounded-lg bg-surface-2" />,
 });
 
-const SERIES_COLORS = ["#37c9de", "#8b5cf6", "#46b97e", "#d9a441", "#5b8dfb", "#d9584c"];
+const BAR_COLOR = "#8b5cf6";
 
 export function ParameterCorrelationView({ report }: { report: ParameterCorrelationReport }) {
+  const metricKeys = useMemo(
+    () =>
+      Array.from(
+        new Set(report.correlations.flatMap((c) => c.groups.flatMap((g) => Object.keys(g.metrics)))),
+      ).sort(compareMetricKeys),
+    [report.correlations],
+  );
+  const [chosen, setChosen] = useState("");
+  const metricKey = metricKeys.includes(chosen)
+    ? chosen
+    : (metricKeys.find((key) => metricDirection(key) !== "neutral") ?? metricKeys[0] ?? "");
+
   if (report.correlations.length === 0) {
     return (
       <p className="text-[13.5px] text-ink-faint">
@@ -23,45 +39,57 @@ export function ParameterCorrelationView({ report }: { report: ParameterCorrelat
     );
   }
 
+  // A seed isn't a tuning knob: its "groups" are individual runs, so a bar
+  // per seed is just a bar per run. Kept available, but out of the way.
+  const knobs = report.correlations.filter((c) => classifyParameter(c.parameterKey) !== "seed");
+  const seeds = report.correlations.filter((c) => classifyParameter(c.parameterKey) === "seed");
+
   return (
     <div className="flex flex-col gap-6">
-      {report.correlations.map((correlation) => (
-        <CorrelationTable key={correlation.parameterKey} correlation={correlation} />
+      <div className="w-full max-w-[280px]">
+        <SelectField label="Show average of" value={metricKey} onChange={setChosen} options={metricKeys} />
+      </div>
+
+      {knobs.map((correlation) => (
+        <CorrelationCard key={correlation.parameterKey} correlation={correlation} metricKey={metricKey} />
       ))}
+
+      {seeds.length > 0 ? (
+        <details className="group rounded-lg border border-research-border">
+          <summary className="cursor-pointer list-none px-4 py-3 text-[13px] text-research-ink-secondary hover:text-research-ink">
+            <span className="mr-2 inline-block text-research-ink-muted transition-transform group-open:rotate-90">▸</span>
+            Seed breakdown
+            <span className="ml-2 text-research-ink-muted">run-to-run noise, not a tuning parameter</span>
+          </summary>
+          <div className="flex flex-col gap-6 border-t border-research-border p-4">
+            {seeds.map((correlation) => (
+              <CorrelationCard key={correlation.parameterKey} correlation={correlation} metricKey={metricKey} />
+            ))}
+          </div>
+        </details>
+      ) : null}
     </div>
   );
 }
 
-function CorrelationTable({ correlation }: { correlation: ParameterCorrelation }) {
-  const metricKeys = Array.from(
+function CorrelationCard({ correlation, metricKey }: { correlation: ParameterCorrelation; metricKey: string }) {
+  const allMetricKeys = Array.from(
     new Set(correlation.groups.flatMap((group) => Object.keys(group.metrics))),
-  ).sort();
+  ).sort(compareMetricKeys);
+  const singleRunGroups = correlation.groups.every((group) => group.runCount === 1);
 
-  const chartOption = useMemo<EChartsCoreOption>(() => {
-    // Metrics can live on wildly different scales (e.g. mAP 0-1 vs. reward
-    // in the hundreds) - sharing one axis squashes the smaller series to
-    // invisibility. Up to 2 metrics get their own axis (a standard
-    // dual-axis pattern); beyond that, per-metric axes get visually
-    // confusing, so it falls back to one shared axis.
-    const dualAxis = metricKeys.length <= 2;
-
-    return {
+  const chartOption = useMemo<EChartsCoreOption>(
+    () => ({
       backgroundColor: "transparent",
       textStyle: { fontFamily: "var(--font-sans)" },
-      grid: { left: 56, right: dualAxis && metricKeys.length === 2 ? 56 : 16, top: 32, bottom: 32 },
-      legend: {
-        top: 0,
-        textStyle: { color: "#a1a1aa", fontSize: 11 },
-        icon: "roundRect",
-        itemWidth: 10,
-        itemHeight: 10,
-      },
+      grid: { left: 64, right: 16, top: 16, bottom: 32 },
       tooltip: {
         trigger: "axis",
         axisPointer: { type: "shadow" },
         backgroundColor: "#18181b",
         borderColor: "#27272a",
         textStyle: { color: "#f4f4f5", fontSize: 12 },
+        valueFormatter: (value: number | null) => (value === null ? "—" : formatMetricValue(value)),
       },
       xAxis: {
         type: "category",
@@ -69,38 +97,37 @@ function CorrelationTable({ correlation }: { correlation: ParameterCorrelation }
         axisLine: { lineStyle: { color: "#27272a" } },
         axisLabel: { color: "#a1a1aa", fontSize: 11 },
       },
-      yAxis: dualAxis
-        ? metricKeys.map((metricKey, index) => ({
-            type: "value",
-            name: metricKey,
-            nameTextStyle: { color: SERIES_COLORS[index % SERIES_COLORS.length], fontSize: 10 },
-            position: index === 0 ? "left" : "right",
-            axisLine: { show: true, lineStyle: { color: SERIES_COLORS[index % SERIES_COLORS.length] } },
-            splitLine: { lineStyle: { color: "#1f1f23" } },
-            axisLabel: { color: "#71717a", fontSize: 11 },
-          }))
-        : {
-            type: "value",
-            axisLine: { show: false },
-            splitLine: { lineStyle: { color: "#1f1f23" } },
-            axisLabel: { color: "#71717a", fontSize: 11 },
-          },
-      series: metricKeys.map((metricKey, index) => ({
-        name: metricKey,
-        type: "bar",
-        yAxisIndex: dualAxis ? index : 0,
-        data: correlation.groups.map((g) => g.metrics[metricKey]?.avg ?? null),
-        itemStyle: { color: SERIES_COLORS[index % SERIES_COLORS.length] },
-      })),
-    };
-  }, [correlation, metricKeys]);
+      yAxis: {
+        type: "value",
+        scale: true,
+        axisLine: { show: false },
+        splitLine: { lineStyle: { color: "#1f1f23" } },
+        axisLabel: { color: "#71717a", fontSize: 11, formatter: (value: number) => formatMetricValue(value) },
+      },
+      series: [
+        {
+          name: metricKey,
+          type: "bar",
+          data: correlation.groups.map((g) => g.metrics[metricKey]?.avg ?? null),
+          itemStyle: { color: BAR_COLOR },
+        },
+      ],
+    }),
+    [correlation, metricKey],
+  );
 
   return (
     <div>
-      <p className="mb-2 font-mono text-[12px] text-ink">{correlation.parameterKey}</p>
-      {metricKeys.length > 0 ? (
+      <p className="mb-1 font-mono text-[12px] text-ink">{correlation.parameterKey}</p>
+      {singleRunGroups ? (
+        <p className="mb-2 text-[12px] text-research-ink-muted">
+          Each value was used by one run, so each bar is a single result, not an average, and a gap between bars can&apos;t
+          be told apart from run-to-run noise.
+        </p>
+      ) : null}
+      {metricKey ? (
         <div className="mb-4">
-          <EChart option={chartOption} height={220} />
+          <EChart option={chartOption} height={200} />
         </div>
       ) : null}
       <div className="overflow-x-auto rounded-lg border border-line">
@@ -113,13 +140,9 @@ function CorrelationTable({ correlation }: { correlation: ParameterCorrelation }
               <th scope="col" className="px-3 py-2 text-left font-mono text-[11px] text-ink-faint">
                 runs
               </th>
-              {metricKeys.map((metricKey) => (
-                <th
-                  key={metricKey}
-                  scope="col"
-                  className="px-3 py-2 text-left font-mono text-[11px] text-ink-faint"
-                >
-                  {metricKey} (avg)
+              {allMetricKeys.map((key) => (
+                <th key={key} scope="col" className="px-3 py-2 text-left font-mono text-[11px] text-ink-faint">
+                  {key} ({singleRunGroups ? "value" : "avg"})
                 </th>
               ))}
             </tr>
@@ -129,11 +152,25 @@ function CorrelationTable({ correlation }: { correlation: ParameterCorrelation }
               <tr key={group.value} className="border-b border-line last:border-b-0">
                 <td className="px-3 py-2 font-medium text-ink">{group.value}</td>
                 <td className="px-3 py-2 text-ink-muted">{group.runCount}</td>
-                {metricKeys.map((metricKey) => (
-                  <td key={metricKey} className="px-3 py-2 text-ink">
-                    {group.metrics[metricKey] ? group.metrics[metricKey].avg.toFixed(4) : "—"}
-                  </td>
-                ))}
+                {allMetricKeys.map((key) => {
+                  const stats = group.metrics[key];
+                  return (
+                    <td key={key} className="px-3 py-2 tabular-nums text-ink" title={stats ? String(stats.avg) : undefined}>
+                      {stats ? (
+                        <>
+                          {formatMetricValue(stats.avg)}
+                          {group.runCount > 1 ? (
+                            <span className="ml-1.5 text-[11px] text-ink-muted">
+                              {formatMetricValue(stats.min)}–{formatMetricValue(stats.max)}
+                            </span>
+                          ) : null}
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>

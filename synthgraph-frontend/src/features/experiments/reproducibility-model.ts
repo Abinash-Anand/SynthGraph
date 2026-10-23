@@ -1,0 +1,145 @@
+// How reproducible is a generation, from what was actually recorded?
+//
+// Deliberately modest. It reads the backend's own classification of the
+// generation's fields (known / supplied / external / missing) and the
+// recorded reproducibility block, and says what could and couldn't be
+// rebuilt. It does NOT verify anything - in particular it doesn't check that
+// data still exists or matches a checksum - so the wording is "recorded",
+// never "verified".
+
+export type ClassifiedFieldLike = { field: string; value?: string };
+
+export type ClassificationLike = {
+  known: ClassifiedFieldLike[];
+  supplied: ClassifiedFieldLike[];
+  external: ClassifiedFieldLike[];
+  missing: string[];
+};
+
+export type ReproducibilityLike = {
+  seed?: number;
+  code_version?: string;
+  environment?: Record<string, unknown>;
+};
+
+export type ReproGrade = "reproducible" | "mostly" | "partial" | "unknown";
+
+export type ReproAssessment = {
+  grade: ReproGrade;
+  /** 0..1 share of fields recorded, or null with no manifest. */
+  score: number | null;
+  counts: { known: number; supplied: number; external: number; missing: number };
+  /** Things that stop an exact rebuild regardless of the score. */
+  blockers: string[];
+  /** Short labels for `blockers`, for places that can't fit a sentence (e.g. a chip). */
+  blockerTags: string[];
+  notes: string[];
+};
+
+export const GRADE_LABEL: Record<ReproGrade, string> = {
+  reproducible: "Reproducible",
+  mostly: "Mostly reproducible",
+  partial: "Partly reproducible",
+  unknown: "Unknown",
+};
+
+const GRADE_ORDER: ReproGrade[] = ["unknown", "partial", "mostly", "reproducible"];
+
+function capAt(grade: ReproGrade, ceiling: ReproGrade): ReproGrade {
+  return GRADE_ORDER.indexOf(grade) > GRADE_ORDER.indexOf(ceiling) ? ceiling : grade;
+}
+
+export function assessReproducibility(
+  classification: ClassificationLike | null | undefined,
+  reproducibility: ReproducibilityLike | null | undefined,
+): ReproAssessment {
+  if (!classification) {
+    return {
+      grade: "unknown",
+      score: null,
+      counts: { known: 0, supplied: 0, external: 0, missing: 0 },
+      blockers: [],
+      blockerTags: [],
+      notes: ["The reproduction manifest couldn't be loaded, so nothing can be said about this generation."],
+    };
+  }
+
+  const counts = {
+    known: classification.known.length,
+    supplied: classification.supplied.length,
+    external: classification.external.length,
+    missing: classification.missing.length,
+  };
+  const total = counts.known + counts.supplied + counts.external + counts.missing;
+  // Known and supplied fields are recorded; an external one is recorded as a
+  // pointer to something SynthGraph doesn't hold, so it counts for half.
+  const score = total === 0 ? null : (counts.known + counts.supplied + counts.external * 0.5) / total;
+
+  const blockers: string[] = [];
+  const blockerTags: string[] = [];
+  const notes: string[] = [];
+  const environment = reproducibility?.environment;
+
+  const dirty = environment?.dirty === true;
+  if (dirty) {
+    blockers.push("The code had uncommitted changes when this ran, so it can't be rebuilt from the recorded commit.");
+    blockerTags.push("uncommitted code");
+  }
+  if (reproducibility?.seed === undefined || reproducibility.seed === null) {
+    blockers.push("No random seed was recorded, so the same inputs won't necessarily give the same output.");
+    blockerTags.push("no seed");
+  }
+  if (!reproducibility?.code_version) {
+    blockers.push("No code version (commit) was recorded, so there's no way to know which code produced this.");
+    blockerTags.push("no code version");
+  }
+  if (counts.external > 0) {
+    notes.push(
+      `${counts.external} input${counts.external === 1 ? " lives" : "s live"} outside SynthGraph and may have changed since: ${classification.external
+        .map((f) => f.field)
+        .join(", ")}.`,
+    );
+  }
+  if (counts.missing > 0) {
+    notes.push(`Not recorded: ${classification.missing.join(", ")}.`);
+  }
+
+  let grade: ReproGrade;
+  if (score === null) grade = "unknown";
+  else if (score >= 0.85) grade = "reproducible";
+  else if (score >= 0.6) grade = "mostly";
+  else grade = "partial";
+
+  // A high field count can't outweigh a blocker: a run on dirty code is not
+  // rebuildable no matter how many other fields were captured.
+  if (dirty) grade = capAt(grade, "partial");
+  else if (blockers.length > 0) grade = capAt(grade, "mostly");
+
+  return { grade, score, counts, blockers, blockerTags, notes };
+}
+
+export type ReproSummary = {
+  total: number;
+  byGrade: Record<ReproGrade, number>;
+  /** Mean of the scores that exist, or null when none do. */
+  averageScore: number | null;
+};
+
+export function summarizeReproducibility(assessments: ReproAssessment[]): ReproSummary {
+  const byGrade: Record<ReproGrade, number> = { reproducible: 0, mostly: 0, partial: 0, unknown: 0 };
+  const scores: number[] = [];
+  for (const assessment of assessments) {
+    byGrade[assessment.grade]++;
+    if (assessment.score !== null) scores.push(assessment.score);
+  }
+  return {
+    total: assessments.length,
+    byGrade,
+    averageScore: scores.length > 0 ? scores.reduce((sum, s) => sum + s, 0) / scores.length : null,
+  };
+}
+
+/** Worst first, so what needs fixing leads the list. */
+export function compareByRisk(a: ReproAssessment, b: ReproAssessment): number {
+  return GRADE_ORDER.indexOf(a.grade) - GRADE_ORDER.indexOf(b.grade) || (a.score ?? -1) - (b.score ?? -1);
+}

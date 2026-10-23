@@ -35,9 +35,22 @@ export function formatDurationSeconds(seconds: number): string {
   return `${(seconds / 3600).toFixed(1)}h`;
 }
 
-// Shared by the Overview cockpit's result panel and the inspector's final-
-// metrics summary - one definition of "how many decimals" for an arbitrary
-// numeric metric value.
+const METRIC_NUMBER = new Intl.NumberFormat(DATE_LOCALE, { maximumSignificantDigits: 4 });
+const METRIC_COUNT = new Intl.NumberFormat(DATE_LOCALE);
+
+// The one definition of "how do I show an arbitrary numeric metric value".
+// Significant figures rather than fixed decimals: a fixed 3 decimals turned
+// reward values of 0.0007 and 0.0021 into "0.001" and "0.002", i.e. threw
+// away exactly the digits that distinguish runs. Integers stay exact,
+// tiny/huge magnitudes go scientific, and non-finite values are visible
+// instead of rendering "NaN".
 export function formatMetricValue(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(3);
+  if (Number.isNaN(value)) return "NaN";
+  if (!Number.isFinite(value)) return value > 0 ? "∞" : "-∞";
+  if (Number.isInteger(value)) {
+    return Math.abs(value) >= 1e15 ? value.toExponential(3) : METRIC_COUNT.format(value);
+  }
+  const magnitude = Math.abs(value);
+  if (magnitude < 1e-4 || magnitude >= 1e9) return value.toExponential(3);
+  return METRIC_NUMBER.format(value);
 }

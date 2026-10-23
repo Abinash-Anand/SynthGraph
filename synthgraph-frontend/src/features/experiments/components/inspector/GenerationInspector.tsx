@@ -6,8 +6,14 @@ import { ConfigSummary } from "@/shared/ui/ConfigSummary";
 import { KeyValueList } from "@/shared/ui/KeyValueList";
 import type { EnrichedGeneration } from "../../types/experiment-workspace";
 
-function ReferenceList({ references }: { references: GenerationDataReference[] }) {
-  if (references.length === 0) return <p className="text-[13px] text-research-ink-muted">None</p>;
+function ReferenceList({
+  references,
+  emptyHint,
+}: {
+  references: GenerationDataReference[];
+  emptyHint: string;
+}) {
+  if (references.length === 0) return <p className="text-[13px] text-research-ink-muted">{emptyHint}</p>;
   return (
     <ul className="flex flex-col gap-1.5">
       {references.map((reference) => (
@@ -72,12 +78,18 @@ export function GenerationInspector({
 
       <div>
         <p className="mono-label mb-2 text-research-ink-muted">Inputs ({generation.inputs.length})</p>
-        <ReferenceList references={generation.inputs} />
+        <ReferenceList
+          references={generation.inputs}
+          emptyHint="None recorded - this generation doesn't say what data it started from."
+        />
       </div>
 
       <div>
         <p className="mono-label mb-2 text-research-ink-muted">Outputs ({generation.outputs.length})</p>
-        <ReferenceList references={generation.outputs} />
+        <ReferenceList
+          references={generation.outputs}
+          emptyHint="None recorded, so no training run can be traced back to this generation. Register the dataset it produced to connect them."
+        />
       </div>
 
       <Link

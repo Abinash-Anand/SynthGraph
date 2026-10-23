@@ -5,6 +5,7 @@ import { TRAINING_RUN_STATUS_TONE, TrainingRunStatusBadge } from "@/features/tra
 import type { TrainingRunStatus } from "@/features/training-runs/types/training-run";
 import { cn } from "@/lib/utils";
 import { formatDateTime, formatDurationSeconds, formatMetricValue } from "@/shared/lib/format";
+import { compareMetricKeys, isOutcomeMetric } from "@/shared/lib/metric-semantics";
 import type { EnrichedGeneration, EnrichedTrainingRun } from "../../types/experiment-workspace";
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
@@ -123,19 +124,24 @@ function computeResultMetrics(trainingRuns: EnrichedTrainingRun[]): MetricSummar
   for (const { evaluations } of trainingRuns) {
     for (const evaluation of evaluations) {
       for (const [key, value] of Object.entries(evaluation.metrics)) {
-        if (typeof value !== "number") continue;
+        // How long the run took and how loaded the machine was aren't
+        // results - elapsed_seconds used to sit here beside episode_reward.
+        // Training time has its own row below.
+        if (typeof value !== "number" || !isOutcomeMetric(key)) continue;
         const list = byKey.get(key) ?? [];
         list.push(value);
         byKey.set(key, list);
       }
     }
   }
-  return Array.from(byKey.entries()).map(([key, values]) => ({
-    key,
-    mean: values.reduce((sum, v) => sum + v, 0) / values.length,
-    min: Math.min(...values),
-    max: Math.max(...values),
-  }));
+  return Array.from(byKey.entries())
+    .map(([key, values]) => ({
+      key,
+      mean: values.reduce((sum, v) => sum + v, 0) / values.length,
+      min: Math.min(...values),
+      max: Math.max(...values),
+    }))
+    .sort((a, b) => compareMetricKeys(a.key, b.key));
 }
 
 function computeTotalTrainingSeconds(trainingRuns: EnrichedTrainingRun[]): number {

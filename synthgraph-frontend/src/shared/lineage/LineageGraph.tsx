@@ -7,6 +7,8 @@ import {
   Controls,
   Handle,
   MarkerType,
+  MiniMap,
+  Panel,
   Position,
   ReactFlow,
   type Edge,
@@ -47,9 +49,17 @@ export type LineageGraphNode = {
    * (Generation -> Dataset -> Training Run -> Evaluation), never inferred
    * by the frontend from names/timestamps/ordering. */
   layer: number;
+  /** Something worth a glance (failed, or capture incomplete) - shown as a dot. */
+  tone?: "bad" | "warn";
 };
 
-export type LineageGraphEdge = { id: string; source: string; target: string };
+export type LineageGraphEdge = {
+  id: string;
+  source: string;
+  target: string;
+  /** Guessed, not recorded - drawn dashed so it can't pass for provenance. */
+  inferred?: boolean;
+};
 
 const NODE_COLOR_VAR: Record<LineageNodeKind, string> = {
   generation: "--color-node-generation",
@@ -130,20 +140,23 @@ function applyCollapse(
       kind,
       label: `${members.length} ${KIND_LABEL[kind]}s`,
       layer,
+      // A collapsed group still has to say if something inside it needs a look.
+      tone: members.some((m) => m.tone === "bad") ? "bad" : members.some((m) => m.tone === "warn") ? "warn" : undefined,
     });
   }
 
-  const seenEdges = new Set<string>();
-  const outEdges: LineageGraphEdge[] = [];
+  // Merged edges stay "inferred" only if every edge folded into them was.
+  const merged = new Map<string, LineageGraphEdge>();
   for (const edge of edges) {
     const source = idRemap.get(edge.source) ?? edge.source;
     const target = idRemap.get(edge.target) ?? edge.target;
     if (source === target) continue;
     const key = `${source}->${target}`;
-    if (seenEdges.has(key)) continue;
-    seenEdges.add(key);
-    outEdges.push({ id: key, source, target });
+    const existing = merged.get(key);
+    if (!existing) merged.set(key, { id: key, source, target, inferred: edge.inferred });
+    else if (!edge.inferred) existing.inferred = undefined;
   }
+  const outEdges = Array.from(merged.values());
 
   return {
     nodes: outNodes,
@@ -167,6 +180,7 @@ function layoutNodes(
   edges: LineageGraphEdge[],
   selectedId: string | null,
   connectedIds: Set<string>,
+  matchIds: Set<string> | null,
 ): Node[] {
   const byLayer = new Map<number, LineageGraphNode[]>();
   for (const node of nodes) {
@@ -209,7 +223,8 @@ function layoutNodes(
   const result: Node[] = [];
   for (const layer of sortedLayers) {
     orderedByLayer.get(layer)!.forEach((node, index) => {
-      const muted = selectedId !== null && !connectedIds.has(node.id);
+      // An active search takes over from selection: dim whatever it doesn't match.
+      const muted = matchIds ? !matchIds.has(node.id) : selectedId !== null && !connectedIds.has(node.id);
       result.push({
         id: node.id,
         type: "lineageNode",
@@ -218,6 +233,7 @@ function layoutNodes(
           label: node.label,
           sublabel: node.sublabel,
           kind: node.kind,
+          tone: node.tone,
           muted,
           selected: node.id === selectedId,
           isGroup: node.id.startsWith("group:"),
@@ -236,6 +252,7 @@ function LineageNodeRenderer({ data }: NodeProps) {
   const muted = data.muted as boolean;
   const selected = data.selected as boolean;
   const isGroup = data.isGroup as boolean;
+  const tone = data.tone as "bad" | "warn" | undefined;
   const colorVar = NODE_COLOR_VAR[kind];
 
   return (
@@ -259,9 +276,11 @@ function LineageNodeRenderer({ data }: NodeProps) {
         }
       }}
       className={cn(
-        "cursor-pointer rounded-lg border bg-research-surface px-3 py-2.5 transition-opacity duration-200",
+        "relative cursor-pointer rounded-lg border bg-research-surface px-3 py-2.5 transition-opacity duration-200",
         isGroup && "border-dashed",
-        muted ? "opacity-30" : "opacity-100",
+        // 30% made the surrounding graph unreadable; this keeps it legible
+        // but clearly secondary.
+        muted ? "opacity-50" : "opacity-100",
       )}
       style={{
         width: NODE_WIDTH,
@@ -272,6 +291,17 @@ function LineageNodeRenderer({ data }: NodeProps) {
       }}
     >
       <Handle type="target" position={Position.Left} style={{ background: `var(${colorVar})`, border: "none" }} />
+      {tone ? (
+        <span
+          role="img"
+          aria-label={tone === "bad" ? "needs attention: failed" : "needs a look: capture incomplete"}
+          title={tone === "bad" ? "Failed" : "Capture incomplete"}
+          className={cn(
+            "absolute right-2 top-2 size-2 rounded-full",
+            tone === "bad" ? "bg-research-error" : "bg-research-warning",
+          )}
+        />
+      ) : null}
       {isGroup ? (
         <p className="truncate text-[13px] text-research-ink">
           <span aria-hidden>+ </span>
@@ -292,37 +322,69 @@ function LineageNodeRenderer({ data }: NodeProps) {
 
 const nodeTypes = { lineageNode: LineageNodeRenderer };
 
+type Reach = { all: Set<string>; upstream: Set<string>; downstream: Set<string>; viaInferred: boolean };
+
 /** Selecting a node highlights every node/edge on a path through it (both
  * directions) and mutes the rest - the "linked visualization" model from
- * docs/frontendarchitecture.md. */
-function connectedNodeIds(
-  selectedId: string | null,
-  edges: LineageGraphEdge[],
-): Set<string> {
-  if (!selectedId) return new Set();
-  const forward = new Map<string, string[]>();
-  const backward = new Map<string, string[]>();
+ * docs/frontendarchitecture.md. Upstream and downstream are kept apart so
+ * the blast-radius panel can say what depends on the node and what it
+ * depends on. */
+function reachFrom(selectedId: string | null, edges: LineageGraphEdge[]): Reach {
+  const empty: Reach = { all: new Set(), upstream: new Set(), downstream: new Set(), viaInferred: false };
+  if (!selectedId) return empty;
+
+  const forward = new Map<string, LineageGraphEdge[]>();
+  const backward = new Map<string, LineageGraphEdge[]>();
   for (const edge of edges) {
-    forward.set(edge.source, [...(forward.get(edge.source) ?? []), edge.target]);
-    backward.set(edge.target, [...(backward.get(edge.target) ?? []), edge.source]);
+    forward.set(edge.source, [...(forward.get(edge.source) ?? []), edge]);
+    backward.set(edge.target, [...(backward.get(edge.target) ?? []), edge]);
   }
 
-  const visited = new Set<string>([selectedId]);
-  const walk = (start: string, graph: Map<string, string[]>) => {
-    const queue = [start];
+  let viaInferred = false;
+  const walk = (graph: Map<string, LineageGraphEdge[]>, pick: (edge: LineageGraphEdge) => string) => {
+    const seen = new Set<string>([selectedId]);
+    const queue = [selectedId];
     while (queue.length > 0) {
       const current = queue.shift()!;
-      for (const next of graph.get(current) ?? []) {
-        if (!visited.has(next)) {
-          visited.add(next);
-          queue.push(next);
-        }
+      for (const edge of graph.get(current) ?? []) {
+        const next = pick(edge);
+        if (seen.has(next)) continue;
+        seen.add(next);
+        if (edge.inferred) viaInferred = true;
+        queue.push(next);
       }
     }
+    seen.delete(selectedId);
+    return seen;
   };
-  walk(selectedId, forward);
-  walk(selectedId, backward);
-  return visited;
+
+  const downstream = walk(forward, (edge) => edge.target);
+  const upstream = walk(backward, (edge) => edge.source);
+  return { all: new Set([selectedId, ...downstream, ...upstream]), upstream, downstream, viaInferred };
+}
+
+const KIND_PLURAL: Record<LineageNodeKind, [string, string]> = {
+  dataset: ["dataset", "datasets"],
+  asset: ["asset", "assets"],
+  generation: ["generation", "generations"],
+  "training-run": ["training run", "training runs"],
+  evaluation: ["evaluation", "evaluations"],
+};
+
+function describeCounts(ids: Set<string>, nodesById: Map<string, LineageGraphNode>): string {
+  const counts = new Map<LineageNodeKind, number>();
+  for (const id of ids) {
+    const node = nodesById.get(id);
+    if (node && !id.startsWith("group:")) counts.set(node.kind, (counts.get(node.kind) ?? 0) + 1);
+  }
+  if (counts.size === 0) return "nothing";
+  return (["generation", "dataset", "asset", "training-run", "evaluation"] as LineageNodeKind[])
+    .filter((kind) => counts.has(kind))
+    .map((kind) => {
+      const count = counts.get(kind)!;
+      return `${count} ${KIND_PLURAL[kind][count === 1 ? 0 : 1]}`;
+    })
+    .join(" · ");
 }
 
 function defaultCollapsedGroups(nodes: LineageGraphNode[]): Set<string> {
@@ -346,6 +408,8 @@ export function LineageGraph({
   onNodeSelect: (id: string, kind: LineageNodeKind) => void;
 }) {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => defaultCollapsedGroups(nodes));
+  const [query, setQuery] = useState("");
+  const [showImpact, setShowImpact] = useState(false);
 
   const collapsed = useMemo(
     () => applyCollapse(nodes, edges, collapsedGroups, selectedId),
@@ -356,13 +420,35 @@ export function LineageGraph({
   const effectiveSelectedId = collapsed.selectedId;
 
   const connectedIds = useMemo(
-    () => connectedNodeIds(effectiveSelectedId, graphEdges),
+    () => reachFrom(effectiveSelectedId, graphEdges).all,
     [effectiveSelectedId, graphEdges],
   );
 
+  // Counts for the blast-radius panel come from the full graph, not the
+  // collapsed one: a collapsed group node stands in for many real nodes.
+  const nodesById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
+  const fullReach = useMemo(() => reachFrom(selectedId, edges), [selectedId, edges]);
+
+  const trimmedQuery = query.trim().toLowerCase();
+  const matchIds = useMemo(() => {
+    if (!trimmedQuery) return null;
+    const haystack = (node: LineageGraphNode) => `${node.label} ${node.sublabel ?? ""}`.toLowerCase();
+    const ids = new Set<string>();
+    for (const node of graphNodes) {
+      if (node.id.startsWith("group:")) {
+        // A group matches when any member inside it does.
+        const members = nodes.filter((n) => collapsed.idRemap.get(n.id) === node.id);
+        if (members.some((member) => haystack(member).includes(trimmedQuery))) ids.add(node.id);
+      } else if (haystack(node).includes(trimmedQuery)) {
+        ids.add(node.id);
+      }
+    }
+    return ids;
+  }, [trimmedQuery, graphNodes, nodes, collapsed.idRemap]);
+
   const flowNodes = useMemo(
-    () => layoutNodes(graphNodes, graphEdges, effectiveSelectedId, connectedIds),
-    [graphNodes, graphEdges, effectiveSelectedId, connectedIds],
+    () => layoutNodes(graphNodes, graphEdges, effectiveSelectedId, connectedIds, matchIds),
+    [graphNodes, graphEdges, effectiveSelectedId, connectedIds, matchIds],
   );
 
   const flowEdges = useMemo<Edge[]>(
@@ -377,7 +463,13 @@ export function LineageGraph({
           source: edge.source,
           target: edge.target,
           type: "smoothstep",
-          style: { stroke: color, strokeWidth: highlighted ? 2 : 1.5, opacity: muted ? 0.2 : 1 },
+          style: {
+            stroke: color,
+            strokeWidth: highlighted ? 2 : 1.5,
+            opacity: muted ? 0.25 : edge.inferred ? 0.75 : 1,
+            // Dashed = guessed, solid = recorded.
+            strokeDasharray: edge.inferred ? "5 4" : undefined,
+          },
           markerEnd: { type: MarkerType.ArrowClosed, color, width: 16, height: 16 },
           animated: false,
         };
@@ -393,49 +485,168 @@ export function LineageGraph({
     const perLayerCount = new Map<number, number>();
     for (const node of graphNodes) perLayerCount.set(node.layer, (perLayerCount.get(node.layer) ?? 0) + 1);
     const maxInLayer = Math.max(1, ...Array.from(perLayerCount.values()));
-    return Math.min(720, Math.max(320, maxInLayer * ROW_HEIGHT + 80));
+    return Math.min(720, Math.max(360, maxInLayer * ROW_HEIGHT + 80));
   }, [graphNodes]);
 
   if (nodes.length === 0) {
     return <p className="text-[13.5px] text-research-ink-muted">Nothing to show lineage for yet.</p>;
   }
 
+  const hasInferred = edges.some((edge) => edge.inferred);
+  const selectedNode = selectedId ? nodesById.get(selectedId) : undefined;
+  const downstreamNodes = Array.from(fullReach.downstream)
+    .map((id) => nodesById.get(id))
+    .filter(
+      (node): node is LineageGraphNode =>
+        node !== undefined && (node.kind === "training-run" || node.kind === "evaluation"),
+    );
+
+  function selectFirstMatch() {
+    const first = nodes.find((node) => `${node.label} ${node.sublabel ?? ""}`.toLowerCase().includes(trimmedQuery));
+    if (first) onNodeSelect(first.id, first.kind);
+  }
+
   return (
-    <div
-      className="overflow-hidden rounded-xl border border-research-border bg-research-bg"
-      style={{ height: canvasHeight }}
-    >
-      <ReactFlow
-        nodes={flowNodes}
-        edges={flowEdges}
-        nodeTypes={nodeTypes}
-        onNodeClick={(_, node) => {
-          if (node.id.startsWith("group:")) {
-            const key = node.id.slice("group:".length);
-            setCollapsedGroups((prev) => {
-              const next = new Set(prev);
-              next.delete(key);
-              return next;
-            });
-            return;
-          }
-          const original = nodes.find((n) => n.id === node.id);
-          if (original) onNodeSelect(original.id, original.kind);
-        }}
-        fitView
-        fitViewOptions={{ duration: 800, ease: FIT_VIEW_EASE }}
-        defaultViewport={{ x: 0, y: 0, zoom: 1 }}
-        nodesConnectable={false}
-        elementsSelectable
-        proOptions={{ hideAttribution: true }}
+    <div className="flex flex-col gap-2">
+      <div
+        className="overflow-hidden rounded-xl border border-research-border bg-research-bg"
+        style={{ height: canvasHeight }}
       >
-        <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#1f1f23" />
-        <Controls
-          showInteractive={false}
-          className="!rounded-lg !border !border-white/10 !bg-slate-900/60 !shadow-lg backdrop-blur-md"
-          style={CONTROLS_BUTTON_VARS}
-        />
-      </ReactFlow>
+        <ReactFlow
+          nodes={flowNodes}
+          edges={flowEdges}
+          nodeTypes={nodeTypes}
+          onNodeClick={(_, node) => {
+            if (node.id.startsWith("group:")) {
+              const key = node.id.slice("group:".length);
+              setCollapsedGroups((prev) => {
+                const next = new Set(prev);
+                next.delete(key);
+                return next;
+              });
+              return;
+            }
+            const original = nodes.find((n) => n.id === node.id);
+            if (original) onNodeSelect(original.id, original.kind);
+          }}
+          fitView
+          fitViewOptions={{ duration: 800, ease: FIT_VIEW_EASE }}
+          defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+          nodesConnectable={false}
+          elementsSelectable
+          proOptions={{ hideAttribution: true }}
+        >
+          <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#1f1f23" />
+          <Controls
+            showInteractive={false}
+            className="!rounded-lg !border !border-white/10 !bg-slate-900/60 !shadow-lg backdrop-blur-md"
+            style={CONTROLS_BUTTON_VARS}
+          />
+          {nodes.length > 12 ? (
+            <MiniMap
+              pannable
+              zoomable
+              nodeColor={(node) => `var(${NODE_COLOR_VAR[(node.data as { kind: LineageNodeKind }).kind]})`}
+              maskColor="rgba(9, 9, 11, 0.7)"
+              style={{ background: "#111113", border: "1px solid #27272a", borderRadius: 8 }}
+            />
+          ) : null}
+
+          <Panel position="top-left" className="!m-3">
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") selectFirstMatch();
+                if (event.key === "Escape") setQuery("");
+              }}
+              placeholder="Find a node…"
+              aria-label="Find a node in the lineage graph"
+              className="w-[190px] rounded-md border border-research-border bg-research-panel/90 px-2.5 py-1.5 text-[12px] text-research-ink backdrop-blur placeholder:text-research-ink-muted focus:border-research-accent-subtle focus:outline-none"
+            />
+          </Panel>
+
+          {selectedNode ? (
+            <Panel position="top-right" className="!m-3 max-w-[300px]">
+              <div className="rounded-lg border border-research-border bg-research-panel/95 p-3 text-[12px] shadow-lg backdrop-blur">
+                <p className="mono-label text-research-ink-muted">If this changes</p>
+                <p className="mt-1 truncate text-research-ink" title={selectedNode.label}>
+                  {selectedNode.label}
+                </p>
+                <dl className="mt-2 flex flex-col gap-1.5">
+                  <div>
+                    <dt className="text-research-ink-muted">Affects</dt>
+                    <dd className="text-research-ink-secondary">{describeCounts(fullReach.downstream, nodesById)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-research-ink-muted">Depends on</dt>
+                    <dd className="text-research-ink-secondary">{describeCounts(fullReach.upstream, nodesById)}</dd>
+                  </div>
+                </dl>
+                {fullReach.viaInferred ? (
+                  <p className="mt-2 text-research-ink-muted">
+                    Includes inferred links (dashed), not recorded provenance.
+                  </p>
+                ) : null}
+                {downstreamNodes.length > 0 ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setShowImpact((value) => !value)}
+                      className="mt-2 font-mono text-[11px] text-research-accent-hover underline underline-offset-2 hover:text-research-accent"
+                    >
+                      {showImpact ? "Hide affected results" : "List affected results"}
+                    </button>
+                    {showImpact ? (
+                      <ul className="mt-2 flex max-h-[180px] flex-col gap-1 overflow-y-auto">
+                        {downstreamNodes.map((node) => (
+                          <li key={node.id}>
+                            <button
+                              type="button"
+                              onClick={() => onNodeSelect(node.id, node.kind)}
+                              className="w-full truncate rounded px-1.5 py-1 text-left text-research-ink-secondary hover:bg-research-subtle hover:text-research-ink"
+                              title={node.label}
+                            >
+                              <span className="mr-1.5 font-mono text-[10px] text-research-ink-muted">
+                                {node.kind === "training-run" ? "RUN" : "EVAL"}
+                              </span>
+                              {node.label}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
+            </Panel>
+          ) : null}
+        </ReactFlow>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[11.5px] text-research-ink-muted">
+        <span className="inline-flex items-center gap-1.5">
+          <svg width="22" height="6" aria-hidden>
+            <line x1="0" y1="3" x2="22" y2="3" stroke="#a1a1aa" strokeWidth="1.5" />
+          </svg>
+          recorded
+        </span>
+        {hasInferred ? (
+          <span className="inline-flex items-center gap-1.5">
+            <svg width="22" height="6" aria-hidden>
+              <line x1="0" y1="3" x2="22" y2="3" stroke="#a1a1aa" strokeWidth="1.5" strokeDasharray="5 4" />
+            </svg>
+            inferred from timing, not recorded
+          </span>
+        ) : null}
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2 rounded-full bg-research-error" aria-hidden /> failed
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2 rounded-full bg-research-warning" aria-hidden /> capture incomplete
+        </span>
+      </div>
     </div>
   );
 }

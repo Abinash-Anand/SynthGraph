@@ -157,7 +157,12 @@ export function ExperimentWorkspace({
       canvas = (
         <MetricsTab
           runs={trainingRuns}
-          selectedRunId={selected?.type === "run" ? selected.id : null}
+          // An evaluation belongs to a run, so selecting one anywhere
+          // (e.g. in Lineage) must put this tab on that run - otherwise the
+          // chart shows one run while the inspector describes another's.
+          selectedRunId={
+            selected?.type === "run" ? selected.id : (selectedEvaluationRun?.run.id ?? null)
+          }
           onSelectRun={(id) => setSelected({ type: "run", id })}
         />
       );
@@ -166,7 +171,7 @@ export function ExperimentWorkspace({
       canvas = <ParametersTab runs={trainingRuns} correlationReport={correlationReport} />;
       break;
     case "reproduction":
-      canvas = <ReproductionTab generations={generations} />;
+      canvas = <ReproductionTab generations={generations} experiment={experiment} runs={trainingRuns} />;
       break;
     default:
       canvas = (
@@ -244,6 +249,7 @@ export function ExperimentWorkspace({
           ) : null
         }
         inspectorTitle={inspectorTitle}
+        inspectorKey={serializeSelectedEntity(selected) ?? "none"}
       />
     </div>
   );

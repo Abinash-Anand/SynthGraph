@@ -7,7 +7,20 @@ import { MetricKeyPicker, extractMetricKeys, useMetricKeySelection } from "@/sha
 import { cn } from "@/lib/utils";
 import type { EnrichedTrainingRun } from "../../types/experiment-workspace";
 
-type MetricsView = "chart" | "table";
+type MetricsView = "chart" | "table" | "compare";
+
+const VIEW_LABEL: Record<MetricsView, string> = {
+  chart: "Chart",
+  table: "Table",
+  compare: "Compare runs",
+};
+
+// Overlaying runs is the point of running several seeds - kept in its own
+// chunk so single-run experiments never download it.
+const RunComparisonPanel = dynamic(
+  () => import("./RunComparisonPanel").then((m) => m.RunComparisonPanel),
+  { ssr: false, loading: () => <div className="h-[320px] animate-pulse rounded-xl bg-research-panel" /> },
+);
 
 // "No metrics" isn't one state - a run that's still running hasn't failed
 // to report anything, and a failed run was never going to. Distinguishing
@@ -54,15 +67,19 @@ export function MetricsTab({
   const [view, setView] = useState<MetricsView>("chart");
   const [logScale, setLogScale] = useState(false);
   const [smoothing, setSmoothing] = useState(false);
+  const [normalize, setNormalize] = useState(false);
 
   if (runsWithMetrics.length === 0 || !active) {
     return <p className="text-[13.5px] text-research-ink-muted">{emptyMetricsMessage(runs)}</p>;
   }
 
+  const views: MetricsView[] = runsWithMetrics.length >= 2 ? ["chart", "table", "compare"] : ["chart", "table"];
+  const currentView: MetricsView = views.includes(view) ? view : "chart";
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="max-w-[320px]">
+        <div className={cn("max-w-[320px]", currentView === "compare" && "invisible")} aria-hidden={currentView === "compare"}>
           <label className="flex flex-col gap-2 text-[13.5px] text-research-ink">
             Training run
             <select
@@ -79,24 +96,26 @@ export function MetricsTab({
           </label>
         </div>
         <div className="flex gap-1 rounded-lg border border-research-border p-1">
-          {(["chart", "table"] as const).map((option) => (
+          {views.map((option) => (
             <button
               key={option}
               type="button"
               onClick={() => setView(option)}
               className={cn(
-                "rounded-md px-3 py-1.5 text-[12.5px] capitalize transition-colors",
-                view === option
+                "rounded-md px-3 py-1.5 text-[12.5px] transition-colors",
+                currentView === option
                   ? "bg-research-accent-subtle/20 text-research-ink"
                   : "text-research-ink-muted hover:text-research-ink-secondary",
               )}
             >
-              {option}
+              {VIEW_LABEL[option]}
             </button>
           ))}
         </div>
       </div>
-      {view === "chart" ? (
+      {currentView === "compare" ? (
+        <RunComparisonPanel runs={runsWithMetrics} />
+      ) : currentView === "chart" ? (
         <>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <MetricKeyPicker keys={allMetricKeys} selected={selectedKeys} onToggle={toggleKey} />
@@ -133,6 +152,22 @@ export function MetricsTab({
                 />
                 Log scale
               </label>
+              <label
+                className={cn(
+                  "flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[11px] transition-colors",
+                  normalize
+                    ? "border-research-accent bg-research-accent-subtle/15 text-research-ink"
+                    : "border-research-border text-research-ink-muted hover:border-research-accent-subtle",
+                )}
+              >
+                <input
+                  type="checkbox"
+                  checked={normalize}
+                  onChange={(event) => setNormalize(event.target.checked)}
+                  className="sr-only"
+                />
+                Normalize
+              </label>
             </div>
           </div>
           <MetricsLineChart
@@ -140,6 +175,8 @@ export function MetricsTab({
             selectedKeys={selectedKeys}
             logScale={logScale}
             smoothing={smoothing}
+            normalize={normalize}
+            onSuggestNormalize={() => setNormalize(true)}
           />
         </>
       ) : (

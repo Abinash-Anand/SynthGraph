@@ -291,7 +291,7 @@ export function ExperimentHeader({
               <button
                 type="button"
                 onClick={() => startTour(WORKSPACE_TOUR.id)}
-                className="rounded-md px-3 py-2 text-[13px] text-research-ink-muted transition-colors hover:text-research-ink"
+                className="rounded-md px-3 py-2 text-[13px] text-research-ink-secondary underline decoration-research-border underline-offset-4 transition-colors hover:text-research-ink hover:decoration-research-ink-muted"
               >
                 Take a tour
               </button>

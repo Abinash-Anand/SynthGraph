@@ -41,6 +41,7 @@ export function buildTrainingRunComparisonRows(
     rows.push({
       label,
       values: trainingRuns.map((run) => formatValue(getValue(run))),
+      raw: trainingRuns.map((run) => getValue(run)),
       differs: field !== null && differingFields.has(field),
     });
   }
@@ -53,6 +54,7 @@ export function buildTrainingRunComparisonRows(
     rows.push({
       label: field,
       values: trainingRuns.map((run) => formatValue(run.parameters[key])),
+      raw: trainingRuns.map((run) => run.parameters[key]),
       differs: differingFields.has(field),
     });
   }
@@ -65,6 +67,7 @@ export function buildTrainingRunComparisonRows(
     rows.push({
       label: field,
       values: trainingRuns.map((run) => formatValue(run.metrics[key])),
+      raw: trainingRuns.map((run) => run.metrics[key]),
       differs: differingFields.has(field),
     });
   }

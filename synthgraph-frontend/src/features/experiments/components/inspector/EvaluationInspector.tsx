@@ -1,5 +1,5 @@
 import type { EvaluationResult } from "@/features/evaluation-results/types/evaluation-result";
-import { formatDateTime } from "@/shared/lib/format";
+import { formatDateTime, formatMetricValue } from "@/shared/lib/format";
 import { KeyValueList } from "@/shared/ui/KeyValueList";
 
 export function EvaluationInspector({
@@ -32,7 +32,12 @@ export function EvaluationInspector({
         <KeyValueList
           rows={Object.entries(evaluation.metrics).map(([key, value]) => ({
             label: key,
-            value: typeof value === "object" ? JSON.stringify(value) : String(value),
+            value:
+              typeof value === "number"
+                ? formatMetricValue(value)
+                : typeof value === "object"
+                  ? JSON.stringify(value)
+                  : String(value),
           }))}
           raw={evaluation.metrics}
         />
