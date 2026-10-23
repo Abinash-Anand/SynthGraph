@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from .checksum import compute_local_digest
 from .errors import SynthGraphValidationError
 from .http import SynthGraphHTTPClient
 from .models import Dataset, DatasetVersion
@@ -77,6 +78,7 @@ class DatasetsAPI:
         format: str | None = None,
         size: int | None = None,
         checksum: str | None = None,
+        compute_checksum: bool = False,
         role: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> DatasetVersion:
@@ -89,10 +91,29 @@ class DatasetsAPI:
         version to it, and attaches that version to the generation.
 
         ``size`` and ``checksum`` are accepted when the researcher already
-        knows them. The SDK does not compute them, because that would mean
-        reading the dataset (spec 38).
+        knows them. The SDK does not compute them by default, because that
+        would mean reading the dataset (spec 38).
+
+        Pass ``compute_checksum=True`` to opt in: the SDK then hashes the file
+        or directory at a *local* ``uri`` (see :mod:`synthgraph.checksum` for
+        the algorithms) and fills in ``checksum`` and, if not given, ``size``.
+        The cost is proportional to the data's size, and a remote URI is an
+        error because the SDK will not download it. The hashing happens
+        before anything is sent, so a failure never leaves a half-created
+        dataset behind.
         """
         generation_id = require_identifier(generation_id, field="generation_id")
+
+        if compute_checksum:
+            if checksum is not None:
+                raise SynthGraphValidationError(
+                    "pass either checksum=... or compute_checksum=True, not both",
+                    field="checksum",
+                )
+            digest = compute_local_digest(require_text(uri, field="uri"))
+            checksum = digest.checksum
+            if size is None:
+                size = digest.size
 
         if dataset_id is not None:
             dataset_id = require_identifier(dataset_id, field="dataset_id")

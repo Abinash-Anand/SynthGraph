@@ -231,6 +231,11 @@ class GenerationHandle(_Handle):
     def __init__(self, client: SynthGraphClient, generation: GenerationRun) -> None:
         super().__init__(client)
         self.generation = generation
+        # Dataset versions recorded through this handle in this process, with
+        # the role each was attached under. Kept so a training run can say
+        # "trained on what this generation produced" without the caller
+        # threading every DatasetVersion through by hand.
+        self._datasets: list[tuple[DatasetVersion, str]] = []
 
     @property
     def id(self) -> str:
@@ -269,14 +274,33 @@ class GenerationHandle(_Handle):
     ) -> DatasetVersion:
         """Record a dataset this generation produced or consumed.
 
-        Metadata only - the data itself stays where it is (spec 6).
+        Metadata only - the data itself stays where it is (spec 6). Pass
+        ``compute_checksum=True`` to hash local data and record the result
+        (opt-in; see :mod:`synthgraph.checksum`).
+
+        The version is remembered on this handle, so it can later be handed to
+        :meth:`ExperimentHandle.training` (``datasets=[generation]``) or
+        :meth:`TrainingHandle.use` to link the training run to it.
         """
-        return self._client.datasets.create(
+        version = self._client.datasets.create(
             generation_id=self.id,
             name=name,
             uri=uri,
             **kwargs,
         )
+        self._datasets.append((version, kwargs.get("role") or "output"))
+        return version
+
+    @property
+    def datasets(self) -> list[DatasetVersion]:
+        """Every dataset version recorded through this handle in this process."""
+        return [version for version, _ in self._datasets]
+
+    @property
+    def produced_datasets(self) -> list[DatasetVersion]:
+        """The ones attached as this generation's output - what a training run
+        would normally be trained on."""
+        return [version for version, role in self._datasets if role == "output"]
 
     def asset(
         self,
@@ -375,15 +399,19 @@ class TrainingHandle(_Handle):
         self,
         *,
         metrics: dict[str, Any],
-        dataset_version_id: str,
+        dataset_version_id: str | DatasetVersion,
         name: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> EvaluationHandle:
         """Record an evaluation of this training run.
 
         ``dataset_version_id`` names the exact dataset version the model was
-        evaluated against; the backend requires it (CONTRACT.md 2.15).
+        evaluated against; the backend requires it (CONTRACT.md 2.15). A
+        ``DatasetVersion`` (what ``generation.dataset(...)`` returns) is
+        accepted in place of its id.
         """
+        if isinstance(dataset_version_id, DatasetVersion):
+            dataset_version_id = dataset_version_id.id
         result = self._client.evaluations.create(
             training_run_id=self.id,
             metrics=metrics,
@@ -433,6 +461,30 @@ class TrainingHandle(_Handle):
             training_run_id=self.id,
             dataset=unwrapped[0],
         )
+        return self
+
+    def use(self, *sources: Any) -> TrainingHandle:
+        """Link this training run to the data it was trained on.
+
+        Each source is a ``DatasetVersion``, a dataset-version id, or a
+        ``GenerationHandle`` (which stands for every dataset that generation
+        produced). Anything already attached is skipped, so calling this twice
+        - or passing a dataset that ``training(datasets=...)`` already
+        attached - never makes a duplicate link.
+
+        This is the link the dashboard's lineage graph is built from::
+
+            training = experiment.training(model="yolo", framework="pytorch")
+            training.use(generation)
+        """
+        attached = {version.id for version in self.training_run.datasets}
+        for dataset in _unwrap_datasets(list(sources)) or []:
+            dataset_id = _dataset_id(dataset)
+            if dataset_id is not None and dataset_id in attached:
+                continue
+            self.add_dataset(dataset)
+            if dataset_id is not None:
+                attached.add(dataset_id)
         return self
 
     def refresh(self) -> TrainingHandle:
@@ -539,9 +591,53 @@ def _default_training_name(model: Any) -> str:
 
 
 def _unwrap_datasets(datasets: Any) -> list[Any] | None:
-    """Accept a single dataset or a list of them wherever datasets are expected."""
+    """Accept a single dataset or a list of them wherever datasets are expected.
+
+    A ``GenerationHandle`` stands for the datasets that generation produced.
+    One that produced none is an error, not an empty list: the caller clearly
+    meant to link the run to something, and silently linking nothing is exactly
+    how a lineage graph ends up with no edges.
+    """
     if datasets is None:
         return None
-    if isinstance(datasets, (list, tuple)):
-        return list(datasets)
-    return [datasets]
+    items = list(datasets) if isinstance(datasets, (list, tuple)) else [datasets]
+
+    expanded: list[Any] = []
+    for item in items:
+        if isinstance(item, GenerationHandle):
+            produced = item.produced_datasets
+            if not produced:
+                raise SynthGraphValidationError(
+                    f"generation {item.id} has no datasets recorded in this process; call "
+                    "generation.dataset(...) first, or pass the DatasetVersion objects (or "
+                    "their ids) directly",
+                    field="datasets",
+                )
+            expanded.extend(produced)
+        else:
+            expanded.append(item)
+
+    # The same version reachable two ways (passed directly and via the
+    # generation that produced it) must be attached once, not twice.
+    seen: set[str] = set()
+    unique: list[Any] = []
+    for item in expanded:
+        dataset_id = _dataset_id(item)
+        if dataset_id is not None:
+            if dataset_id in seen:
+                continue
+            seen.add(dataset_id)
+        unique.append(item)
+    return unique
+
+
+def _dataset_id(dataset: Any) -> str | None:
+    """The dataset-version id a dataset input refers to, if it is knowable here."""
+    if isinstance(dataset, DatasetVersion):
+        return dataset.id
+    if isinstance(dataset, str):
+        return dataset
+    if isinstance(dataset, dict):
+        value = dataset.get("id")
+        return value if isinstance(value, str) else None
+    return None
