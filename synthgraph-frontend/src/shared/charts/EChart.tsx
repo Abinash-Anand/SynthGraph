@@ -1,12 +1,14 @@
 "use client";
 
 import * as echarts from "echarts/core";
-import { BarChart, LineChart, ScatterChart } from "echarts/charts";
+import { BarChart, LineChart, ParallelChart, ScatterChart } from "echarts/charts";
 import {
   GridComponent,
   LegendComponent,
+  ParallelComponent,
   TitleComponent,
   TooltipComponent,
+  VisualMapComponent,
 } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 import { useEffect, useRef } from "react";
@@ -15,10 +17,13 @@ echarts.use([
   LineChart,
   BarChart,
   ScatterChart,
+  ParallelChart,
   GridComponent,
   LegendComponent,
+  ParallelComponent,
   TitleComponent,
   TooltipComponent,
+  VisualMapComponent,
   CanvasRenderer,
 ]);
 
