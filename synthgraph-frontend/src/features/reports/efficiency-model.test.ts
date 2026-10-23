@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   analyzeEfficiency,
+  closeResultsSpread,
   defaultMetricKey,
+  paddedAxisRange,
   type EfficiencyRunInput,
   paretoPath,
   rankableMetricKeys,
@@ -117,5 +119,40 @@ describe("paretoPath", () => {
       [0.5, 0.6],
       [2, 0.9],
     ]);
+  });
+});
+
+describe("paddedAxisRange", () => {
+  it("does not zoom a tiny gap into a cliff", () => {
+    const range = paddedAxisRange([0.7107, 0.7122]);
+    assert.ok(range);
+    // The 0.0015 gap is a sliver of the axis, not the whole of it.
+    assert.ok((0.7122 - 0.7107) / (range.max - range.min) < 0.1);
+    assert.ok(range.min < 0.7107 && range.max > 0.7122);
+  });
+
+  it("pads a spread-out set by half its spread", () => {
+    const range = paddedAxisRange([10, 20]);
+    // spread 10 -> pad 5 (half the spread beats 5% of the typical value, 0.75)
+    assert.deepEqual(range, { min: 5, max: 25 });
+  });
+
+  it("copes with one value, all zeros, and no values", () => {
+    assert.ok(paddedAxisRange([0.5]));
+    assert.deepEqual(paddedAxisRange([0, 0]), { min: -1, max: 1 });
+    assert.equal(paddedAxisRange([]), null);
+    assert.equal(paddedAxisRange([Number.NaN]), null);
+  });
+});
+
+describe("closeResultsSpread", () => {
+  it("flags results within two percent of each other", () => {
+    const spread = closeResultsSpread([0.7107, 0.7122]);
+    assert.ok(spread !== null && spread < 0.01);
+  });
+  it("is quiet when results are clearly apart or there is only one", () => {
+    assert.equal(closeResultsSpread([0.5, 0.9]), null);
+    assert.equal(closeResultsSpread([0.7]), null);
+    assert.equal(closeResultsSpread([0, 0]), null);
   });
 });

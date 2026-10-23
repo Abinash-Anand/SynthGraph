@@ -100,6 +100,40 @@ export function analyzeEfficiency(
   });
 }
 
+export type AxisRange = { min: number; max: number };
+
+/**
+ * Y-axis bounds with generous padding. Letting the chart fit the data tightly
+ * turned 0.7107 vs 0.7122 into a dramatic cliff; padding by at least half the
+ * spread and 5% of the typical value keeps a difference that small looking small.
+ */
+export function paddedAxisRange(values: number[]): AxisRange | null {
+  const finite = values.filter((value) => Number.isFinite(value));
+  if (finite.length === 0) return null;
+  const min = Math.min(...finite);
+  const max = Math.max(...finite);
+  const typical = finite.reduce((sum, value) => sum + Math.abs(value), 0) / finite.length;
+  const pad = Math.max((max - min) * 0.5, typical * 0.05) || 1;
+  return { min: min - pad, max: max + pad };
+}
+
+const CLOSE_RESULT_SHARE = 0.02;
+
+/**
+ * When every result is within a couple of percent of the others, the ranking
+ * is probably noise: separate runs of the same config vary by about that much.
+ * Returns the spread as a share of the typical value, or null when the results
+ * are clearly apart (or there aren't two to compare).
+ */
+export function closeResultsSpread(values: number[]): number | null {
+  const finite = values.filter((value) => Number.isFinite(value));
+  if (finite.length < 2) return null;
+  const typical = finite.reduce((sum, value) => sum + Math.abs(value), 0) / finite.length;
+  if (typical === 0) return null;
+  const spread = (Math.max(...finite) - Math.min(...finite)) / typical;
+  return spread < CLOSE_RESULT_SHARE ? spread : null;
+}
+
 /** The frontier as a left-to-right path (fastest first) for drawing. */
 export function paretoPath(rows: EfficiencyRow[]): Array<[number, number]> {
   return rows
