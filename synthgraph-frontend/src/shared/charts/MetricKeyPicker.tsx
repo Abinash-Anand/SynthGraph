@@ -31,7 +31,9 @@ export function extractMetricKeys(metrics: TrainingRunMetric[]): string[] {
  * via React's documented "adjust state during render when a prop changes"
  * pattern rather than an effect.
  */
-export function useMetricKeySelection(allKeys: string[]): [Set<string>, (key: string) => void] {
+export function useMetricKeySelection(
+  allKeys: string[],
+): [Set<string>, (key: string) => void, (keys: string[]) => void] {
   const signature = allKeys.join("\u0000");
   const [prevSignature, setPrevSignature] = useState(signature);
   const [selected, setSelected] = useState<Set<string>>(() => new Set(preferredSeriesKeys(allKeys)));
@@ -50,7 +52,9 @@ export function useMetricKeySelection(allKeys: string[]): [Set<string>, (key: st
     });
   };
 
-  return [selected, toggle];
+  const replace = (keys: string[]) => setSelected(new Set(keys));
+
+  return [selected, toggle, replace];
 }
 
 type MetricCategory = "rewards" | "accuracy" | "policy" | "system" | "other";

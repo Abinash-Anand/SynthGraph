@@ -9,7 +9,7 @@ import {
 } from "@/features/experiments/schemas/experiment-schemas";
 import type { Experiment } from "@/features/experiments/types/experiment";
 import type { Generation } from "@/features/generations/types/generation";
-import { formatDateTime } from "@/shared/lib/format";
+import { formatDateTime, pluralize } from "@/shared/lib/format";
 import { toFieldErrors } from "@/shared/lib/validation";
 import { WORKSPACE_TOUR } from "@/features/onboarding/tours/workspace-tour";
 import { useTour } from "@/shared/tour/TourProvider";
@@ -314,9 +314,9 @@ export function ExperimentHeader({
         </p>
       ) : (
         <div className="flex flex-wrap items-center gap-x-5 gap-y-1 font-mono text-[11.5px] text-research-ink-muted">
-          <span>{generations.length} generations</span>
+          <span>{pluralize(generations.length, "generation")}</span>
           <span>
-            {completed}/{trainingRuns.length} runs completed
+            {completed}/{pluralize(trainingRuns.length, "run")} completed
           </span>
           <span>Created {formatDateTime(experiment.createdAt)}</span>
         </div>

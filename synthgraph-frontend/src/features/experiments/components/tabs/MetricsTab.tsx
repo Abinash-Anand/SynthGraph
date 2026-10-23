@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useState } from "react";
 import { MetricsTable } from "@/features/training-runs/components/MetricsTable";
 import { MetricKeyPicker, extractMetricKeys, useMetricKeySelection } from "@/shared/charts/MetricKeyPicker";
+import { READABLE_SERIES_LIMIT, TRIMMED_SERIES_COUNT, preferredSeriesKeys } from "@/shared/charts/metric-series";
 import { cn } from "@/lib/utils";
 import type { EnrichedTrainingRun } from "../../types/experiment-workspace";
 
@@ -63,7 +64,7 @@ export function MetricsTab({
   // empty fallback rather than early-returning above this point. The React
   // Compiler handles memoization here, so no manual useMemo.
   const allMetricKeys = extractMetricKeys(active?.metrics ?? []);
-  const [selectedKeys, toggleKey] = useMetricKeySelection(allMetricKeys);
+  const [selectedKeys, toggleKey, replaceSelection] = useMetricKeySelection(allMetricKeys);
   const [view, setView] = useState<MetricsView>("chart");
   const [logScale, setLogScale] = useState(false);
   const [smoothing, setSmoothing] = useState(false);
@@ -170,6 +171,21 @@ export function MetricsTab({
               </label>
             </div>
           </div>
+          {selectedKeys.size > READABLE_SERIES_LIMIT ? (
+            <p
+              role="note"
+              className="rounded-lg border border-research-border bg-research-panel px-3 py-2 text-[12.5px] text-research-ink-secondary"
+            >
+              {selectedKeys.size} series at once is hard to read, and the tooltip becomes a wall of numbers.{" "}
+              <button
+                type="button"
+                onClick={() => replaceSelection(preferredSeriesKeys(Array.from(selectedKeys), TRIMMED_SERIES_COUNT))}
+                className="text-research-accent-hover underline underline-offset-2 hover:text-research-accent"
+              >
+                Keep the {TRIMMED_SERIES_COUNT} most relevant
+              </button>
+            </p>
+          ) : null}
           <MetricsLineChart
             metrics={active.metrics}
             selectedKeys={selectedKeys}
