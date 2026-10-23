@@ -171,7 +171,7 @@ export function ExperimentWorkspace({
       canvas = <ParametersTab runs={trainingRuns} correlationReport={correlationReport} />;
       break;
     case "reproduction":
-      canvas = <ReproductionTab generations={generations} />;
+      canvas = <ReproductionTab generations={generations} experiment={experiment} runs={trainingRuns} />;
       break;
     default:
       canvas = (
