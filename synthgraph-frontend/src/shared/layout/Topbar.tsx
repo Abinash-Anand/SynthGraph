@@ -1,4 +1,8 @@
+"use client";
+
 import { LogoutButton } from "@/features/auth/components/LogoutButton";
+import { PaletteTrigger } from "@/shared/command-palette/PaletteTrigger";
+import { TourLauncherButton } from "@/shared/tour/TourLauncherButton";
 
 export function Topbar({
   email,
@@ -25,7 +29,11 @@ export function Topbar({
           Signed in as <span className="text-ink">{email}</span>
         </p>
       </div>
-      <LogoutButton />
+      <div className="flex shrink-0 items-center gap-2">
+        <PaletteTrigger />
+        <TourLauncherButton />
+        <LogoutButton />
+      </div>
     </header>
   );
 }

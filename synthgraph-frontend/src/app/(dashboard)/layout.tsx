@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { getSession } from "@/features/auth/server/session";
+import { OnboardingProvider } from "@/features/onboarding/components/OnboardingProvider";
+import { DashboardShellProvider } from "@/shared/layout/dashboard-shell-context";
 import { DashboardShell } from "@/shared/layout/DashboardShell";
 import { QueryProvider } from "@/shared/query/QueryProvider";
 
@@ -16,7 +18,11 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   return (
     <QueryProvider>
-      <DashboardShell email={session.user.email}>{children}</DashboardShell>
+      <DashboardShellProvider>
+        <OnboardingProvider>
+          <DashboardShell email={session.user.email}>{children}</DashboardShell>
+        </OnboardingProvider>
+      </DashboardShellProvider>
     </QueryProvider>
   );
 }

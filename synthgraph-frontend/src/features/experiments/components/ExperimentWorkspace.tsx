@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 import type { Experiment } from "@/features/experiments/types/experiment";
 import type { ParameterCorrelationReport } from "@/features/reports/types/report";
+import { WorkspaceTourAutoStart } from "@/features/onboarding/components/WorkspaceTourAutoStart";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { ResearchWorkspace } from "@/shared/layout/ResearchWorkspace";
 import { Tabs } from "@/shared/ui/Tabs";
@@ -37,7 +38,9 @@ export function ExperimentWorkspace({
   generations,
   trainingRuns,
   correlationReport,
+  workspaceTourDue = false,
 }: {
+  workspaceTourDue?: boolean;
   projectId: string;
   experimentId: string;
   experiment: Experiment;
@@ -207,7 +210,10 @@ export function ExperimentWorkspace({
           router.push(`${path}?ids=${ids}`);
         }}
       />
-      <Tabs tabs={TABS} />
+      <WorkspaceTourAutoStart due={workspaceTourDue} />
+      <div data-tour="ws-tabs">
+        <Tabs tabs={TABS} />
+      </div>
       <ResearchWorkspace
         canvas={
           <AnimatePresence mode="wait" initial={false}>

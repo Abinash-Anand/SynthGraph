@@ -6,6 +6,8 @@ import { useEffect, useState } from "react";
 import { useSearch } from "@/features/search/hooks/useSearch";
 import type { SearchResult, SearchResultType } from "@/features/search/types/search";
 import { cn } from "@/lib/utils";
+import { useTour } from "@/shared/tour/TourProvider";
+import { OPEN_PALETTE_EVENT } from "./palette-events";
 
 type CommandEntry = { id: string; label: string; href: string; group: string };
 
@@ -80,6 +82,7 @@ export function CommandPalette() {
   const [query, setQuery] = useState("");
   const router = useRouter();
   const { results, isSearching } = useSearch(query);
+  const { launchableTours, startTour } = useTour();
 
   // Query is cleared at every point that transitions `open` to false
   // (here, Command.Dialog's own onOpenChange, and runCommand) rather than
@@ -113,6 +116,12 @@ export function CommandPalette() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [open]);
 
+  useEffect(() => {
+    const openFromChrome = () => setOpen(true);
+    window.addEventListener(OPEN_PALETTE_EVENT, openFromChrome);
+    return () => window.removeEventListener(OPEN_PALETTE_EVENT, openFromChrome);
+  }, []);
+
   const runCommand = (href: string) => {
     close();
     router.push(href);
@@ -125,6 +134,7 @@ export function CommandPalette() {
   const filteredCommands = COMMANDS.filter((c) => c.label.toLowerCase().includes(query.toLowerCase()));
   const groups = Array.from(new Set(filteredCommands.map((c) => c.group)));
   const showSearchResults = query.trim().length >= 2;
+  const filteredTours = launchableTours.filter((tour) => tour.label.toLowerCase().includes(query.toLowerCase()));
 
   return (
     <Command.Dialog
@@ -212,6 +222,29 @@ export function CommandPalette() {
                 ))}
             </Command.Group>
           ))}
+          {filteredTours.length > 0 ? (
+            <Command.Group
+              heading="Help"
+              className="mb-1 [&_[cmdk-group-heading]]:mono-label [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-research-ink-muted"
+            >
+              {filteredTours.map((tour) => (
+                <Command.Item
+                  key={tour.id}
+                  value={tour.label}
+                  onSelect={() => {
+                    close();
+                    startTour(tour.id);
+                  }}
+                  className={
+                    "cursor-pointer rounded-md px-3 py-2.5 text-[13.5px] text-research-ink-secondary " +
+                    "data-[selected=true]:bg-research-subtle data-[selected=true]:text-research-ink"
+                  }
+                >
+                  {tour.label}
+                </Command.Item>
+              ))}
+            </Command.Group>
+          ) : null}
         </Command.List>
       </div>
     </Command.Dialog>
