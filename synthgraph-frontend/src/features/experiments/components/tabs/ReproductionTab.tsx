@@ -11,6 +11,7 @@ import {
   assessReproducibility,
   compareByRisk,
   GRADE_LABEL,
+  missingFields,
   type ReproAssessment,
   type ReproGrade,
   summarizeReproducibility,
@@ -92,12 +93,17 @@ export function ReproductionTab({
 
   const active = assessed.find((a) => a.enriched.generation.id === selectedId) ?? assessed[0];
   const { generation, manifest } = active.enriched;
-  const { known, supplied, missing, external } = manifest?.classification ?? {
+  const { known, supplied, external } = manifest?.classification ?? {
     known: [],
     supplied: [],
     missing: [],
     external: [],
   };
+  // Not the backend's raw list: it calls the code version missing even when the
+  // commit was recorded under the environment.
+  const missing = manifest
+    ? missingFields(manifest.classification, manifest.generation.reproducibility ?? generation.reproducibility)
+    : [];
 
   const reportInput = () => ({
     generatedAt: new Date().toISOString(),

@@ -36,6 +36,9 @@ export type ReproAssessment = {
   notes: string[];
 };
 
+// The backend's own label for the field (see get-reproduction-manifest.service.ts).
+const CODE_VERSION_FIELD = "Code version";
+
 export const GRADE_LABEL: Record<ReproGrade, string> = {
   reproducible: "Reproducible",
   mostly: "Mostly reproducible",
@@ -47,6 +50,25 @@ const GRADE_ORDER: ReproGrade[] = ["unknown", "partial", "mostly", "reproducible
 
 function capAt(grade: ReproGrade, ceiling: ReproGrade): ReproGrade {
   return GRADE_ORDER.indexOf(grade) > GRADE_ORDER.indexOf(ceiling) ? ceiling : grade;
+}
+
+/** The recorded git commit, if any - the code version the backend's classification can't see. */
+function recordedCommit(reproducibility: ReproducibilityLike | null | undefined): string | null {
+  const commit = reproducibility?.environment?.commit;
+  return typeof commit === "string" && commit.trim() !== "" ? commit : null;
+}
+
+/**
+ * The classification's `missing` list with the code version removed when a
+ * commit was recorded after all. Use this wherever missing fields are shown, so
+ * the list and the grade never disagree.
+ */
+export function missingFields(
+  classification: ClassificationLike,
+  reproducibility: ReproducibilityLike | null | undefined,
+): string[] {
+  if (recordedCommit(reproducibility) === null || reproducibility?.code_version) return classification.missing;
+  return classification.missing.filter((field) => field !== CODE_VERSION_FIELD);
 }
 
 export function assessReproducibility(
@@ -64,11 +86,23 @@ export function assessReproducibility(
     };
   }
 
+  const environment = reproducibility?.environment;
+
+  // The SDK records the git commit automatically as `environment.commit`; it
+  // only fills the separate `code_version` field when the caller passes one.
+  // The backend classifies on `code_version` alone, so it lists "Code version"
+  // as missing for a run whose commit WAS recorded. That commit is the code
+  // version, so it must not be reported as missing, blocking, or scored down.
+  const commit = recordedCommit(reproducibility);
+  const hasCodeVersion = Boolean(reproducibility?.code_version) || commit !== null;
+  const missing = missingFields(classification, reproducibility);
+  const recoveredCodeVersion = classification.missing.length - missing.length;
+
   const counts = {
-    known: classification.known.length,
+    known: classification.known.length + recoveredCodeVersion,
     supplied: classification.supplied.length,
     external: classification.external.length,
-    missing: classification.missing.length,
+    missing: missing.length,
   };
   const total = counts.known + counts.supplied + counts.external + counts.missing;
   // Known and supplied fields are recorded; an external one is recorded as a
@@ -78,7 +112,6 @@ export function assessReproducibility(
   const blockers: string[] = [];
   const blockerTags: string[] = [];
   const notes: string[] = [];
-  const environment = reproducibility?.environment;
 
   const dirty = environment?.dirty === true;
   if (dirty) {
@@ -89,7 +122,7 @@ export function assessReproducibility(
     blockers.push("No random seed was recorded, so the same inputs won't necessarily give the same output.");
     blockerTags.push("no seed");
   }
-  if (!reproducibility?.code_version) {
+  if (!hasCodeVersion) {
     blockers.push("No code version (commit) was recorded, so there's no way to know which code produced this.");
     blockerTags.push("no code version");
   }
@@ -101,7 +134,7 @@ export function assessReproducibility(
     );
   }
   if (counts.missing > 0) {
-    notes.push(`Not recorded: ${classification.missing.join(", ")}.`);
+    notes.push(`Not recorded: ${missing.join(", ")}.`);
   }
 
   let grade: ReproGrade;
