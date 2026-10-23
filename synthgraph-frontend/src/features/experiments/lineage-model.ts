@@ -33,6 +33,13 @@ export type LineageGenerationInput = {
   status: string;
   inputs: DataRef[];
   outputs: DataRef[];
+  /**
+   * Dataset versions attached through the SDK's `generation.dataset(...)`.
+   * That call writes a separate link table (surfaced as the manifest's
+   * `datasetReferences`), NOT the generation's own `inputs`/`outputs`, so a
+   * graph built from inputs/outputs alone misses every link made that way.
+   */
+  datasetReferences?: Array<{ datasetVersionId: string; role: string }>;
   started_at: string | null;
   completed_at: string | null;
   created_at: string;
@@ -49,7 +56,8 @@ export type LineageRunInput = {
     createdAt: string;
     datasets?: Array<{ id: string; version: string; uri?: string }>;
   };
-  evaluations: Array<{ id: string; name: string | null }>;
+  /** `datasetVersionId` is the dataset version the evaluation was run against (required by the backend). */
+  evaluations: Array<{ id: string; name: string | null; datasetVersionId?: string }>;
 };
 
 export type LineageModel = {
@@ -78,6 +86,11 @@ function timeOf(...values: Array<string | null | undefined>): number | null {
     }
   }
   return null;
+}
+
+// A dataset version we only know by id (no run lists it, no output ref names it).
+function placeholderLabel(versionId: string): string {
+  return `Dataset ${versionId.slice(0, 8)}`;
 }
 
 function reachableTo(startIds: string[], edges: LineageEdge[]): Set<string> {
@@ -133,6 +146,24 @@ export function buildLineage(generations: LineageGenerationInput[], runs: Lineag
       }
       addEdge(id, genId);
     }
+
+    for (const reference of generation.datasetReferences ?? []) {
+      const id = `dataset-version:${reference.datasetVersionId}`;
+      const isInput = reference.role.toLowerCase() === "input";
+      if (!nodes.has(id)) {
+        nodes.set(id, {
+          id,
+          kind: "dataset",
+          label: placeholderLabel(reference.datasetVersionId),
+          layer: isInput ? 0 : 2,
+        });
+      }
+      if (isInput) addEdge(id, genId);
+      else {
+        producedIds.add(id);
+        addEdge(genId, id);
+      }
+    }
   }
 
   for (const { run, evaluations } of runs) {
@@ -165,6 +196,22 @@ export function buildLineage(generations: LineageGenerationInput[], runs: Lineag
       const evalId = `evaluation:${evaluation.id}`;
       nodes.set(evalId, { id: evalId, kind: "evaluation", label: evaluation.name ?? evaluation.id, layer: 4 });
       addEdge(runId, evalId);
+
+      // Every evaluation names the dataset version it was scored against -
+      // a recorded link that exists even when nothing else was linked.
+      if (evaluation.datasetVersionId) {
+        const versionId = `dataset-version:${evaluation.datasetVersionId}`;
+        if (!nodes.has(versionId)) {
+          nodes.set(versionId, {
+            id: versionId,
+            kind: "dataset",
+            label: placeholderLabel(evaluation.datasetVersionId),
+            layer: 2,
+          });
+        }
+        producedIds.add(versionId);
+        addEdge(versionId, evalId);
+      }
     }
   }
 
@@ -177,12 +224,18 @@ export function buildLineage(generations: LineageGenerationInput[], runs: Lineag
 
   // Which generations already have a recorded path to a run?
   const recorded = Array.from(edges.values());
-  const runNodeIds = new Set(runs.map(({ run }) => `training-run:${run.id}`));
+  // A path to an evaluation counts as much as one to a run: it proves a
+  // recorded relationship to a result (a generation's dataset that was later
+  // evaluated on), so guessing a link to a run for it would be redundant.
+  const resultNodeIds = new Set([
+    ...runs.map(({ run }) => `training-run:${run.id}`),
+    ...runs.flatMap(({ evaluations }) => evaluations.map((evaluation) => `evaluation:${evaluation.id}`)),
+  ]);
   const unlinked: string[] = [];
   for (const generation of generations) {
     const genId = `generation:${generation.id}`;
     const reach = reachableTo([genId], recorded);
-    if (![...reach].some((id) => runNodeIds.has(id))) unlinked.push(generation.id);
+    if (![...reach].some((id) => resultNodeIds.has(id))) unlinked.push(generation.id);
   }
 
   // Without any recorded link, the only honest statement is "same

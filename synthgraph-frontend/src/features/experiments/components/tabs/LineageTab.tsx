@@ -27,7 +27,10 @@ export function LineageTab({
   const model = useMemo(
     () =>
       buildLineage(
-        generations.map((g) => g.generation),
+        // The manifest carries the links made by the SDK's
+        // generation.dataset(...) - a separate table from the generation's
+        // own inputs/outputs, so it has to be merged in explicitly.
+        generations.map((g) => ({ ...g.generation, datasetReferences: g.manifest?.datasetReferences })),
         trainingRuns,
       ),
     [generations, trainingRuns],
