@@ -41,7 +41,7 @@ export function CaptureStatusControl({
 
   if (!open) {
     return (
-      <Button size="sm" variant="ghost" onClick={() => setOpen(true)}>
+      <Button size="sm" variant="secondary" onClick={() => setOpen(true)}>
         Update capture status
       </Button>
     );

@@ -10,7 +10,10 @@ import type { TrainingRun } from "@/features/training-runs/types/training-run";
 import type { TrainingRunMetric } from "@/features/training-runs/types/training-run-metric";
 import type { TrainingRunHealthMetric } from "@/features/reports/types/report";
 import { cn } from "@/lib/utils";
+import { preferredSeriesKeys } from "@/shared/charts/metric-series";
 import { formatDateTime, formatMetricValue } from "@/shared/lib/format";
+import { isOutcomeMetric } from "@/shared/lib/metric-semantics";
+import { judgeTrendFor, summarizeTrends } from "@/shared/lib/trend-judgement";
 import { ConfigSummary } from "@/shared/ui/ConfigSummary";
 import { KeyValueList } from "@/shared/ui/KeyValueList";
 import type { EnrichedTrainingRun } from "../../types/experiment-workspace";
@@ -22,16 +25,17 @@ const TREND_LABEL: Record<TrainingRunHealthMetric["trend"], string> = {
   insufficient_data: "not enough data",
 };
 
-// Neither direction is colored success/warning - increasing loss is bad,
-// increasing reward is good, and this component has no idea which metric
-// is which. Trend is a directionless classifier, not a value judgment
-// (matches the backend service's own documented reasoning).
-const TREND_TONE: Record<TrainingRunHealthMetric["trend"], string> = {
-  increasing: "text-research-info",
-  decreasing: "text-research-accent-hover",
-  flat: "text-research-ink-muted",
-  insufficient_data: "text-research-ink-muted",
-};
+// The backend's trend is a directionless classifier (increasing loss is bad,
+// increasing reward is good, and it can't tell which metric is which), so
+// colour only comes from a judgement the frontend makes when the metric's
+// direction can be inferred from its name; otherwise it stays neutral.
+const JUDGEMENT_TONE = {
+  good: "text-research-success",
+  bad: "text-research-warning",
+  neutral: "text-research-ink-muted",
+} as const;
+
+const HEALTH_PREVIEW_COUNT = 8;
 
 // Prefer the run's own author-supplied summary metrics (a distinct field
 // from per-step telemetry - see TrainingRun's own type comment); fall back
@@ -72,8 +76,25 @@ export function TrainingRunInspector({
   const run = live?.run ?? enriched.run;
   const metrics = live?.metrics ?? enriched.metrics;
   const evaluations = live?.evaluations ?? enriched.evaluations;
-  const finalMetrics = getFinalMetrics(run, metrics);
-  const finalMetricsCount = Object.keys(finalMetrics).length;
+  const rawFinalMetrics = getFinalMetrics(run, metrics);
+  const finalMetricsCount = Object.keys(rawFinalMetrics).length;
+  // Outcomes (reward, loss...) lead, machine telemetry trails - the compact
+  // preview used to show whichever keys happened to be logged first, which
+  // was eval/sps and training/sps rather than anything about the model.
+  const finalMetrics = Object.fromEntries(
+    preferredSeriesKeys(Object.keys(rawFinalMetrics), finalMetricsCount).map((key) => [key, rawFinalMetrics[key]]),
+  );
+  const [showAllHealth, setShowAllHealth] = useState(false);
+
+  // Model metrics first, then by judgement so what's going wrong surfaces at
+  // the top of a 40-row list instead of being buried in it.
+  const healthRows = [...health.metrics].sort((a, b) => {
+    const rank = (key: string, trend: TrainingRunHealthMetric["trend"]) =>
+      (isOutcomeMetric(key) ? 0 : 10) + (judgeTrendFor(key, trend) === "bad" ? 0 : judgeTrendFor(key, trend) === "good" ? 1 : 2);
+    return rank(a.metricKey, a.trend) - rank(b.metricKey, b.trend) || a.metricKey.localeCompare(b.metricKey);
+  });
+  const healthSummary = summarizeTrends(health.metrics);
+  const visibleHealth = showAllHealth ? healthRows : healthRows.slice(0, HEALTH_PREVIEW_COUNT);
 
   // A run with 40+ logged metrics, a hyperparameter dump, and a full health
   // trend list used to render as one uninterrupted column - splitting into
@@ -86,9 +107,17 @@ export function TrainingRunInspector({
       <div>
         <p className="mono-label text-research-ink-muted">Training run</p>
         <h3 className="mt-1 truncate text-[16px] font-medium text-research-ink">{run.name}</h3>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <TrainingRunStatusBadge status={run.status} />
-          <CaptureStatusBadge status={run.captureStatus?.status ?? null} />
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+          {/* Two different axes that read alike ("completed" / "complete"),
+              so each says which it is. */}
+          <span className="inline-flex items-center gap-1.5">
+            <span className="font-mono text-[10px] text-research-ink-muted uppercase">Run</span>
+            <TrainingRunStatusBadge status={run.status} />
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="font-mono text-[10px] text-research-ink-muted uppercase">Capture</span>
+            <CaptureStatusBadge status={run.captureStatus?.status ?? null} />
+          </span>
           {isLive ? (
             <span className="inline-flex items-center gap-1.5 font-mono text-[10px] tracking-[0.1em] text-research-info uppercase">
               <span
@@ -190,24 +219,60 @@ export function TrainingRunInspector({
         <div className="flex flex-col gap-6">
           {health.metrics.length > 0 ? (
             <div>
-              <p className="mono-label mb-2 text-research-ink-muted">
+              <p className="mono-label mb-1 text-research-ink-muted">
                 Health (last {health.windowSize} steps)
               </p>
+              <p className="mb-2 text-[12px] text-research-ink-muted">
+                {healthSummary.increasing} rising · {healthSummary.decreasing} falling · {healthSummary.flat} flat
+                {healthSummary.good + healthSummary.bad > 0 ? (
+                  <>
+                    {" — "}
+                    <span className="text-research-success">{healthSummary.good} improving</span>
+                    {", "}
+                    <span className={healthSummary.bad > 0 ? "text-research-warning" : undefined}>
+                      {healthSummary.bad} worsening
+                    </span>
+                  </>
+                ) : null}
+              </p>
               <div className="flex flex-col gap-1.5">
-                {health.metrics.map((metric) => (
-                  <div
-                    key={metric.metricKey}
-                    className="flex items-center justify-between gap-3 rounded-md border border-research-border bg-research-subtle/40 px-3 py-2"
-                  >
-                    <span className="min-w-0 truncate font-mono text-[12.5px] text-research-ink">
-                      {metric.metricKey}
-                    </span>
-                    <span className={cn("shrink-0 whitespace-nowrap text-[12px]", TREND_TONE[metric.trend])}>
-                      {TREND_LABEL[metric.trend]}
-                    </span>
-                  </div>
-                ))}
+                {visibleHealth.map((metric) => {
+                  const judgement = judgeTrendFor(metric.metricKey, metric.trend);
+                  return (
+                    <div
+                      key={metric.metricKey}
+                      className="flex items-start justify-between gap-3 rounded-md border border-research-border bg-research-subtle/40 px-3 py-2"
+                    >
+                      {/* Wraps instead of truncating: 38 reward terms share a long
+                          prefix, so the tail is the only part that tells them apart. */}
+                      <span className="min-w-0 break-all font-mono text-[12px] text-research-ink" title={metric.metricKey}>
+                        {metric.metricKey}
+                      </span>
+                      <span
+                        className={cn("shrink-0 whitespace-nowrap text-[12px]", JUDGEMENT_TONE[judgement])}
+                        title={
+                          judgement === "neutral"
+                            ? undefined
+                            : judgement === "good"
+                              ? "Moving the right way (direction inferred from the name)"
+                              : "Moving the wrong way (direction inferred from the name)"
+                        }
+                      >
+                        {TREND_LABEL[metric.trend]}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
+              {healthRows.length > HEALTH_PREVIEW_COUNT ? (
+                <button
+                  type="button"
+                  onClick={() => setShowAllHealth((value) => !value)}
+                  className="mt-2 font-mono text-[11px] text-research-accent-hover underline underline-offset-2 hover:text-research-accent"
+                >
+                  {showAllHealth ? "Show fewer" : `Show all ${healthRows.length}`}
+                </button>
+              ) : null}
             </div>
           ) : (
             <p className="text-[13px] text-research-ink-muted">Not enough step metrics yet to show a trend.</p>
@@ -244,17 +309,35 @@ export function TrainingRunInspector({
               <p className="text-[13px] text-research-ink-muted">None yet.</p>
             ) : (
               <ul className="flex flex-col gap-1.5">
-                {evaluations.map((evaluation) => (
-                  <li key={evaluation.id}>
-                    <button
-                      type="button"
-                      onClick={() => onSelectEvaluation(evaluation.id)}
-                      className="w-full rounded-md border border-research-border bg-research-subtle/40 p-2.5 text-left transition-colors hover:border-research-accent-subtle"
-                    >
-                      <p className="truncate text-[13px] text-research-ink">{evaluation.name ?? evaluation.id}</p>
-                    </button>
-                  </li>
-                ))}
+                {evaluations.map((evaluation) => {
+                  // Show the headline score so the list says something
+                  // before you open each evaluation.
+                  const keys = preferredSeriesKeys(
+                    Object.entries(evaluation.metrics)
+                      .filter(([, value]) => typeof value === "number")
+                      .map(([key]) => key)
+                      .filter(isOutcomeMetric),
+                    2,
+                  );
+                  return (
+                    <li key={evaluation.id}>
+                      <button
+                        type="button"
+                        onClick={() => onSelectEvaluation(evaluation.id)}
+                        className="w-full rounded-md border border-research-border bg-research-subtle/40 p-2.5 text-left transition-colors hover:border-research-accent-subtle"
+                      >
+                        <p className="truncate text-[13px] text-research-ink">{evaluation.name ?? evaluation.id}</p>
+                        {keys.length > 0 ? (
+                          <p className="mt-0.5 truncate font-mono text-[11px] text-research-ink-muted">
+                            {keys
+                              .map((key) => `${key} ${formatMetricValue(evaluation.metrics[key] as number)}`)
+                              .join(" · ")}
+                          </p>
+                        ) : null}
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
