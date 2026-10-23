@@ -7,17 +7,19 @@ import { cn } from "@/lib/utils";
 type NavItem = {
   label: string;
   href: string;
+  /** Stable guided-tour target id, rendered as data-tour. */
+  tour?: string;
 };
 
 const NAV_ITEMS: NavItem[] = [
   { label: "Overview", href: "/dashboard" },
-  { label: "Projects", href: "/dashboard/projects" },
-  { label: "Datasets", href: "/dashboard/datasets" },
+  { label: "Projects", href: "/dashboard/projects", tour: "nav-projects" },
+  { label: "Datasets", href: "/dashboard/datasets", tour: "nav-datasets" },
   { label: "Assets", href: "/dashboard/assets" },
 ];
 
 // No owning entity, so it doesn't fit under Dashboard or Settings.
-const TOOLS_ITEMS: NavItem[] = [{ label: "Compare", href: "/dashboard/compare" }];
+const TOOLS_ITEMS: NavItem[] = [{ label: "Compare", href: "/dashboard/compare", tour: "nav-compare" }];
 
 // Both fleet-wide (aggregated across every project), so they're real
 // top-level pages, unlike Parameter Correlation (experiment-scoped, lives
@@ -29,7 +31,7 @@ const REPORTS_ITEMS: NavItem[] = [
   { label: "Training Run Search", href: "/dashboard/reports/training-run-search" },
 ];
 
-const SETTINGS_ITEMS: NavItem[] = [{ label: "API Keys", href: "/dashboard/settings/api-keys" }];
+const SETTINGS_ITEMS: NavItem[] = [{ label: "API Keys", href: "/dashboard/settings/api-keys", tour: "nav-api-keys" }];
 
 // Training Runs and Evaluation Results have no flat "list all" backend
 // endpoint (only nested under an Experiment / a Training Run respectively),
@@ -53,7 +55,7 @@ export function Sidebar() {
         </ul>
       </div>
 
-      <div>
+      <div data-tour="nav-reports">
         <p className="mono-label mb-2 px-2">Reports</p>
         <ul className="flex flex-col gap-0.5">
           {REPORTS_ITEMS.map((item) => (
@@ -88,6 +90,7 @@ function SidebarLink({ item, active }: { item: NavItem; active: boolean }) {
     <li>
       <Link
         href={item.href}
+        data-tour={item.tour}
         aria-current={active ? "page" : undefined}
         className={cn(
           "block rounded-md px-2 py-2 text-[14px] transition-colors duration-200",

@@ -1,6 +1,12 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { requireSession } from "@/features/auth/server/session";
+import { GettingStartedChecklist } from "@/features/onboarding/components/GettingStartedChecklist";
+import { WelcomeAutoStart } from "@/features/onboarding/components/WelcomeAutoStart";
+import { buildChecklist, decideWelcomeMode, isSeen } from "@/features/onboarding/onboarding-rules";
+import { readOnboardingSeen } from "@/features/onboarding/server/onboarding-state";
+import { WELCOME_TOUR } from "@/features/onboarding/tours/welcome-tour";
+import { WORKSPACE_TOUR } from "@/features/onboarding/tours/workspace-tour";
 import { ProjectCard } from "@/features/projects/components/ProjectCard";
 import { listProjects } from "@/features/projects/server/projects-api";
 import { getCaptureCompletenessReport } from "@/features/reports/server/reports-api";
@@ -22,10 +28,18 @@ function StatCard({ label, value, hint }: { label: string; value: string; hint?:
 
 export default async function DashboardOverviewPage() {
   const session = await requireSession();
-  const [projects, capture] = await Promise.all([
+  const [projects, capture, seen] = await Promise.all([
     listProjects(session.apiKey),
     getCaptureCompletenessReport(session.apiKey),
+    readOnboardingSeen(session.user.id),
   ]);
+  const welcomeMode = decideWelcomeMode({ seen, version: WELCOME_TOUR.version, projectCount: projects.length });
+  const checklist = buildChecklist({
+    projectCount: projects.length,
+    trainingRunCount: capture.total,
+    workspaceSeen: isSeen(seen, "workspace", WORKSPACE_TOUR.version),
+  });
+  const showChecklist = !isSeen(seen, "checklist", 1);
   const recent = projects.slice(0, RECENT_PROJECT_COUNT);
   const completePercent =
     capture.total > 0 ? Math.round((capture.byStatus.complete / capture.total) * 100) : null;
@@ -37,7 +51,9 @@ export default async function DashboardOverviewPage() {
         <p className="mt-1 text-[14px] text-research-ink-muted">Welcome back, {session.user.email}.</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {welcomeMode !== "none" ? <WelcomeAutoStart mode={welcomeMode} /> : null}
+
+      <div data-tour="overview-stats" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard label="Projects" value={String(projects.length)} />
         <StatCard label="Training runs" value={String(capture.total)} />
         <StatCard
@@ -55,6 +71,8 @@ export default async function DashboardOverviewPage() {
           hint="worth a look — see Capture Completeness"
         />
       </div>
+
+      {showChecklist ? <GettingStartedChecklist items={checklist} /> : null}
 
       <div className="flex flex-wrap gap-2">
         <Link

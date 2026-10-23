@@ -63,6 +63,7 @@ export function Tabs({
               tabRefs.current[tab.id] = el;
             }}
             role="tab"
+            data-tour={`tab-${tab.id}`}
             type="button"
             aria-selected={active}
             tabIndex={active ? 0 : -1}

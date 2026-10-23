@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Logo } from "@/components/navigation/Logo";
 import { cn } from "@/lib/utils";
 import { CommandPalette } from "@/shared/command-palette/CommandPalette";
+import { useDashboardShell } from "./dashboard-shell-context";
 import { OverflowWatcher } from "./OverflowWatcher";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
@@ -26,7 +27,7 @@ import { Topbar } from "./Topbar";
  * cramped-canvas version of the same overflow problem.
  */
 export function DashboardShell({ email, children }: { email: string; children: ReactNode }) {
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const { mobileOpen, openMobileMenu, closeMobileMenu } = useDashboardShell();
 
   return (
     <div className="min-h-screen xl:grid xl:grid-cols-[240px_1fr]">
@@ -36,7 +37,7 @@ export function DashboardShell({ email, children }: { email: string; children: R
         <button
           type="button"
           aria-label="Close menu"
-          onClick={() => setMobileOpen(false)}
+          onClick={closeMobileMenu}
           className="fixed inset-0 z-40 bg-void/70 xl:hidden"
         />
       ) : null}
@@ -54,7 +55,7 @@ export function DashboardShell({ email, children }: { email: string; children: R
           <Logo />
           <button
             type="button"
-            onClick={() => setMobileOpen(false)}
+            onClick={closeMobileMenu}
             aria-label="Close menu"
             className="grid size-8 place-items-center rounded-md text-ink-muted hover:text-ink xl:hidden"
           >
@@ -64,7 +65,7 @@ export function DashboardShell({ email, children }: { email: string; children: R
         {/* Closes the drawer on navigation: any Link click inside bubbles
             up to this handler, since Sidebar renders plain <a>-backed
             Links with no stopPropagation. */}
-        <div className="flex-1 overflow-y-auto" onClick={() => setMobileOpen(false)}>
+        <div className="flex-1 overflow-y-auto" onClick={closeMobileMenu}>
           <Sidebar />
         </div>
       </aside>
@@ -75,7 +76,7 @@ export function DashboardShell({ email, children }: { email: string; children: R
           entire grid track and force the whole page to scroll
           horizontally, instead of that one child scrolling internally. */}
       <div className="flex min-w-0 flex-col">
-        <Topbar email={email} onOpenMenu={() => setMobileOpen(true)} />
+        <Topbar email={email} onOpenMenu={openMobileMenu} />
         <main id="main" className="min-w-0 flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8">
           {children}
         </main>

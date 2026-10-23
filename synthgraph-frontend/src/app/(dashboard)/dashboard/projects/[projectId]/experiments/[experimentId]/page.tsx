@@ -2,6 +2,9 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getSession, requireSession } from "@/features/auth/server/session";
 import { ExperimentWorkspace } from "@/features/experiments/components/ExperimentWorkspace";
+import { isSeen } from "@/features/onboarding/onboarding-rules";
+import { readOnboardingSeen } from "@/features/onboarding/server/onboarding-state";
+import { WORKSPACE_TOUR } from "@/features/onboarding/tours/workspace-tour";
 import { getExperimentForProject } from "@/features/experiments/server/experiments-api";
 import { listGenerations } from "@/features/generations/server/generations-api";
 import { getReproductionManifest } from "@/features/reproduction/server/reproduction-api";
@@ -70,8 +73,16 @@ export default async function ExperimentDetailPage({ params }: { params: Promise
     })),
   );
 
+  // Only worth touring once there is something to tour - an experiment with
+  // no generations or runs yet has an empty canvas for every step to point at.
+  const seen = await readOnboardingSeen(session.user.id);
+  const workspaceTourDue =
+    !isSeen(seen, "workspace", WORKSPACE_TOUR.version) &&
+    enrichedGenerations.length + enrichedTrainingRuns.length > 0;
+
   return (
     <ExperimentWorkspace
+      workspaceTourDue={workspaceTourDue}
       projectId={projectId}
       experimentId={experimentId}
       experiment={experiment}

@@ -11,6 +11,8 @@ import type { Experiment } from "@/features/experiments/types/experiment";
 import type { Generation } from "@/features/generations/types/generation";
 import { formatDateTime } from "@/shared/lib/format";
 import { toFieldErrors } from "@/shared/lib/validation";
+import { WORKSPACE_TOUR } from "@/features/onboarding/tours/workspace-tour";
+import { useTour } from "@/shared/tour/TourProvider";
 import { CompareSelectionBar } from "@/shared/ui/CompareSelectionBar";
 import type { EnrichedTrainingRun } from "../types/experiment-workspace";
 
@@ -80,6 +82,7 @@ export function ExperimentHeader({
 
   const completed = trainingRuns.filter((r) => r.run.status === "completed").length;
   const canCompare = activeTab === "runs" ? trainingRuns.length >= 2 : generations.length >= 2;
+  const { startTour } = useTour();
 
   const set = <K extends keyof UpdateExperimentRequest>(key: K) => (value: UpdateExperimentRequest[K]) => {
     setValues((current) => ({ ...current, [key]: value }));
@@ -252,6 +255,7 @@ export function ExperimentHeader({
               {canCompare ? (
                 <button
                   type="button"
+                  data-tour="ws-compare"
                   onClick={onStartCompare}
                   className="rounded-md border border-research-border bg-research-panel px-3.5 py-2 text-[13px] font-medium text-research-ink transition-colors hover:border-research-accent-subtle"
                 >
@@ -283,6 +287,13 @@ export function ExperimentHeader({
               </button>
               <button type="button" onClick={startArchiving} className={secondaryButtonClass}>
                 Archive
+              </button>
+              <button
+                type="button"
+                onClick={() => startTour(WORKSPACE_TOUR.id)}
+                className="rounded-md px-3 py-2 text-[13px] text-research-ink-muted transition-colors hover:text-research-ink"
+              >
+                Take a tour
               </button>
             </>
           )}
