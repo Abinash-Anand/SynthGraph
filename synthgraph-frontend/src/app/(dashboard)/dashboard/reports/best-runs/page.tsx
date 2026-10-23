@@ -28,9 +28,8 @@ export default async function BestRunsPage({
       <div>
         <h1 className="text-[22px] font-medium tracking-[-0.01em] text-research-ink">Best Runs</h1>
         <p className="mt-1 max-w-[62ch] text-[14px] text-research-ink-muted">
-          The highest and lowest value ever recorded for each metric across your completed training
-          runs — which direction counts as &ldquo;better&rdquo; depends on the metric, so both extremes
-          are shown.
+          The best value ever recorded for each metric across your completed training runs, and the run
+          that set it.
         </p>
       </div>
 
