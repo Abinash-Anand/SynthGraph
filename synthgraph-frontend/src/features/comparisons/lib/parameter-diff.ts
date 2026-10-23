@@ -9,6 +9,8 @@ export type ComparisonRow = {
   /** The unformatted values behind `values`, so a cell can expand to the real thing. */
   raw?: unknown[];
   differs: boolean;
+  /** True for rows that always differ (timestamps) and so are not counted as differences. */
+  informational?: boolean;
 };
 
 // `field: null` rows (ID, Created) are never highlighted — the backend
@@ -18,6 +20,7 @@ const FIXED_ROWS: Array<{
   label: string;
   field: string | null;
   getValue: (generation: ComparedGeneration) => unknown;
+  informational?: boolean;
 }> = [
   { label: "ID", field: null, getValue: (g) => g.id },
   { label: "Status", field: "status", getValue: (g) => g.status },
@@ -26,8 +29,8 @@ const FIXED_ROWS: Array<{
     field: "generator",
     getValue: (g) => `${g.generator.name}${g.generator.version ? ` @ ${g.generator.version}` : ""}`,
   },
-  { label: "Started", field: "startedAt", getValue: (g) => g.startedAt },
-  { label: "Completed", field: "completedAt", getValue: (g) => g.completedAt },
+  { label: "Started", field: "startedAt", getValue: (g) => g.startedAt, informational: true },
+  { label: "Completed", field: "completedAt", getValue: (g) => g.completedAt, informational: true },
   { label: "Created", field: null, getValue: (g) => g.createdAt },
 ];
 
@@ -45,8 +48,9 @@ export function buildComparisonRows(
   const differingFields = new Set(differences.map((difference) => difference.field));
   const rows: ComparisonRow[] = [];
 
-  for (const { label, field, getValue } of FIXED_ROWS) {
+  for (const { label, field, getValue, informational } of FIXED_ROWS) {
     rows.push({
+      informational,
       label,
       values: generations.map((generation) => formatValue(getValue(generation))),
       raw: generations.map((generation) => getValue(generation)),

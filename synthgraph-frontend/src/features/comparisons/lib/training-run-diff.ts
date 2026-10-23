@@ -11,6 +11,7 @@ const FIXED_ROWS: Array<{
   label: string;
   field: string | null;
   getValue: (run: ComparedTrainingRun) => unknown;
+  informational?: boolean;
 }> = [
   { label: "ID", field: null, getValue: (r) => r.id },
   { label: "Status", field: "status", getValue: (r) => r.status },
@@ -19,8 +20,8 @@ const FIXED_ROWS: Array<{
     field: "trainer",
     getValue: (r) => `${r.trainer.name}${r.trainer.version ? ` @ ${r.trainer.version}` : ""}`,
   },
-  { label: "Started", field: "startedAt", getValue: (r) => r.startedAt },
-  { label: "Completed", field: "completedAt", getValue: (r) => r.completedAt },
+  { label: "Started", field: "startedAt", getValue: (r) => r.startedAt, informational: true },
+  { label: "Completed", field: "completedAt", getValue: (r) => r.completedAt, informational: true },
   { label: "Created", field: null, getValue: (r) => r.createdAt },
 ];
 
@@ -37,8 +38,9 @@ export function buildTrainingRunComparisonRows(
   const differingFields = new Set(differences.map((difference) => difference.field));
   const rows: ComparisonRow[] = [];
 
-  for (const { label, field, getValue } of FIXED_ROWS) {
+  for (const { label, field, getValue, informational } of FIXED_ROWS) {
     rows.push({
+      informational,
       label,
       values: trainingRuns.map((run) => formatValue(getValue(run))),
       raw: trainingRuns.map((run) => getValue(run)),

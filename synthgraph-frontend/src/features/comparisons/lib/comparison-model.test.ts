@@ -7,6 +7,7 @@ import {
   familyWarning,
   groupOf,
   groupRows,
+  isDifference,
   isExpandable,
   type MatrixRow,
   numericDelta,
@@ -100,5 +101,24 @@ describe("isExpandable", () => {
     assert.equal(isExpandable("x".repeat(60), "x".repeat(60)), true);
     assert.equal(isExpandable("GPU", "GPU"), false);
     assert.equal(isExpandable(3, "3"), false);
+  });
+});
+
+describe("informational rows", () => {
+  const timestamps: MatrixRow = { label: "Started", values: ["a", "b"], differs: true, informational: true };
+  const real: MatrixRow = { label: "parameters.lr", values: ["1", "2"], differs: true };
+
+  it("are not differences even though the values differ", () => {
+    assert.equal(isDifference(timestamps), false);
+    assert.equal(isDifference(real), true);
+    assert.equal(isDifference({ label: "x", values: ["1", "1"], differs: false }), false);
+  });
+
+  it("do not count towards a group's differing total", () => {
+    const groups = groupRows([timestamps, { label: "Generator", values: ["a", "b"], differs: true }, real]);
+    const details = groups.find((g) => g.name === "Details");
+    assert.equal(details?.rows.length, 2);
+    assert.equal(details?.differing, 1);
+    assert.equal(groups.find((g) => g.name === "Parameters")?.differing, 1);
   });
 });
