@@ -84,5 +84,10 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # Node strips the types itself, so there is no test-runner dependency
+      # and nothing here touches the lockfile.
+      - name: Test
+        run: npm test
+
       - name: Build
         run: npm run build
