@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useMemo } from "react";
-import { buildLineage } from "../../lineage-model";
+import { buildLineage, describeLinkGap } from "../../lineage-model";
 import type { EnrichedGeneration, EnrichedTrainingRun, SelectedEntity } from "../../types/experiment-workspace";
 
 // @xyflow/react is a sizeable dependency (canvas/graph engine + its own
@@ -45,21 +45,16 @@ export function LineageTab({
           ? `evaluation:${selected.id}`
           : null;
 
-  const unlinked = model.unlinkedGenerationIds.length;
-  const hasRuns = trainingRuns.length > 0;
+  const gapNote = describeLinkGap(model, generations.length, trainingRuns.length > 0);
 
   return (
     <div className="flex flex-col gap-3">
-      {unlinked > 0 && hasRuns ? (
+      {gapNote ? (
         <p
           role="note"
           className="rounded-lg border border-research-border bg-research-panel px-4 py-3 text-[13px] text-research-ink-secondary"
         >
-          {unlinked === generations.length
-            ? "No dataset links were recorded between these generations and the training runs."
-            : `${unlinked} of ${generations.length} generations have no recorded link to a training run.`}{" "}
-          The dashed lines are a guess from timing within this experiment, not recorded provenance. Register each
-          generation&apos;s outputs and each run&apos;s dataset versions in the SDK to make them solid.
+          {gapNote}
         </p>
       ) : null}
 
