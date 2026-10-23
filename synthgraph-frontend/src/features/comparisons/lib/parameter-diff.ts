@@ -6,6 +6,8 @@ import type {
 export type ComparisonRow = {
   label: string;
   values: string[];
+  /** The unformatted values behind `values`, so a cell can expand to the real thing. */
+  raw?: unknown[];
   differs: boolean;
 };
 
@@ -47,6 +49,7 @@ export function buildComparisonRows(
     rows.push({
       label,
       values: generations.map((generation) => formatValue(getValue(generation))),
+      raw: generations.map((generation) => getValue(generation)),
       differs: field !== null && differingFields.has(field),
     });
   }
@@ -59,6 +62,7 @@ export function buildComparisonRows(
     rows.push({
       label: field,
       values: generations.map((generation) => formatValue(generation.parameters[key])),
+      raw: generations.map((generation) => generation.parameters[key]),
       differs: differingFields.has(field),
     });
   }

@@ -3,7 +3,6 @@
 import { FloatingPortal } from "@floating-ui/react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { Button } from "@/components/ui/Button";
 import type { SearchResult, SearchResultType } from "@/features/search/types/search";
 import { useRecentEntities, useSearch } from "@/features/search/hooks/useSearch";
 import { cn } from "@/lib/utils";
@@ -215,15 +214,16 @@ export function EntitySearchPicker({
         ) : null}
       </div>
 
-      <Button
+      {/* The dashboard's accent button, not the marketing-site white
+          primary Button, which read as an unrelated control here. */}
+      <button
         type="button"
-        size="lg"
-        className="self-start"
+        className="self-start rounded-md bg-research-accent px-5 py-2.5 text-[14px] font-medium text-white transition-colors hover:bg-research-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
         disabled={selected.size < MIN_SELECTION}
         onClick={onCompare}
       >
         Compare ({selected.size})
-      </Button>
+      </button>
     </div>
   );
 }
