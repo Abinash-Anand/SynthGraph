@@ -360,7 +360,7 @@ export function describeLinkGap(model: LineageModel, generationCount: number, ha
   const unlinked = model.unlinkedGenerationIds.length;
   if (unlinked === 0 || !hasRuns) return null;
 
-  const who = unlinked === generationCount ? "no generation" : `${unlinked} of ${generationCount} generations`;
+  const partial = unlinked === generationCount ? "" : ` ${unlinked} of ${generationCount} generations have no recorded link at all.`;
   const labels = model.unclaimedDatasetIds.map(
     (id) => model.nodes.find((node) => node.id === id)?.label ?? id.replace("dataset-version:", ""),
   );
@@ -369,7 +369,7 @@ export function describeLinkGap(model: LineageModel, generationCount: number, ha
     const named = labels.length <= 2 ? labels.join(" and ") : `${labels.slice(0, 2).join(", ")} and ${labels.length - 2} more`;
     const subject = labels.length === 1 ? "dataset" : "datasets";
     return (
-      `Your training runs recorded ${subject} ${named}, but ${who} claim${unlinked === generationCount ? "s" : ""} to have produced ${labels.length === 1 ? "it" : "them"}. ` +
+      `Your training runs recorded ${subject} ${named}, but no generation claims to have produced ${labels.length === 1 ? "it" : "them"}.${partial} ` +
       `The dashed lines are a guess from timing, not recorded provenance. ${SDK_HINT}`
     );
   }

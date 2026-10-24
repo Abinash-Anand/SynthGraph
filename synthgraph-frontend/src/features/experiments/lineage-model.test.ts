@@ -281,7 +281,10 @@ describe("describeLinkGap", () => {
       [run("r-claimed", { datasets: [{ id: "dv-2", version: "v2" }] }), trained("r-orphan")],
     );
     const text = describeLinkGap(model, 2, true) ?? "";
-    assert.match(text, /1 of 2 generations claim to have produced/);
+    // An unclaimed dataset is claimed by NO generation, however many are unlinked.
+    assert.match(text, /no generation claims to have produced it/);
+    assert.match(text, /1 of 2 generations have no recorded link at all/);
+    assert.doesNotMatch(text, /generations claim to have produced/);
   });
 
   it("falls back to the plain wording when the runs recorded no datasets either", () => {
