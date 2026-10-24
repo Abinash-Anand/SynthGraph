@@ -183,7 +183,7 @@ export function ComparisonMatrix({
                       )}
                     >
                       <td
-                        className="sticky left-0 z-[1] max-w-[200px] truncate bg-research-bg px-3 py-2.5 font-mono text-[11px] text-research-ink-muted"
+                        className="sticky left-0 z-[1] max-w-[96px] truncate bg-research-bg px-3 py-2.5 sm:max-w-[200px] font-mono text-[11px] text-research-ink-muted"
                         title={row.label}
                       >
                         {row.label.replace(/^(parameters|metrics)\./, "")}

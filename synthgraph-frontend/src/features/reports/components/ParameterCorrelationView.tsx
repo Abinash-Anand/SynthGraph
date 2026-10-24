@@ -86,7 +86,8 @@ function CorrelationCard({ correlation, metricKey }: { correlation: ParameterCor
       tooltip: {
         trigger: "axis",
         axisPointer: { type: "shadow" },
-        backgroundColor: "#18181b",
+        confine: true,
+      backgroundColor: "#18181b",
         borderColor: "#27272a",
         textStyle: { color: "#f4f4f5", fontSize: 12 },
         valueFormatter: (value: number | null) => (value === null ? "—" : formatMetricValue(value)),

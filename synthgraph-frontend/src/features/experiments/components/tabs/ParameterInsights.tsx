@@ -146,7 +146,8 @@ export function ParameterInsights({ runs }: { runs: EnrichedTrainingRun[] }) {
         // Higher-is-better reads purple; lower-is-better flips so purple is still "good".
         inRange: { color: direction === "lower" ? ["#a78bfa", "#3f3f46"] : ["#3f3f46", "#a78bfa"] },
       },
-      tooltip: { backgroundColor: "#18181b", borderColor: "#27272a", textStyle: { color: "#f4f4f5", fontSize: 12 } },
+      tooltip: { confine: true,
+      backgroundColor: "#18181b", borderColor: "#27272a", textStyle: { color: "#f4f4f5", fontSize: 12 } },
       series: [
         {
           type: "parallel",

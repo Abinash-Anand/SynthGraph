@@ -126,7 +126,7 @@ export function CaptureCompletenessView({
                     <div className="min-w-0">
                       <Link
                         href={`/dashboard/projects/${runProjectId}/experiments/${experimentId}?entity=run:${run.id}`}
-                        className="truncate text-[14.5px] font-medium text-ink underline underline-offset-2 hover:text-research-accent-hover"
+                        className="inline-block max-w-full truncate py-1 text-[14.5px] font-medium text-ink underline underline-offset-2 hover:text-research-accent-hover"
                       >
                         {run.name}
                       </Link>

@@ -26,7 +26,8 @@ const EChart = dynamic(() => import("@/shared/charts/EChart").then((m) => m.ECha
 
 const AXIS = { color: "#71717a", fontSize: 11 };
 const TOOLTIP = {
-  backgroundColor: "#18181b",
+  confine: true,
+      backgroundColor: "#18181b",
   borderColor: "#27272a",
   textStyle: { color: "#f4f4f5", fontSize: 12 },
 };

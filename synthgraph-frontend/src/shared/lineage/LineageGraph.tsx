@@ -598,7 +598,7 @@ export function LineageGraph({
               <button
                 type="button"
                 onClick={() => setShowImpact((value) => !value)}
-                className="mt-2 font-mono text-[11px] text-research-accent-hover underline underline-offset-2 hover:text-research-accent"
+                className="mt-1 py-1.5 font-mono text-[11px] text-research-accent-hover underline underline-offset-2 hover:text-research-accent"
               >
                 {showImpact ? "Hide affected results" : "List affected results"}
               </button>

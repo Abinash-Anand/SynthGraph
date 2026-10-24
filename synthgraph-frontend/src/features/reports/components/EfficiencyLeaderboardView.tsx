@@ -73,13 +73,15 @@ export function EfficiencyLeaderboardView({
     const frontier = paretoPath(rows);
     // Padded, not fitted: a tight fit made a 0.0015 gap fill the whole chart.
     const yRange = paddedAxisRange(scored.map((row) => row.value as number));
+    const maxHours = Math.max(0, ...scored.map((row) => row.durationSeconds / 3600));
     return {
       backgroundColor: "transparent",
       textStyle: { fontFamily: "var(--font-sans)" },
-      grid: { left: 64, right: 32, top: 24, bottom: 44 },
+      grid: { left: 64, right: 40, top: 24, bottom: 44 },
       tooltip: {
         trigger: "item",
-        backgroundColor: "#18181b",
+        confine: true,
+      backgroundColor: "#18181b",
         borderColor: "#27272a",
         textStyle: { color: "#f4f4f5", fontSize: 12 },
         formatter: (params: unknown) => {
@@ -90,6 +92,10 @@ export function EfficiencyLeaderboardView({
       },
       xAxis: {
         type: "value",
+        min: 0,
+        // Headroom on the right so the slowest run's label isn't cut off by the
+        // chart edge (it was, on a phone).
+        max: maxHours > 0 ? maxHours * 1.25 : undefined,
         name: "training time (hours)",
         nameLocation: "middle",
         nameGap: 28,
@@ -244,7 +250,7 @@ export function EfficiencyLeaderboardView({
                   {link ? (
                     <Link
                       href={`/dashboard/projects/${link.projectId}/experiments/${link.experimentId}?entity=run:${row.runId}`}
-                      className="truncate text-[14.5px] font-medium text-ink underline underline-offset-2 hover:text-research-accent-hover"
+                      className="inline-block max-w-full truncate py-1 text-[14.5px] font-medium text-ink underline underline-offset-2 hover:text-research-accent-hover"
                     >
                       {row.name}
                     </Link>
