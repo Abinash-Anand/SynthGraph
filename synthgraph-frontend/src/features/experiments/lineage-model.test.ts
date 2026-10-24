@@ -124,3 +124,80 @@ describe("buildLineage - tone and layers", () => {
     assert.equal(model.nodes.find((n) => n.id === "asset:tex")?.kind, "asset");
   });
 });
+
+describe("buildLineage - links recorded through the SDK's dataset attach", () => {
+  it("connects a generation to a run through a dataset version listed only in datasetReferences", () => {
+    const model = buildLineage(
+      [gen("g1", { datasetReferences: [{ datasetVersionId: "dv1", role: "output" }] })],
+      [run("r1", { datasets: [{ id: "dv1", version: "v1", uri: "s3://x" }] })],
+    );
+    assert.ok(model.edges.some((e) => e.source === "generation:g1" && e.target === "dataset-version:dv1" && !e.inferred));
+    assert.ok(model.edges.some((e) => e.source === "dataset-version:dv1" && e.target === "training-run:r1"));
+    assert.deepEqual(model.unlinkedGenerationIds, []);
+    assert.equal(model.inferredEdgeCount, 0);
+    // The run's own dataset record names the node; the bare id is only a fallback.
+    assert.equal(model.nodes.find((n) => n.id === "dataset-version:dv1")?.label, "v1");
+  });
+
+  it("draws an input reference into the generation, not out of it", () => {
+    const model = buildLineage(
+      [gen("g1", { datasetReferences: [{ datasetVersionId: "raw", role: "input" }] })],
+      [],
+    );
+    assert.ok(model.edges.some((e) => e.source === "dataset-version:raw" && e.target === "generation:g1"));
+    assert.equal(model.nodes.find((n) => n.id === "dataset-version:raw")?.layer, 0);
+  });
+
+  it("falls back to a short id label for a dataset nothing names", () => {
+    const model = buildLineage(
+      [gen("g1", { datasetReferences: [{ datasetVersionId: "5e04c3a7-bfe3-46f9", role: "output" }] })],
+      [],
+    );
+    assert.equal(model.nodes.find((n) => n.id === "dataset-version:5e04c3a7-bfe3-46f9")?.label, "Dataset 5e04c3a7");
+  });
+});
+
+describe("buildLineage - evaluations name their dataset", () => {
+  it("links the dataset version an evaluation was scored against, even if nothing else links it", () => {
+    const model = buildLineage(
+      [],
+      [run("r1", {}, [{ id: "e1", name: "eval", datasetVersionId: "dv9" }])],
+    );
+    assert.ok(model.edges.some((e) => e.source === "dataset-version:dv9" && e.target === "evaluation:e1" && !e.inferred));
+    assert.equal(model.nodes.find((n) => n.id === "dataset-version:dv9")?.layer, 2);
+  });
+
+  it("shares one node between evaluations on the same dataset", () => {
+    const model = buildLineage(
+      [],
+      [run("r1", {}, [
+        { id: "e1", name: "a", datasetVersionId: "dv9" },
+        { id: "e2", name: "b", datasetVersionId: "dv9" },
+      ])],
+    );
+    assert.equal(model.nodes.filter((n) => n.kind === "dataset").length, 1);
+    assert.equal(model.edges.filter((e) => e.source === "dataset-version:dv9").length, 2);
+  });
+
+  it("does not guess a run link for a generation whose dataset was evaluated on", () => {
+    const model = buildLineage(
+      [gen("g1", { datasetReferences: [{ datasetVersionId: "dv9", role: "output" }] })],
+      [run("r1", {}, [{ id: "e1", name: "eval", datasetVersionId: "dv9" }])],
+    );
+    assert.deepEqual(model.unlinkedGenerationIds, []);
+    assert.equal(model.inferredEdgeCount, 0);
+    const reach = reachOf("generation:g1", model);
+    assert.equal(countByKind(reach.downstream).evaluation, 1);
+  });
+
+  it("keeps the run's dataset label when an evaluation reaches the same version first", () => {
+    const model = buildLineage(
+      [],
+      [
+        run("r1", {}, [{ id: "e1", name: "eval", datasetVersionId: "dv1" }]),
+        run("r2", { datasets: [{ id: "dv1", version: "release-3" }] }),
+      ],
+    );
+    assert.equal(model.nodes.find((n) => n.id === "dataset-version:dv1")?.label, "release-3");
+  });
+});
