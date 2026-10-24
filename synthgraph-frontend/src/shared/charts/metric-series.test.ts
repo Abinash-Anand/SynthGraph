@@ -6,9 +6,11 @@ import {
   normalizeValues,
   parseCheckpointStep,
   preferredSeriesKeys,
+  READABLE_SERIES_LIMIT,
   rangeOf,
   scalesDiverge,
   splitStepDomains,
+  TRIMMED_SERIES_COUNT,
 } from "./metric-series.ts";
 
 describe("splitStepDomains", () => {
@@ -89,5 +91,19 @@ describe("parseCheckpointStep", () => {
     assert.equal(parseCheckpointStep("eval_step_500"), 500);
     assert.equal(parseCheckpointStep("final"), null);
     assert.equal(parseCheckpointStep(null), null);
+  });
+});
+
+describe("series limits", () => {
+  it("trimming keeps outcomes and drops machine telemetry first", () => {
+    const keys = ["cpu_count", "cpu_percent", "memory_percent", "episode_reward", "training/policy_loss", "mAP50", "val_loss", "eval/sps"];
+    const kept = preferredSeriesKeys(keys, TRIMMED_SERIES_COUNT);
+    assert.equal(kept.length, TRIMMED_SERIES_COUNT);
+    for (const key of ["episode_reward", "training/policy_loss", "mAP50", "val_loss"]) {
+      assert.ok(kept.includes(key), key);
+    }
+  });
+  it("has a limit that trimming actually brings the chart under", () => {
+    assert.ok(TRIMMED_SERIES_COUNT < READABLE_SERIES_LIMIT);
   });
 });

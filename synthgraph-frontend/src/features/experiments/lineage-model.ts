@@ -66,6 +66,12 @@ export type LineageModel = {
   /** Generations with no recorded path to any training run. */
   unlinkedGenerationIds: string[];
   inferredEdgeCount: number;
+  /**
+   * Dataset versions a training run recorded using that no generation claims to
+   * have produced. This is the precise shape of the usual gap: the run side was
+   * recorded, the generation side wasn't.
+   */
+  unclaimedDatasetIds: string[];
 };
 
 function refNode(ref: DataRef): { id: string; kind: LineageNodeKind } {
@@ -238,17 +244,55 @@ export function buildLineage(generations: LineageGenerationInput[], runs: Lineag
     if (![...reach].some((id) => resultNodeIds.has(id))) unlinked.push(generation.id);
   }
 
+  // Training datasets nobody claims: a run says it trained on this version,
+  // but no generation says it produced it. Evaluation-only datasets don't count
+  // - a held-out test set often comes from somewhere else entirely, so guessing
+  // that a generation produced it would be a stretch.
+  const claimed = new Set(
+    Array.from(edges.values())
+      .filter((edge) => edge.source.startsWith("generation:") && edge.target.startsWith("dataset-version:"))
+      .map((edge) => edge.target),
+  );
+  const consumerStarts = new Map<string, number[]>();
+  for (const { run } of runs) {
+    const began = timeOf(run.startedAt, run.createdAt);
+    for (const version of run.datasets ?? []) {
+      const id = `dataset-version:${version.id}`;
+      consumerStarts.set(id, [...(consumerStarts.get(id) ?? []), ...(began === null ? [] : [began])]);
+    }
+  }
+  const unclaimedDatasetIds = Array.from(consumerStarts.keys()).filter((id) => !claimed.has(id));
+
   // Without any recorded link, the only honest statement is "same
-  // experiment, and the run began after the generation finished". Flagged
-  // as inferred so the UI never presents it as provenance.
+  // experiment, and what consumed it began after the generation finished".
+  // Flagged as inferred so the UI never presents it as provenance.
+  //
+  // The guess goes to the dataset when runs recorded one nobody claims: that is
+  // where the chain is actually broken, and drawing the line to the run would
+  // jump over a dataset node the graph already shows. With no such dataset it
+  // falls back to the runs themselves.
   let inferredEdgeCount = 0;
   for (const generation of generations) {
     if (!unlinked.includes(generation.id)) continue;
     const available = timeOf(generation.completed_at, generation.started_at, generation.created_at);
+    const genId = `generation:${generation.id}`;
+
+    if (unclaimedDatasetIds.length > 0) {
+      for (const versionId of unclaimedDatasetIds) {
+        const starts = consumerStarts.get(versionId) ?? [];
+        const usedAfter =
+          available === null || starts.length === 0 || starts.some((began) => began >= available);
+        if (!usedAfter) continue;
+        addEdge(genId, versionId, true);
+        inferredEdgeCount++;
+      }
+      continue;
+    }
+
     for (const { run } of runs) {
       const began = timeOf(run.startedAt, run.createdAt);
       if (available !== null && began !== null && began < available) continue;
-      addEdge(`generation:${generation.id}`, `training-run:${run.id}`, true);
+      addEdge(genId, `training-run:${run.id}`, true);
       inferredEdgeCount++;
     }
   }
@@ -258,6 +302,7 @@ export function buildLineage(generations: LineageGenerationInput[], runs: Lineag
     edges: Array.from(edges.values()),
     unlinkedGenerationIds: unlinked,
     inferredEdgeCount,
+    unclaimedDatasetIds,
   };
 }
 
@@ -302,4 +347,35 @@ export function countByKind(nodes: LineageNode[]): Partial<Record<LineageNodeKin
   const counts: Partial<Record<LineageNodeKind, number>> = {};
   for (const node of nodes) counts[node.kind] = (counts[node.kind] ?? 0) + 1;
   return counts;
+}
+
+const SDK_HINT = "Record each generation's output with generation.dataset(...) to make them solid.";
+
+/**
+ * One sentence about why the graph has dashed lines, or null when it doesn't.
+ * Says *which* link is missing: "no links recorded" used to be printed even when
+ * the runs had recorded their datasets and only the generation side was missing.
+ */
+export function describeLinkGap(model: LineageModel, generationCount: number, hasRuns: boolean): string | null {
+  const unlinked = model.unlinkedGenerationIds.length;
+  if (unlinked === 0 || !hasRuns) return null;
+
+  const partial = unlinked === generationCount ? "" : ` ${unlinked} of ${generationCount} generations have no recorded link at all.`;
+  const labels = model.unclaimedDatasetIds.map(
+    (id) => model.nodes.find((node) => node.id === id)?.label ?? id.replace("dataset-version:", ""),
+  );
+
+  if (labels.length > 0) {
+    const named = labels.length <= 2 ? labels.join(" and ") : `${labels.slice(0, 2).join(", ")} and ${labels.length - 2} more`;
+    const subject = labels.length === 1 ? "dataset" : "datasets";
+    return (
+      `Your training runs recorded ${subject} ${named}, but no generation claims to have produced ${labels.length === 1 ? "it" : "them"}.${partial} ` +
+      `The dashed lines are a guess from timing, not recorded provenance. ${SDK_HINT}`
+    );
+  }
+  const lead =
+    unlinked === generationCount
+      ? "No dataset links were recorded between these generations and the training runs."
+      : `${unlinked} of ${generationCount} generations have no recorded link to a training run.`;
+  return `${lead} The dashed lines are a guess from timing within this experiment, not recorded provenance. Register each generation's outputs and each run's dataset versions in the SDK to make them solid.`;
 }

@@ -11,7 +11,9 @@ import { formatDurationSeconds, formatMetricValue } from "@/shared/lib/format";
 import { type MetricDirection, directionLabel, metricDirection } from "@/shared/lib/metric-semantics";
 import {
   analyzeEfficiency,
+  closeResultsSpread,
   defaultMetricKey,
+  paddedAxisRange,
   paretoPath,
   rankableMetricKeys,
 } from "../efficiency-model";
@@ -69,13 +71,17 @@ export function EfficiencyLeaderboardView({
   const scatterOption = useMemo<EChartsCoreOption>(() => {
     const scored = rows.filter((row) => row.value !== null);
     const frontier = paretoPath(rows);
+    // Padded, not fitted: a tight fit made a 0.0015 gap fill the whole chart.
+    const yRange = paddedAxisRange(scored.map((row) => row.value as number));
+    const maxHours = Math.max(0, ...scored.map((row) => row.durationSeconds / 3600));
     return {
       backgroundColor: "transparent",
       textStyle: { fontFamily: "var(--font-sans)" },
-      grid: { left: 64, right: 32, top: 24, bottom: 44 },
+      grid: { left: 64, right: 40, top: 24, bottom: 44 },
       tooltip: {
         trigger: "item",
-        backgroundColor: "#18181b",
+        confine: true,
+      backgroundColor: "#18181b",
         borderColor: "#27272a",
         textStyle: { color: "#f4f4f5", fontSize: 12 },
         formatter: (params: unknown) => {
@@ -86,6 +92,10 @@ export function EfficiencyLeaderboardView({
       },
       xAxis: {
         type: "value",
+        min: 0,
+        // Headroom on the right so the slowest run's label isn't cut off by the
+        // chart edge (it was, on a phone).
+        max: maxHours > 0 ? maxHours * 1.25 : undefined,
         name: "training time (hours)",
         nameLocation: "middle",
         nameGap: 28,
@@ -96,7 +106,8 @@ export function EfficiencyLeaderboardView({
       },
       yAxis: {
         type: "value",
-        scale: true,
+        min: yRange?.min,
+        max: yRange?.max,
         name: `${activeMetricKey} (${direction === "lower" ? "lower" : "higher"} is better)`,
         nameTextStyle: { color: "#71717a", fontSize: 11, align: "left" },
         axisLine: { show: false },
@@ -117,6 +128,8 @@ export function EfficiencyLeaderboardView({
           type: "scatter",
           z: 2,
           symbolSize: 13,
+          // Two nearby points otherwise print their names on top of each other.
+          labelLayout: { hideOverlap: true },
           data: scored.map((row) => ({
             value: [row.durationSeconds / 3600, row.value],
             name: row.name,
@@ -134,6 +147,8 @@ export function EfficiencyLeaderboardView({
       ],
     };
   }, [rows, activeMetricKey, direction]);
+
+  const closeSpread = closeResultsSpread(rows.flatMap((row) => (row.value === null ? [] : [row.value])));
 
   if (leaderboard.runs.length === 0) {
     return (
@@ -216,6 +231,12 @@ export function EfficiencyLeaderboardView({
               <span className="size-2.5 rounded-full" style={{ background: DOMINATED_COLOR }} /> beaten by a faster, better run
             </span>
           </p>
+          {closeSpread !== null ? (
+            <p role="note" className="mt-2 text-[12.5px] text-research-warning">
+              These results are within {(closeSpread * 100).toFixed(1)}% of each other, which may be within normal
+              run-to-run variation. Treat the ranking as a tie unless you&apos;ve repeated the runs.
+            </p>
+          ) : null}
         </div>
       ) : null}
 
@@ -229,7 +250,7 @@ export function EfficiencyLeaderboardView({
                   {link ? (
                     <Link
                       href={`/dashboard/projects/${link.projectId}/experiments/${link.experimentId}?entity=run:${row.runId}`}
-                      className="truncate text-[14.5px] font-medium text-ink underline underline-offset-2 hover:text-research-accent-hover"
+                      className="inline-block max-w-full truncate py-1 text-[14.5px] font-medium text-ink underline underline-offset-2 hover:text-research-accent-hover"
                     >
                       {row.name}
                     </Link>

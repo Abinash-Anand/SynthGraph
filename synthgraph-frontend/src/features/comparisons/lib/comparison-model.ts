@@ -8,7 +8,17 @@ export type MatrixRow = {
   /** The raw values behind `values`, for expansion and diffing. */
   raw?: unknown[];
   differs: boolean;
+  /**
+   * Differs by nature, so it isn't evidence of a change: two records never share
+   * a start or finish time. Shown, but never counted or highlighted as a difference.
+   */
+  informational?: boolean;
 };
+
+/** Whether a row is a real difference worth counting and highlighting. */
+export function isDifference(row: MatrixRow): boolean {
+  return row.differs && !row.informational;
+}
 
 export type RowGroup = { name: "Details" | "Parameters" | "Metrics"; rows: MatrixRow[]; differing: number };
 
@@ -28,7 +38,7 @@ export function groupRows(rows: MatrixRow[]): RowGroup[] {
   }
   return GROUP_ORDER.filter((name) => groups.has(name)).map((name) => {
     const list = groups.get(name)!;
-    return { name, rows: list, differing: list.filter((row) => row.differs).length };
+    return { name, rows: list, differing: list.filter(isDifference).length };
   });
 }
 

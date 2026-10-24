@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { formatDurationSeconds, formatMetricValue } from "./format.ts";
+import { formatDurationSeconds, formatMetricValue, pluralize } from "./format.ts";
 
 describe("formatMetricValue", () => {
   it("keeps the digits that distinguish small values", () => {
@@ -42,5 +42,18 @@ describe("formatDurationSeconds", () => {
     assert.equal(formatDurationSeconds(45), "45s");
     assert.equal(formatDurationSeconds(560), "9.3m");
     assert.equal(formatDurationSeconds(7200), "2.0h");
+  });
+});
+
+describe("pluralize", () => {
+  it("uses the singular only for exactly one", () => {
+    assert.equal(pluralize(1, "generation"), "1 generation");
+    assert.equal(pluralize(0, "generation"), "0 generations");
+    assert.equal(pluralize(2, "generation"), "2 generations");
+  });
+  it("accepts an irregular plural and groups thousands", () => {
+    assert.equal(pluralize(1, "analysis", "analyses"), "1 analysis");
+    assert.equal(pluralize(3, "analysis", "analyses"), "3 analyses");
+    assert.equal(pluralize(1200, "run"), "1,200 runs");
   });
 });

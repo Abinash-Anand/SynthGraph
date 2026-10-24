@@ -59,6 +59,14 @@ export function preferredSeriesKeys(keys: string[], limit = 3): string[] {
     .slice(0, limit);
 }
 
+/**
+ * Past this many lines a chart stops being readable and its tooltip becomes a
+ * wall of numbers. Not enforced - people do want to see a lot at once - but past
+ * it the UI says so and offers to trim.
+ */
+export const READABLE_SERIES_LIMIT = 8;
+export const TRIMMED_SERIES_COUNT = 6;
+
 export type Range = { min: number; max: number };
 
 export function rangeOf(values: number[]): Range | null {

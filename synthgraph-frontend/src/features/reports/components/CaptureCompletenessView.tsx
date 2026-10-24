@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { cn } from "@/lib/utils";
-import { formatDateTime } from "@/shared/lib/format";
+import { formatDateTime, pluralize } from "@/shared/lib/format";
 import {
   type CaptureStatusFilter,
   describeRunCapture,
@@ -126,7 +126,7 @@ export function CaptureCompletenessView({
                     <div className="min-w-0">
                       <Link
                         href={`/dashboard/projects/${runProjectId}/experiments/${experimentId}?entity=run:${run.id}`}
-                        className="truncate text-[14.5px] font-medium text-ink underline underline-offset-2 hover:text-research-accent-hover"
+                        className="inline-block max-w-full truncate py-1 text-[14.5px] font-medium text-ink underline underline-offset-2 hover:text-research-accent-hover"
                       >
                         {run.name}
                       </Link>
@@ -204,7 +204,7 @@ export function CaptureCompletenessView({
                       <td className="px-3 py-3">
                         <div className="flex flex-col gap-1">
                           <span className="font-mono text-[12px] text-ink-secondary">
-                            {item.total} of {total} runs · {percent(item.coverage)}
+                            {item.total} of {pluralize(total, "run")} · {percent(item.coverage)}
                           </span>
                           <Meter value={item.coverage} tone="blue" />
                         </div>

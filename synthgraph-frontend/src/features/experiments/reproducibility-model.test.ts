@@ -97,3 +97,59 @@ describe("blocker tags", () => {
     assert.deepEqual(assessReproducibility(null, clean).blockerTags, []);
   });
 });
+
+describe("code version recorded as a git commit", () => {
+  // The backend lists "Code version" as missing whenever `code_version` is
+  // unset, even though the SDK records the commit under environment.commit.
+  const backendView = (): ClassificationLike => ({
+    known: fields(8),
+    supplied: fields(2),
+    external: [],
+    missing: ["Code version", "Configuration hash"],
+  });
+  const withCommit = { seed: 0, environment: { dirty: false, commit: "3f2a9c1d" } };
+
+  it("does not call a recorded commit 'no code version'", () => {
+    const result = assessReproducibility(backendView(), withCommit);
+    assert.equal(result.blockers.length, 0);
+    assert.deepEqual(result.blockerTags, []);
+  });
+
+  it("does not report the code version as not recorded, but still reports what really is missing", () => {
+    const result = assessReproducibility(backendView(), withCommit);
+    const note = result.notes.join(" ");
+    assert.doesNotMatch(note, /Code version/);
+    assert.match(note, /Not recorded: Configuration hash/);
+    assert.equal(result.counts.missing, 1);
+  });
+
+  it("scores a recorded commit as recorded", () => {
+    const withoutCommit = assessReproducibility(backendView(), { seed: 0, environment: { dirty: false } });
+    const result = assessReproducibility(backendView(), withCommit);
+    assert.ok((result.score ?? 0) > (withoutCommit.score ?? 1));
+    assert.equal(result.counts.known, 9);
+  });
+
+  it("still blocks when there is neither a code_version nor a commit", () => {
+    const result = assessReproducibility(backendView(), { seed: 0, environment: { dirty: false } });
+    assert.deepEqual(result.blockerTags, ["no code version"]);
+  });
+
+  it("keeps the uncommitted-code blocker even when the commit is known", () => {
+    const result = assessReproducibility(backendView(), { seed: 0, environment: { dirty: true, commit: "3f2a9c1d" } });
+    assert.deepEqual(result.blockerTags, ["uncommitted code"]);
+    assert.equal(result.grade, "partial");
+  });
+
+  it("ignores a blank commit", () => {
+    const result = assessReproducibility(backendView(), { seed: 0, environment: { commit: "  " } });
+    assert.deepEqual(result.blockerTags, ["no code version"]);
+  });
+
+  it("does not double-count when code_version itself is set", () => {
+    const supplied: ClassificationLike = { known: fields(9), supplied: [], external: [], missing: ["Configuration hash"] };
+    const result = assessReproducibility(supplied, { seed: 0, code_version: "abc", environment: { commit: "def" } });
+    assert.equal(result.counts.known, 9);
+    assert.equal(result.counts.missing, 1);
+  });
+});

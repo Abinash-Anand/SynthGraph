@@ -20,7 +20,7 @@ function RunNameCell({
   return (
     <Link
       href={`/dashboard/projects/${link.projectId}/experiments/${link.experimentId}?entity=run:${runId}`}
-      className="truncate text-research-ink-muted underline underline-offset-2 hover:text-research-accent-hover"
+      className="inline-block max-w-full truncate py-1 text-research-ink-muted underline underline-offset-2 hover:text-research-accent-hover"
     >
       {name}
     </Link>
@@ -63,7 +63,50 @@ function MetricRows({
   linksByRunId: Record<string, RunLink>;
 }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-research-border">
+    <>
+      {/* Phones get a card per metric: a four-column table there hid the other
+          extreme and the Compare link behind a sideways scroll. */}
+      <ul className="flex flex-col gap-2 sm:hidden">
+        {rows.map((row) => {
+          const href = compareHref(row);
+          const first = row.best ?? row.high;
+          const second = row.worst ?? row.low;
+          return (
+            <li key={row.metricKey} className="rounded-xl border border-research-border bg-research-panel p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-mono font-medium text-research-ink">{row.metricKey}</span>
+                <DirectionChip row={row} />
+              </div>
+              {row.flat ? (
+                <p className="mt-2 text-[13px] text-research-ink-muted">
+                  every run recorded {formatMetricValue(first.value)}
+                </p>
+              ) : (
+                <div className="mt-2 grid grid-cols-2 gap-3 text-[13px]">
+                  <div className="min-w-0">
+                    <p className="mb-0.5 font-mono text-[10px] text-research-ink-muted">{row.best ? "BEST" : "HIGH"}</p>
+                    <ValueRun entry={first} linksByRunId={linksByRunId} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="mb-0.5 font-mono text-[10px] text-research-ink-muted">{row.worst ? "WORST" : "LOW"}</p>
+                    <ValueRun entry={second} linksByRunId={linksByRunId} />
+                  </div>
+                </div>
+              )}
+              {href ? (
+                <Link
+                  href={href}
+                  className="mt-1 inline-block py-2 text-[12.5px] text-research-accent-hover underline underline-offset-2"
+                >
+                  Compare →
+                </Link>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+
+    <div className="hidden overflow-x-auto rounded-xl border border-research-border sm:block">
       <table className="w-full border-collapse text-[13px]">
         <thead>
           <tr className="border-b border-research-border bg-research-panel">
@@ -118,7 +161,7 @@ function MetricRows({
                   {href ? (
                     <Link
                       href={href}
-                      className="whitespace-nowrap text-[12.5px] text-research-accent-hover underline underline-offset-2"
+                      className="inline-block whitespace-nowrap py-1.5 text-[12.5px] text-research-accent-hover underline underline-offset-2"
                     >
                       Compare →
                     </Link>
@@ -130,6 +173,7 @@ function MetricRows({
         </tbody>
       </table>
     </div>
+    </>
   );
 }
 

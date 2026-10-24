@@ -11,6 +11,7 @@ import {
   displayLines,
   familyWarning,
   groupRows,
+  isDifference,
   isExpandable,
   type MatrixRow,
   numericDelta,
@@ -58,7 +59,8 @@ export function ComparisonMatrix({
   const [open, setOpen] = useState<Set<string>>(new Set());
 
   const baseline = Math.min(baselineIndex, columns.length - 1);
-  const differingTotal = rows.filter((row) => row.differs).length;
+  const differingTotal = rows.filter(isDifference).length;
+  const timesDiffer = rows.some((row) => row.informational && row.differs);
   const groups = useMemo(() => groupRows(rows), [rows]);
   const warning = useMemo(() => familyWarning(rows), [rows]);
 
@@ -105,13 +107,21 @@ export function ComparisonMatrix({
             {warning}
           </p>
         ) : null}
+        {timesDiffer ? (
+          <p className="text-[12px] text-research-ink-muted">
+            Start and finish times differ between any two records, so they aren&apos;t counted as differences.
+          </p>
+        ) : null}
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-research-border">
         <table className="w-full border-collapse text-[13px]">
           <thead>
             <tr className="border-b border-research-border bg-research-panel align-bottom">
-              <th scope="col" className="px-3 py-2.5 text-left font-mono text-[11px] text-research-ink-muted">
+              <th
+                scope="col"
+                className="sticky left-0 z-[1] bg-research-panel px-3 py-2.5 text-left font-mono text-[11px] text-research-ink-muted"
+              >
                 field
               </th>
               {columns.map((column, index) => (
@@ -148,7 +158,7 @@ export function ComparisonMatrix({
           </thead>
           <tbody>
             {groups.map((group) => {
-              const visible = showAll ? group.rows : group.rows.filter((row) => row.differs);
+              const visible = showAll ? group.rows : group.rows.filter(isDifference);
               if (visible.length === 0) return null;
               return (
                 <Fragment key={group.name}>
@@ -169,11 +179,11 @@ export function ComparisonMatrix({
                       key={row.label}
                       className={cn(
                         "border-b border-research-border align-top last:border-b-0",
-                        row.differs && "bg-research-warning/[0.04]",
+                        isDifference(row) && "bg-research-warning/[0.04]",
                       )}
                     >
                       <td
-                        className="max-w-[200px] truncate px-3 py-2.5 font-mono text-[11px] text-research-ink-muted"
+                        className="sticky left-0 z-[1] max-w-[96px] truncate bg-research-bg px-3 py-2.5 sm:max-w-[200px] font-mono text-[11px] text-research-ink-muted"
                         title={row.label}
                       >
                         {row.label.replace(/^(parameters|metrics)\./, "")}
@@ -183,7 +193,7 @@ export function ComparisonMatrix({
                         const raw = row.raw?.[index];
                         const baseRaw = row.raw?.[baseline];
                         const isBaseline = index === baseline;
-                        const differsFromBaseline = row.differs && display !== row.values[baseline];
+                        const differsFromBaseline = isDifference(row) && display !== row.values[baseline];
                         const expandable = isExpandable(raw, display);
                         const expanded = open.has(key);
                         const delta = !isBaseline ? formatDelta(baseRaw, raw) : null;

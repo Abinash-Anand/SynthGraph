@@ -26,6 +26,15 @@ export function formatDateTime(iso: string): string {
   });
 }
 
+/**
+ * "1 generation", "3 generations". Only for nouns that add "s" (or pass the
+ * plural). The count is formatted with thousands separators so "1200 runs"
+ * reads "1,200 runs" like everything else here.
+ */
+export function pluralize(count: number, singular: string, plural = `${singular}s`): string {
+  return `${METRIC_COUNT.format(count)} ${count === 1 ? singular : plural}`;
+}
+
 // The single frontend definition of "what does '1.5h' mean" - was
 // previously reimplemented separately in RunsTab.tsx and
 // EfficiencyLeaderboardView.tsx with subtly different rounding.

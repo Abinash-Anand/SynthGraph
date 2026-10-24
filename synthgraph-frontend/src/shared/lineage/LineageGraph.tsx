@@ -567,63 +567,64 @@ export function LineageGraph({
             />
           </Panel>
 
-          {selectedNode ? (
-            <Panel position="top-right" className="!m-3 max-w-[300px]">
-              <div className="rounded-lg border border-research-border bg-research-panel/95 p-3 text-[12px] shadow-lg backdrop-blur">
-                <p className="mono-label text-research-ink-muted">If this changes</p>
-                <p className="mt-1 truncate text-research-ink" title={selectedNode.label}>
-                  {selectedNode.label}
-                </p>
-                <dl className="mt-2 flex flex-col gap-1.5">
-                  <div>
-                    <dt className="text-research-ink-muted">Affects</dt>
-                    <dd className="text-research-ink-secondary">{describeCounts(fullReach.downstream, nodesById)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-research-ink-muted">Depends on</dt>
-                    <dd className="text-research-ink-secondary">{describeCounts(fullReach.upstream, nodesById)}</dd>
-                  </div>
-                </dl>
-                {fullReach.viaInferred ? (
-                  <p className="mt-2 text-research-ink-muted">
-                    Includes inferred links (dashed), not recorded provenance.
-                  </p>
-                ) : null}
-                {downstreamNodes.length > 0 ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setShowImpact((value) => !value)}
-                      className="mt-2 font-mono text-[11px] text-research-accent-hover underline underline-offset-2 hover:text-research-accent"
-                    >
-                      {showImpact ? "Hide affected results" : "List affected results"}
-                    </button>
-                    {showImpact ? (
-                      <ul className="mt-2 flex max-h-[180px] flex-col gap-1 overflow-y-auto">
-                        {downstreamNodes.map((node) => (
-                          <li key={node.id}>
-                            <button
-                              type="button"
-                              onClick={() => onNodeSelect(node.id, node.kind)}
-                              className="w-full truncate rounded px-1.5 py-1 text-left text-research-ink-secondary hover:bg-research-subtle hover:text-research-ink"
-                              title={node.label}
-                            >
-                              <span className="mr-1.5 font-mono text-[10px] text-research-ink-muted">
-                                {node.kind === "training-run" ? "RUN" : "EVAL"}
-                              </span>
-                              {node.label}
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </>
-                ) : null}
-              </div>
-            </Panel>
-          ) : null}
         </ReactFlow>
       </div>
+
+      {/* Below the canvas, not floating over it: an overlay covered the very nodes
+          being inspected whenever the graph was narrow. */}
+      {selectedNode ? (
+        <div className="rounded-lg border border-research-border bg-research-panel p-3 text-[12px]">
+          <p className="mono-label text-research-ink-muted">If this changes</p>
+          <p className="mt-1 truncate text-research-ink" title={selectedNode.label}>
+            {selectedNode.label}
+          </p>
+          <dl className="mt-2 flex flex-col gap-1.5">
+            <div>
+              <dt className="text-research-ink-muted">Affects</dt>
+              <dd className="text-research-ink-secondary">{describeCounts(fullReach.downstream, nodesById)}</dd>
+            </div>
+            <div>
+              <dt className="text-research-ink-muted">Depends on</dt>
+              <dd className="text-research-ink-secondary">{describeCounts(fullReach.upstream, nodesById)}</dd>
+            </div>
+          </dl>
+          {fullReach.viaInferred ? (
+            <p className="mt-2 text-research-ink-muted">
+              Includes inferred links (dashed), not recorded provenance.
+            </p>
+          ) : null}
+          {downstreamNodes.length > 0 ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setShowImpact((value) => !value)}
+                className="mt-1 py-1.5 font-mono text-[11px] text-research-accent-hover underline underline-offset-2 hover:text-research-accent"
+              >
+                {showImpact ? "Hide affected results" : "List affected results"}
+              </button>
+              {showImpact ? (
+                <ul className="mt-2 flex max-h-[180px] flex-col gap-1 overflow-y-auto">
+                  {downstreamNodes.map((node) => (
+                    <li key={node.id}>
+                      <button
+                        type="button"
+                        onClick={() => onNodeSelect(node.id, node.kind)}
+                        className="w-full truncate rounded px-1.5 py-1 text-left text-research-ink-secondary hover:bg-research-subtle hover:text-research-ink"
+                        title={node.label}
+                      >
+                        <span className="mr-1.5 font-mono text-[10px] text-research-ink-muted">
+                          {node.kind === "training-run" ? "RUN" : "EVAL"}
+                        </span>
+                        {node.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[11.5px] text-research-ink-muted">
         <span className="inline-flex items-center gap-1.5">

@@ -5,7 +5,7 @@ import type { EChartsCoreOption } from "echarts/core";
 import { useMemo, useState } from "react";
 import { SelectField } from "@/components/ui/Field";
 import { cn } from "@/lib/utils";
-import { formatMetricValue } from "@/shared/lib/format";
+import { formatMetricValue, pluralize } from "@/shared/lib/format";
 import { directionLabel, metricDirection } from "@/shared/lib/metric-semantics";
 import { bestEvaluationValue, outcomeMetricKeys, preferredOutcomeKey } from "../../outcomes";
 import {
@@ -146,7 +146,8 @@ export function ParameterInsights({ runs }: { runs: EnrichedTrainingRun[] }) {
         // Higher-is-better reads purple; lower-is-better flips so purple is still "good".
         inRange: { color: direction === "lower" ? ["#a78bfa", "#3f3f46"] : ["#3f3f46", "#a78bfa"] },
       },
-      tooltip: { backgroundColor: "#18181b", borderColor: "#27272a", textStyle: { color: "#f4f4f5", fontSize: 12 } },
+      tooltip: { confine: true,
+      backgroundColor: "#18181b", borderColor: "#27272a", textStyle: { color: "#f4f4f5", fontSize: 12 } },
       series: [
         {
           type: "parallel",
@@ -184,7 +185,7 @@ export function ParameterInsights({ runs }: { runs: EnrichedTrainingRun[] }) {
           Each run&apos;s outcome is its best evaluation of <span className="font-mono">{metricKey}</span> (
           {directionLabel(direction)}
           {direction === "neutral" ? ", so no better/worse reading is given" : ", inferred from the name"}).
-          These are associations across {result.usableRuns} of {result.totalRuns} runs, not proof of cause.
+          These are associations across {result.usableRuns} of {pluralize(result.totalRuns, "run")}, not proof of cause.
         </p>
       </div>
 

@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   buildLineage,
   countByKind,
+  describeLinkGap,
   type LineageGenerationInput,
   type LineageRunInput,
   reachOf,
@@ -199,5 +200,110 @@ describe("buildLineage - evaluations name their dataset", () => {
       ],
     );
     assert.equal(model.nodes.find((n) => n.id === "dataset-version:dv1")?.label, "release-3");
+  });
+});
+
+describe("buildLineage - runs recorded a dataset that no generation claims", () => {
+  const trained = (id: string, startedAt = "2026-09-24T22:00:00Z") =>
+    run(id, { startedAt, datasets: [{ id: "dv-1", version: "1.0.0", uri: "D:/data" }] }, [
+      { id: `e-${id}`, name: "eval" },
+    ]);
+
+  it("guesses generation -> dataset, not a line over the dataset to each run", () => {
+    const model = buildLineage([gen("g1")], [trained("r1"), trained("r2")]);
+
+    assert.deepEqual(model.unclaimedDatasetIds, ["dataset-version:dv-1"]);
+    const guessed = model.edges.filter((e) => e.inferred);
+    assert.deepEqual(guessed.map((e) => [e.source, e.target]), [["generation:g1", "dataset-version:dv-1"]]);
+    assert.equal(model.inferredEdgeCount, 1);
+    assert.ok(!model.edges.some((e) => e.source === "generation:g1" && e.target.startsWith("training-run:")));
+  });
+
+  it("keeps the real run -> dataset links solid and reaches results through the guess", () => {
+    const model = buildLineage([gen("g1")], [trained("r1")]);
+
+    assert.ok(model.edges.some((e) => e.source === "dataset-version:dv-1" && e.target === "training-run:r1" && !e.inferred));
+    const reach = reachOf("generation:g1", model);
+    assert.equal(reach.viaInferred, true);
+    assert.equal(countByKind(reach.downstream)["training-run"], 1);
+    assert.equal(countByKind(reach.downstream).evaluation, 1);
+  });
+
+  it("does not guess when every run began before the generation finished", () => {
+    const model = buildLineage(
+      [gen("g1", { completed_at: "2026-09-25T00:00:00Z" })],
+      [trained("r1", "2026-09-24T22:00:00Z")],
+    );
+    assert.equal(model.inferredEdgeCount, 0);
+  });
+
+  it("is not triggered by a dataset that a generation does claim", () => {
+    const model = buildLineage(
+      [
+        gen("g1", { datasetReferences: [{ datasetVersionId: "dv-1", role: "output" }] }),
+        gen("g2"),
+      ],
+      [trained("r1")],
+    );
+    assert.deepEqual(model.unclaimedDatasetIds, []);
+    // g1 is linked; g2 is not, and with nothing unclaimed it falls back to guessing a run.
+    assert.deepEqual(model.unlinkedGenerationIds, ["g2"]);
+    assert.ok(model.edges.some((e) => e.inferred && e.source === "generation:g2" && e.target === "training-run:r1"));
+  });
+
+  it("ignores datasets that only an evaluation used", () => {
+    const model = buildLineage(
+      [gen("g1")],
+      [run("r1", {}, [{ id: "e1", name: "eval", datasetVersionId: "held-out" }])],
+    );
+    assert.deepEqual(model.unclaimedDatasetIds, []);
+    // Falls back to the run, not to the held-out set.
+    assert.ok(model.edges.some((e) => e.inferred && e.target === "training-run:r1"));
+    assert.ok(!model.edges.some((e) => e.inferred && e.target === "dataset-version:held-out"));
+  });
+});
+
+describe("describeLinkGap", () => {
+  const trained = (id: string) => run(id, { datasets: [{ id: "dv-1", version: "1.0.0" }] });
+
+  it("names the dataset the runs recorded and says the generation side is what is missing", () => {
+    const model = buildLineage([gen("g1")], [trained("r1")]);
+    const text = describeLinkGap(model, 1, true) ?? "";
+    assert.match(text, /training runs recorded dataset 1.0.0/);
+    assert.match(text, /no generation claims to have produced it/);
+    assert.match(text, /generation.dataset(...)/);
+  });
+
+  it("counts generations when only some are unlinked", () => {
+    // g1 produced dv-2 and r-claimed trained on it; r-orphan trained on dv-1, which nobody claims.
+    const model = buildLineage(
+      [gen("g1", { datasetReferences: [{ datasetVersionId: "dv-2", role: "output" }] }), gen("g2")],
+      [run("r-claimed", { datasets: [{ id: "dv-2", version: "v2" }] }), trained("r-orphan")],
+    );
+    const text = describeLinkGap(model, 2, true) ?? "";
+    // An unclaimed dataset is claimed by NO generation, however many are unlinked.
+    assert.match(text, /no generation claims to have produced it/);
+    assert.match(text, /1 of 2 generations have no recorded link at all/);
+    assert.doesNotMatch(text, /generations claim to have produced/);
+  });
+
+  it("falls back to the plain wording when the runs recorded no datasets either", () => {
+    const model = buildLineage([gen("g1")], [run("r1")]);
+    assert.match(describeLinkGap(model, 1, true) ?? "", /No dataset links were recorded/);
+  });
+
+  it("says nothing when everything is linked or there are no runs", () => {
+    const linked = buildLineage(
+      [gen("g1", { datasetReferences: [{ datasetVersionId: "dv-1", role: "output" }] })],
+      [trained("r1")],
+    );
+    assert.equal(describeLinkGap(linked, 1, true), null);
+    assert.equal(describeLinkGap(buildLineage([gen("g1")], []), 1, false), null);
+  });
+
+  it("abbreviates a long list of datasets", () => {
+    const runs = [1, 2, 3].map((n) => run(`r${n}`, { datasets: [{ id: `dv-${n}`, version: `v${n}` }] }));
+    const text = describeLinkGap(buildLineage([gen("g1")], runs), 1, true) ?? "";
+    assert.match(text, /datasets v1, v2 and 1 more/);
   });
 });

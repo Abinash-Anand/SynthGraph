@@ -76,7 +76,7 @@ export function MetricsLineChart({
           <button
             type="button"
             onClick={onSuggestNormalize}
-            className="text-research-accent-hover underline underline-offset-2 hover:text-research-accent"
+            className="inline-block py-1.5 text-research-accent-hover underline underline-offset-2 hover:text-research-accent"
           >
             Normalize to compare their shapes
           </button>
@@ -246,6 +246,7 @@ function buildOption(
     grid: { left: 56, right: 24, top: 16, bottom: 36 },
     tooltip: {
       trigger: "axis",
+      confine: true,
       backgroundColor: "#18181b",
       borderColor: "#27272a",
       textStyle: { color: "#f4f4f5", fontSize: 12 },
