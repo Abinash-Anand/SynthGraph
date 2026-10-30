@@ -29,6 +29,9 @@ This project does not yet have tagged releases - entries accumulate under
 - A consistent, additive `normalized` shape on every Generation-returning
   response
 - `CONTRIBUTING.md`, `SECURITY.md`, issue/PR templates
+- `POST /training-runs/:id/generations` records that a training run used a generation (same project
+  required, other experiments allowed) and `GET` lists them; training runs now include
+  `generationReferences`. Existing runs have none until one is recorded.
 - Evaluation results record an optional `checkpointStep` (the training step the
   evaluation was taken at): `POST /training-runs/:id/evaluations` accepts it, and it
   is returned everywhere an evaluation is. SDK/CLI 0.5.0:

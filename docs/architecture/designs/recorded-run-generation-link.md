@@ -1,6 +1,6 @@
 # Design: recorded lineage, and removing the guessed edges
 
-Status: **approved 2026-10-30 (owner decisions in the registry, section 2a). PR 1 of 5 is implemented; the rest are not.**
+Status: **approved 2026-10-30 (owner decisions in the registry, section 2a). PRs 1 and 2 of 5 are implemented; the rest are not.**
 Closes: registry entry ARCH-004.
 
 ## Problem
@@ -28,7 +28,11 @@ Closes: registry entry ARCH-004.
    - Every write that references a dataset version (generation reference, run reference, evaluation) calls one service. A dataset scoped to another project is rejected with 409 `cross_project_reference` and nothing is written. An unscoped dataset is scoped to the referencing project in the same request, atomically, so two simultaneous first references from different projects cannot both win.
    - Datasets that already have references decide by them: none, or only this project, scopes it; exactly one other project rejects (that is its project, and a failed request does not scope it); two or more projects leaves it unscoped and accepts the reference, because it cannot be attributed to one. Existing references are never changed or revalidated.
    - `projectId` is returned on dataset responses.
-2. **Recorded generation-to-run link (backend).** A `training_run_generation_refs(training_run_id, generation_id, created_at)` table, `POST` and `GET /training-runs/:id/generations`, and `generationReferences` on the run and workspace responses. Same project required (409 `cross_project_reference`), same experiment not. No `role`.
+2. **Recorded generation-to-run link (backend). Implemented.**
+   - Table `training_run_generation_refs(training_run_id, generation_id, created_at)`, primary key `(training_run_id, generation_id)`, both foreign keys `ON DELETE RESTRICT`, additive, no rows added. No `role`.
+   - `POST /training-runs/:id/generations` with `{ generationId }` returns 201 with `{ trainingRunId, generationId, generationName, experimentId, createdAt }`; 404 when the run or the generation is not the caller's; 409 for a duplicate (settled by the primary key, so two identical simultaneous requests give one 201 and one 409); 409 `cross_project_reference` when the generation is in another project. `GET` lists them oldest first, paginated.
+   - `generationReferences: [{ generationId, generationName, experimentId, createdAt }]` on the run, on the experiment's run list and on the workspace; an empty list means none was recorded. No existing field changes.
+   - A generation in another experiment of the same project is allowed. No route updates or deletes a link.
 3. **SDK and CLI.** `training.use(generation)` records the direct link and still attaches the produced datasets; `experiment.training(..., generations=[...])`; `training.generations()`; `synthgraph training-runs link-generation`.
 4. **Frontend draws recorded links.** Generation-to-run edges appear solid. A generation from another experiment of the project is an external node showing its name. The guessed edges are still shown and still labelled.
 5. **Remove the inference.** Delete the timestamp edges, `inferredEdgeCount`, the legend and the "includes inferred links" note. An unlinked generation is shown as unlinked with no edge. Ships only after 4 is verified and the owner agrees to the visible cost below.
