@@ -1,6 +1,6 @@
 # Design: declared metric direction
 
-Status: **approved 2026-10-30. PR 1 (backend) is implemented; PR 2 (SDK) and PR 3 (frontend) are not.**
+Status: **approved 2026-10-30. PR 1 (backend) and PR 2 (SDK and CLI) are implemented; PR 3 (frontend) is not.**
 Closes: registry entries ARCH-001 and, with ARCH-006's own work, the direction half of ARCH-006.
 
 An earlier draft of this document proposed prefix patterns and per-run storage. The owner's decisions replaced both; this is the approved contract.
