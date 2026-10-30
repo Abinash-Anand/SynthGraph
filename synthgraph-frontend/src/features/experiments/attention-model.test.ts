@@ -1,88 +1,83 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { ATTENTION_CHECKS, computeAttentionEntries, describeEmptyAttention } from "./attention-model.ts";
+import {
+  ATTENTION_UNAVAILABLE,
+  describeAttentionEntries,
+  describeAttentionReason,
+  describeEmptyAttention,
+  type ExperimentAttention,
+} from "./attention-model.ts";
 
-const run = (
-  overrides: Partial<{ status: string; capture: string | null; drift: number }> = {},
-  name = "run",
-) => ({
-  run: {
-    id: `${name}-id`,
-    name,
-    status: overrides.status ?? "completed",
-    // Omitted means a run that reported complete capture; null means it never reported.
-    captureStatus:
-      overrides.capture === undefined ? { status: "complete" } : overrides.capture === null ? null : { status: overrides.capture },
-  },
-  drift: { drift: Array.from({ length: overrides.drift ?? 0 }, () => ({})) },
+const CHECKS = [
+  { code: "run_failed", description: "failed runs" },
+  { code: "capture_partial", description: "capture reported as partial" },
+  { code: "capture_unknown", description: "capture reported as unknown" },
+  { code: "capture_not_reported", description: "capture never reported" },
+  { code: "drift", description: "drift from earlier completed runs" },
+];
+
+describe("describeAttentionReason", () => {
+  it("words each reason code the backend can send", () => {
+    assert.equal(describeAttentionReason({ code: "run_failed" }), "run failed");
+    assert.equal(describeAttentionReason({ code: "capture_partial" }), "capture incomplete");
+    assert.equal(describeAttentionReason({ code: "capture_unknown" }), "capture status unknown");
+    assert.equal(describeAttentionReason({ code: "capture_not_reported" }), "capture not reported");
+  });
+
+  it("counts drifted fields, in the singular and the plural", () => {
+    assert.equal(describeAttentionReason({ code: "drift", driftFields: 1 }), "drift in 1 field");
+    assert.equal(describeAttentionReason({ code: "drift", driftFields: 3 }), "drift in 3 fields");
+  });
+
+  it("shows a code from a newer backend as it is rather than dropping it", () => {
+    assert.equal(describeAttentionReason({ code: "disk_full" }), "disk full");
+  });
 });
 
-describe("computeAttentionEntries", () => {
-  it("flags failed runs, partial and unknown capture, and drift", () => {
-    const entries = computeAttentionEntries([
-      run({ status: "failed" }, "failed"),
-      run({ capture: "partial" }, "partial"),
-      run({ capture: "unknown" }, "unknown"),
-      run({ drift: 1 }, "drift-one"),
-      run({ drift: 3 }, "drift-three"),
+describe("describeAttentionEntries", () => {
+  const attention: ExperimentAttention = {
+    runsChecked: 3,
+    checks: CHECKS,
+    runs: [
+      { trainingRunId: "r-a", reasons: [{ code: "run_failed" }, { code: "drift", driftFields: 2 }] },
+      { trainingRunId: "r-unloaded-1234567", reasons: [{ code: "capture_not_reported" }] },
+    ],
+  };
+
+  it("names the flagged runs and words every reason, in the backend's order", () => {
+    const entries = describeAttentionEntries(attention, new Map([["r-a", "run A"]]));
+
+    assert.deepEqual(entries, [
+      { runId: "r-a", runName: "run A", reasons: ["run failed", "drift in 2 fields"] },
+      { runId: "r-unloaded-1234567", runName: "r-unload", reasons: ["capture not reported"] },
     ]);
-    assert.deepEqual(
-      entries.map((entry) => [entry.runName, entry.reasons]),
-      [
-        ["failed", ["run failed"]],
-        ["partial", ["capture incomplete"]],
-        ["unknown", ["capture status unknown"]],
-        ["drift-one", ["drift in 1 field"]],
-        ["drift-three", ["drift in 3 fields"]],
-      ],
+  });
+
+  it("flags nothing itself: a run the backend did not flag is not an entry", () => {
+    const entries = describeAttentionEntries(
+      { runsChecked: 2, checks: CHECKS, runs: [] },
+      new Map([
+        ["healthy", "healthy"],
+        ["failed-looking", "failed"],
+      ]),
     );
-  });
 
-  it("lists every reason that applies to one run", () => {
-    const [entry] = computeAttentionEntries([run({ status: "failed", capture: "partial", drift: 2 })]);
-    assert.deepEqual(entry.reasons, ["run failed", "capture incomplete", "drift in 2 fields"]);
-  });
-
-  it("leaves healthy runs out", () => {
-    assert.deepEqual(computeAttentionEntries([run({ status: "completed", capture: "complete" })]), []);
-  });
-
-  it("flags a run that never reported capture, as the Capture Completeness report counts it", () => {
-    // Regression: Overview flagged only an explicit "unknown", so a run with a null
-    // captureStatus was counted as unknown by the report but not flagged here.
-    const [entry] = computeAttentionEntries([run({ capture: null }, "silent")]);
-    assert.deepEqual(entry.reasons, ["capture not reported"]);
-  });
-
-  it("flags a run that is still running and has not reported capture, like the report", () => {
-    const entries = computeAttentionEntries([run({ status: "running", capture: null }, "running")]);
-    assert.deepEqual(entries.map((e) => e.reasons), [["capture not reported"]]);
-  });
-
-  it("agrees with the capture report on which runs have no complete capture", () => {
-    // The report buckets by `captureStatus?.status ?? "unknown"`; partial and unknown
-    // there are exactly the runs flagged here for capture.
-    const runs = [
-      run({ capture: "complete" }, "complete"),
-      run({ capture: "partial" }, "partial"),
-      run({ capture: "unknown" }, "unknown"),
-      run({ capture: null }, "never"),
-    ];
-    const reportNeedsAttention = runs
-      .filter((r) => ["partial", "unknown"].includes(r.run.captureStatus?.status ?? "unknown"))
-      .map((r) => r.run.name);
-    const flaggedForCapture = computeAttentionEntries(runs)
-      .filter((entry) => entry.reasons.some((reason) => reason.startsWith("capture")))
-      .map((entry) => entry.runName);
-    assert.deepEqual(flaggedForCapture, reportNeedsAttention);
+    assert.deepEqual(entries, []);
   });
 });
 
 describe("describeEmptyAttention", () => {
-  const text = describeEmptyAttention();
+  const text = describeEmptyAttention(CHECKS);
 
-  it("lists every check that is actually performed", () => {
-    for (const check of ATTENTION_CHECKS) assert.ok(text.includes(check.description), check.description);
+  it("lists every check the backend says it performed", () => {
+    for (const check of CHECKS) assert.ok(text.includes(check.description), check.description);
+  });
+
+  it("lists only what the backend sent, so the page cannot claim more", () => {
+    const narrow = describeEmptyAttention([{ code: "run_failed", description: "failed runs" }]);
+
+    assert.match(narrow, /Checks run here: failed runs\./);
+    assert.doesNotMatch(narrow, /capture|drift/);
   });
 
   it("does not claim that nothing needs attention", () => {
@@ -92,20 +87,15 @@ describe("describeEmptyAttention", () => {
     assert.match(text, /^No runs flagged\./);
   });
 
-  it("says what it does not check, and no longer lists never-reported capture there", () => {
+  it("says what it does not check", () => {
     assert.match(text, /Metric behaviour/);
-    assert.match(text, /capture never reported/); // now a check that is run
     assert.doesNotMatch(text, /are not checked/);
   });
+});
 
-  it("matches the reasons the rules can produce", () => {
-    const produced = new Set(
-      computeAttentionEntries([
-        run({ status: "failed", capture: "partial", drift: 1 }, "a"),
-        run({ capture: "unknown" }, "b"),
-        run({ capture: null }, "c"),
-      ]).flatMap((entry) => entry.reasons.map((reason) => (reason.startsWith("drift") ? "drift" : reason))),
-    );
-    assert.deepEqual(new Set(ATTENTION_CHECKS.map((check) => check.reason)), produced);
+describe("when the backend returned no attention result", () => {
+  it("says so rather than showing an empty, reassuring panel", () => {
+    assert.match(ATTENTION_UNAVAILABLE, /not available from this backend version/);
+    assert.doesNotMatch(ATTENTION_UNAVAILABLE, /no runs flagged\.$/i);
   });
 });

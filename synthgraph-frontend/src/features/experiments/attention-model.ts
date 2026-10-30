@@ -1,53 +1,52 @@
-// Which training runs the Overview flags, and what it says about the checks it
-// ran. Pure and framework-free so the rules and their wording are tested
-// together. These rules are a domain decision made in the frontend (registry
-// entry ARCH-005); this module keeps them in one place until they move.
+// How the Overview words what the backend says needs attention. Pure and
+// framework-free so the wording is tested on its own.
 //
-// A run that never reported capture (`captureStatus` null) is flagged, as the
-// Capture Completeness report counts it as unknown, so the two screens agree.
-// That includes a run that is still running: the report does the same, and
-// until a run reports capture the status is genuinely unknown.
+// Which runs are flagged, and which checks that covers, is decided by the
+// backend (registry entry ARCH-005): `GET /experiments/:id/workspace` returns
+// `attention`. Nothing here decides a flag. This module only turns the backend's
+// reason codes into words, and writes the empty state from the checks the
+// backend says it performed, so the page can only claim what was checked.
 
-export type AttentionRun = {
-  run: {
-    id: string;
-    name: string;
-    status: string;
-    captureStatus: { status: string } | null;
-  };
-  drift: { drift: unknown[] };
+export type AttentionReason = { code: string; driftFields?: number };
+
+export type ExperimentAttention = {
+  runsChecked: number;
+  checks: Array<{ code: string; description: string }>;
+  runs: Array<{ trainingRunId: string; reasons: AttentionReason[] }>;
 };
 
 export type AttentionEntry = { runId: string; runName: string; reasons: string[] };
 
-/**
- * Every check the Overview performs, in the order it reports them. The empty
- * state is written from this list, so the page can only claim what is checked.
- * Deliberately objective and independent of what an experiment measures - never
- * "this run underperformed".
- */
-export const ATTENTION_CHECKS = [
-  { reason: "run failed", description: "failed runs" },
-  { reason: "capture incomplete", description: "capture reported as partial" },
-  { reason: "capture status unknown", description: "capture reported as unknown" },
-  { reason: "capture not reported", description: "capture never reported" },
-  { reason: "drift", description: "drift from earlier completed runs" },
-] as const;
+/** What the panel says when the backend returned no attention result at all. */
+export const ATTENTION_UNAVAILABLE =
+  "Attention checks are not available from this backend version, so no runs are flagged here.";
 
-export function computeAttentionEntries(runs: AttentionRun[]): AttentionEntry[] {
-  const entries: AttentionEntry[] = [];
-  for (const { run, drift } of runs) {
-    const reasons: string[] = [];
-    if (run.status === "failed") reasons.push("run failed");
-    if (run.captureStatus?.status === "partial") reasons.push("capture incomplete");
-    if (run.captureStatus?.status === "unknown") reasons.push("capture status unknown");
-    if (run.captureStatus === null) reasons.push("capture not reported");
-    if (drift.drift.length > 0) {
-      reasons.push(`drift in ${drift.drift.length} field${drift.drift.length === 1 ? "" : "s"}`);
-    }
-    if (reasons.length > 0) entries.push({ runId: run.id, runName: run.name, reasons });
+const REASON_TEXT: Record<string, string> = {
+  run_failed: "run failed",
+  capture_partial: "capture incomplete",
+  capture_unknown: "capture status unknown",
+  capture_not_reported: "capture not reported",
+};
+
+export function describeAttentionReason(reason: AttentionReason): string {
+  if (reason.code === "drift") {
+    const fields = reason.driftFields ?? 0;
+    return `drift in ${fields} field${fields === 1 ? "" : "s"}`;
   }
-  return entries;
+  // A code from a newer backend is shown as it is, never dropped.
+  return REASON_TEXT[reason.code] ?? reason.code.replaceAll("_", " ");
+}
+
+/** The flagged runs, named from the runs the page has loaded (a run it has not loaded shows a short id). */
+export function describeAttentionEntries(
+  attention: ExperimentAttention,
+  runNames: ReadonlyMap<string, string>,
+): AttentionEntry[] {
+  return attention.runs.map((flagged) => ({
+    runId: flagged.trainingRunId,
+    runName: runNames.get(flagged.trainingRunId) ?? flagged.trainingRunId.slice(0, 8),
+    reasons: flagged.reasons.map(describeAttentionReason),
+  }));
 }
 
 function joinWithAnd(parts: readonly string[]): string {
@@ -55,9 +54,9 @@ function joinWithAnd(parts: readonly string[]): string {
   return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
 }
 
-/** What the empty state says: which checks ran, and what they do not cover. */
-export function describeEmptyAttention(): string {
-  const checked = joinWithAnd(ATTENTION_CHECKS.map((check) => check.description));
+/** What the empty state says: which checks the backend ran, and what they do not cover. */
+export function describeEmptyAttention(checks: ExperimentAttention["checks"]): string {
+  const checked = joinWithAnd(checks.map((check) => check.description));
   return (
     `No runs flagged. Checks run here: ${checked}. ` +
     "Metric behaviour, such as a loss that diverges, is not checked."
