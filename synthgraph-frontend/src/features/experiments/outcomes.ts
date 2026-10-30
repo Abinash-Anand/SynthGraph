@@ -7,8 +7,9 @@ import {
   rankingDirection,
 } from "../../shared/lib/metric-direction.ts";
 import { compareMetricKeys, isOutcomeMetric } from "../../shared/lib/metric-semantics.ts";
+import { type CheckpointEvaluation, latestEvaluation } from "./checkpoint-model.ts";
 
-type WithEvaluations = { evaluations: Array<{ metrics: Record<string, unknown>; createdAt?: string }> };
+type WithEvaluations = { evaluations: CheckpointEvaluation[] };
 
 function numbersFor(run: WithEvaluations, key: string): number[] {
   return run.evaluations
@@ -35,21 +36,17 @@ export function preferredOutcomeKey(keys: string[], directions: MetricDirections
 }
 
 /**
- * The value of a run's most recent evaluation of a metric. Evaluations are
- * ordered by when they were recorded; one without a timestamp counts as
- * recorded in the order it was listed.
+ * The value of a run's last evaluation of a metric: the one at the highest recorded
+ * checkpoint step when every candidate has one, otherwise the one recorded most
+ * recently (see `latestEvaluation`).
  */
 export function latestEvaluationValue(run: WithEvaluations, key: string): number | null {
-  let latest: { value: number; at: string; index: number } | null = null;
-  run.evaluations.forEach((evaluation, index) => {
+  const candidates = run.evaluations.filter((evaluation) => {
     const value = evaluation.metrics[key];
-    if (typeof value !== "number" || !Number.isFinite(value)) return;
-    const at = evaluation.createdAt ?? "";
-    if (latest === null || at > latest.at || (at === latest.at && index > latest.index)) {
-      latest = { value, at, index };
-    }
+    return typeof value === "number" && Number.isFinite(value);
   });
-  return latest === null ? null : (latest as { value: number }).value;
+  const latest = latestEvaluation(candidates);
+  return latest === null ? null : (latest.metrics[key] as number);
 }
 
 /**

@@ -67,6 +67,29 @@ describe("bestEvaluationValue", () => {
   });
 });
 
+describe("latestEvaluationValue with recorded checkpoint steps", () => {
+  it("takes the highest recorded step, not the most recently saved evaluation", () => {
+    const r = {
+      evaluations: [
+        { metrics: { x: 0.9 }, checkpointStep: 20000, createdAt: "2026-01-01T00:00:00Z" },
+        { metrics: { x: 0.1 }, checkpointStep: 5000, createdAt: "2026-01-09T00:00:00Z" },
+      ],
+    };
+    assert.equal(latestEvaluationValue(r, "x"), 0.9);
+    assert.equal(bestEvaluationValue(r, "x", null), 0.9);
+  });
+
+  it("ignores a step in the name and falls back to the most recently recorded", () => {
+    const r = {
+      evaluations: [
+        { metrics: { x: 0.9 }, name: "a-step20000", createdAt: "2026-01-01T00:00:00Z" },
+        { metrics: { x: 0.1 }, name: "a-step5000", createdAt: "2026-01-09T00:00:00Z" },
+      ],
+    };
+    assert.equal(latestEvaluationValue(r, "x"), 0.1);
+  });
+});
+
 describe("latestEvaluationValue", () => {
   it("picks by timestamp and falls back to list order", () => {
     assert.equal(latestEvaluationValue(run({ x: 1 }, { x: 2 }, { x: 3 }), "x"), 3);
