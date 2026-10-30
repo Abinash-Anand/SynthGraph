@@ -1,0 +1,22 @@
+{
+  "capturedOn": "2026-10-30",
+  "environment": "https://synthgraph.dev (production, after deploy of the batched-loading change 1b1eb67), built-in browser pane, signed-in user, Phase 1 experiment (3 runs, 16 generations)",
+  "method": "Same as before/baseline.json and after-prod/after-production.json. Server render = fetch of the page URL with the RSC header, 5 times, 1.5 s apart. Hard navigation = Navigation Timing after a fresh load.",
+  "serverRenderMs": { "runs": [1073, 931, 843, 834, 871], "median": 871, "firstAfterPreviousDeploy": 2015 },
+  "hardNavigationDomContentLoadedMs": { "runs": [1994, 1604, 1117], "median": 1604, "previousDeploy": 2439 },
+  "refreshDataMs": { "now": 1257, "previousDeploy": 2074 },
+  "tabClicks": {
+    "uiChangedMs": [24, 13, 23, 15, 23, 19, 12, 11],
+    "median": 17,
+    "dataRequestsPerClick": 0,
+    "note": "A few first visits to a tab showed 1-2 new requests; the only non-static requests in the page are the sidebar link prefetches and the probes above, so those were lazy JS chunks."
+  },
+  "burst30Clicks": { "newRequests": 0, "unknown": 0, "unavailable": 0, "signedIn": true },
+  "reproductionTab": "16 partly reproducible, 0 Unknown, 0 Unavailable",
+  "payload": { "decodedKB": 274, "normalizedMirrors": 0, "manifests": 16, "healthTrendEntries": 180, "domainRandomizeMentions": 90 },
+  "notVerified": [
+    "Server-Timing / experiment_workspace.loaded log line: those are in the hosting provider's logs, not visible from the browser.",
+    "Which loading path production used (workspace route or the fallback): inferred from the speed-up, not observed."
+  ],
+  "screenshots": "Taken but not saved: they show the account email."
+}
