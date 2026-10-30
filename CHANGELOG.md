@@ -35,6 +35,9 @@ This project does not yet have tagged releases - entries accumulate under
   another project, or reusing a dataset of another project, is refused before anything
   is created (`SynthGraphCrossProjectReferenceError`). `use(generation)` no longer
   fails for a generation that produced no dataset.
+- `GET /reports/experiment-attention?experimentId=` and `attention` on `GET /experiments/:id/workspace`:
+  which training runs need a look (failed, capture partial, unknown or never reported, drift) and which
+  checks that covers. The Overview now shows the backend's answer instead of working it out itself.
 - `POST /training-runs/:id/generations` records that a training run used a generation (same project
   required, other experiments allowed) and `GET` lists them; training runs now include
   `generationReferences`. Existing runs have none until one is recorded.
