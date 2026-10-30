@@ -53,17 +53,14 @@ describe("buildLineage - recorded links", () => {
     assert.ok(model.edges.some((e) => e.source === "dataset-version:dv1" && e.target === "training-run:r1"));
   });
 
-  it("records no inferred links when the path exists", () => {
+  it("has every generation linked when the path exists", () => {
     assert.deepEqual(model.unlinkedGenerationIds, []);
-    assert.equal(model.inferredEdgeCount, 0);
-    assert.ok(model.edges.every((e) => !e.inferred));
   });
 
   it("walks the full chain in both directions", () => {
     const reach = reachOf("dataset-version:dv1", model);
     assert.deepEqual(countByKind(reach.downstream), { "training-run": 1, evaluation: 1 });
     assert.deepEqual(countByKind(reach.upstream), { generation: 1 });
-    assert.equal(reach.viaInferred, false);
   });
 });
 
@@ -76,23 +73,24 @@ describe("buildLineage - nothing recorded", () => {
     assert.deepEqual(model.unlinkedGenerationIds, ["g1", "g2"]);
   });
 
-  it("falls back to clearly-flagged inferred edges", () => {
-    assert.equal(model.inferredEdgeCount, 4);
-    assert.ok(model.edges.filter((e) => e.target.startsWith("training-run:")).every((e) => e.inferred === true));
+  it("draws no line between a generation and a run when nothing records one", () => {
+    assert.deepEqual(model.edges, []);
+    assert.deepEqual(reachOf("generation:g1", model), { upstream: [], downstream: [] });
   });
 
-  it("marks reach through inferred edges as inferred", () => {
-    const reach = reachOf("generation:g1", model);
-    assert.equal(reach.viaInferred, true);
-    assert.equal(countByKind(reach.downstream)["training-run"], 2);
-  });
-
-  it("does not link a generation to a run that began before it finished", () => {
-    const late = buildLineage(
-      [gen("late", { completed_at: "2026-09-25T00:00:00Z" })],
-      [run("early", { startedAt: "2026-09-24T22:00:00Z" })],
+  it("draws no line however the timing falls", () => {
+    // A run that began after the generation finished, and one that began before it did.
+    const after = buildLineage(
+      [gen("g", { completed_at: "2026-09-24T21:01:00Z" })],
+      [run("later", { startedAt: "2026-09-24T23:00:00Z" })],
     );
-    assert.equal(late.inferredEdgeCount, 0);
+    const before = buildLineage(
+      [gen("g", { completed_at: "2026-09-25T00:00:00Z" })],
+      [run("earlier", { startedAt: "2026-09-24T22:00:00Z" })],
+    );
+    assert.deepEqual(after.edges, []);
+    assert.deepEqual(before.edges, []);
+    assert.deepEqual(after.unlinkedGenerationIds, ["g"]);
   });
 });
 
@@ -132,10 +130,9 @@ describe("buildLineage - links recorded through the SDK's dataset attach", () =>
       [gen("g1", { datasetReferences: [{ datasetVersionId: "dv1", role: "output" }] })],
       [run("r1", { datasets: [{ id: "dv1", version: "v1", uri: "s3://x" }] })],
     );
-    assert.ok(model.edges.some((e) => e.source === "generation:g1" && e.target === "dataset-version:dv1" && !e.inferred));
+    assert.ok(model.edges.some((e) => e.source === "generation:g1" && e.target === "dataset-version:dv1"));
     assert.ok(model.edges.some((e) => e.source === "dataset-version:dv1" && e.target === "training-run:r1"));
     assert.deepEqual(model.unlinkedGenerationIds, []);
-    assert.equal(model.inferredEdgeCount, 0);
     // The run's own dataset record names the node; the bare id is only a fallback.
     assert.equal(model.nodes.find((n) => n.id === "dataset-version:dv1")?.label, "v1");
   });
@@ -164,7 +161,7 @@ describe("buildLineage - evaluations name their dataset", () => {
       [],
       [run("r1", {}, [{ id: "e1", name: "eval", datasetVersionId: "dv9" }])],
     );
-    assert.ok(model.edges.some((e) => e.source === "dataset-version:dv9" && e.target === "evaluation:e1" && !e.inferred));
+    assert.ok(model.edges.some((e) => e.source === "dataset-version:dv9" && e.target === "evaluation:e1"));
     assert.equal(model.nodes.find((n) => n.id === "dataset-version:dv9")?.layer, 2);
   });
 
@@ -180,13 +177,12 @@ describe("buildLineage - evaluations name their dataset", () => {
     assert.equal(model.edges.filter((e) => e.source === "dataset-version:dv9").length, 2);
   });
 
-  it("does not guess a run link for a generation whose dataset was evaluated on", () => {
+  it("connects a generation to an evaluation through the dataset it produced", () => {
     const model = buildLineage(
       [gen("g1", { datasetReferences: [{ datasetVersionId: "dv9", role: "output" }] })],
       [run("r1", {}, [{ id: "e1", name: "eval", datasetVersionId: "dv9" }])],
     );
     assert.deepEqual(model.unlinkedGenerationIds, []);
-    assert.equal(model.inferredEdgeCount, 0);
     const reach = reachOf("generation:g1", model);
     assert.equal(countByKind(reach.downstream).evaluation, 1);
   });
@@ -209,32 +205,28 @@ describe("buildLineage - runs recorded a dataset that no generation claims", () 
       { id: `e-${id}`, name: "eval" },
     ]);
 
-  it("guesses generation -> dataset, not a line over the dataset to each run", () => {
+  it("names the gap and draws nothing to bridge it", () => {
     const model = buildLineage([gen("g1")], [trained("r1"), trained("r2")]);
 
     assert.deepEqual(model.unclaimedDatasetIds, ["dataset-version:dv-1"]);
-    const guessed = model.edges.filter((e) => e.inferred);
-    assert.deepEqual(guessed.map((e) => [e.source, e.target]), [["generation:g1", "dataset-version:dv-1"]]);
-    assert.equal(model.inferredEdgeCount, 1);
-    assert.ok(!model.edges.some((e) => e.source === "generation:g1" && e.target.startsWith("training-run:")));
+    assert.deepEqual(model.unlinkedGenerationIds, ["g1"]);
+    assert.ok(!model.edges.some((e) => e.source === "generation:g1" || e.target === "generation:g1"));
   });
 
-  it("keeps the real run -> dataset links solid and reaches results through the guess", () => {
+  it("keeps the recorded dataset -> run links and gives the generation no way to reach them", () => {
     const model = buildLineage([gen("g1")], [trained("r1")]);
 
-    assert.ok(model.edges.some((e) => e.source === "dataset-version:dv-1" && e.target === "training-run:r1" && !e.inferred));
-    const reach = reachOf("generation:g1", model);
-    assert.equal(reach.viaInferred, true);
-    assert.equal(countByKind(reach.downstream)["training-run"], 1);
-    assert.equal(countByKind(reach.downstream).evaluation, 1);
+    assert.ok(model.edges.some((e) => e.source === "dataset-version:dv-1" && e.target === "training-run:r1"));
+    assert.deepEqual(reachOf("generation:g1", model).downstream, []);
+    assert.equal(countByKind(reachOf("dataset-version:dv-1", model).downstream)["training-run"], 1);
   });
 
-  it("does not guess when every run began before the generation finished", () => {
-    const model = buildLineage(
-      [gen("g1", { completed_at: "2026-09-25T00:00:00Z" })],
-      [trained("r1", "2026-09-24T22:00:00Z")],
-    );
-    assert.equal(model.inferredEdgeCount, 0);
+  it("does not depend on when the run began", () => {
+    const early = buildLineage([gen("g1", { completed_at: "2026-09-25T00:00:00Z" })], [trained("r1", "2026-09-24T22:00:00Z")]);
+    const late = buildLineage([gen("g1", { completed_at: "2026-09-24T21:01:00Z" })], [trained("r1", "2026-09-25T09:00:00Z")]);
+
+    assert.deepEqual(early.edges, late.edges);
+    assert.deepEqual(early.unclaimedDatasetIds, late.unclaimedDatasetIds);
   });
 
   it("is not triggered by a dataset that a generation does claim", () => {
@@ -246,9 +238,9 @@ describe("buildLineage - runs recorded a dataset that no generation claims", () 
       [trained("r1")],
     );
     assert.deepEqual(model.unclaimedDatasetIds, []);
-    // g1 is linked; g2 is not, and with nothing unclaimed it falls back to guessing a run.
+    // g1 is linked; g2 is not, and nothing connects it.
     assert.deepEqual(model.unlinkedGenerationIds, ["g2"]);
-    assert.ok(model.edges.some((e) => e.inferred && e.source === "generation:g2" && e.target === "training-run:r1"));
+    assert.ok(!model.edges.some((e) => e.source === "generation:g2"));
   });
 
   it("ignores datasets that only an evaluation used", () => {
@@ -257,9 +249,35 @@ describe("buildLineage - runs recorded a dataset that no generation claims", () 
       [run("r1", {}, [{ id: "e1", name: "eval", datasetVersionId: "held-out" }])],
     );
     assert.deepEqual(model.unclaimedDatasetIds, []);
-    // Falls back to the run, not to the held-out set.
-    assert.ok(model.edges.some((e) => e.inferred && e.target === "training-run:r1"));
-    assert.ok(!model.edges.some((e) => e.inferred && e.target === "dataset-version:held-out"));
+    assert.ok(!model.edges.some((e) => e.source === "generation:g1"));
+  });
+});
+
+describe("buildLineage - nothing is inferred", () => {
+  it("has no inferred edge and no inference count in its result", () => {
+    const model = buildLineage(
+      [gen("g1"), gen("g2", { datasetReferences: [{ datasetVersionId: "dv1", role: "output" }] })],
+      [run("r1", { datasets: [{ id: "dv1", version: "v1" }], generationReferences: [{ generationId: "g1" }] })],
+    );
+
+    assert.ok(model.edges.length > 0);
+    for (const edge of model.edges) assert.deepEqual(Object.keys(edge).sort(), ["id", "source", "target"]);
+    assert.deepEqual(Object.keys(model).sort(), ["edges", "nodes", "unclaimedDatasetIds", "unlinkedGenerationIds"]);
+  });
+
+  it("gives the same graph whatever the timestamps are", () => {
+    const refs = { generationReferences: [{ generationId: "g1" }] };
+    const base = buildLineage([gen("g1"), gen("g2")], [run("r1", refs), run("r2")]);
+    const shifted = buildLineage(
+      [
+        gen("g1", { started_at: "2030-01-01T00:00:00Z", completed_at: "2030-01-01T00:01:00Z", created_at: "2030-01-01T00:00:00Z" }),
+        gen("g2", { started_at: null, completed_at: null, created_at: "1999-01-01T00:00:00Z" }),
+      ],
+      [run("r1", { ...refs, startedAt: null, createdAt: "1990-01-01T00:00:00Z" }), run("r2", { startedAt: "2040-01-01T00:00:00Z" })],
+    );
+
+    assert.deepEqual(shifted.edges, base.edges);
+    assert.deepEqual(shifted.unlinkedGenerationIds, base.unlinkedGenerationIds);
   });
 });
 
@@ -318,10 +336,10 @@ describe("buildLineage - recorded generation-to-run links", () => {
   it("draws a solid edge from a generation to the run that recorded using it, with no dataset between", () => {
     const model = buildLineage([gen("g1")], [run("r1", { generationReferences: [used("g1")] })]);
 
-    const edge = model.edges.find((e) => e.source === "generation:g1" && e.target === "training-run:r1");
-    assert.ok(edge, "the recorded link is drawn");
-    assert.equal(edge.inferred, undefined);
-    assert.equal(model.inferredEdgeCount, 0);
+    assert.ok(
+      model.edges.some((e) => e.source === "generation:g1" && e.target === "training-run:r1"),
+      "the recorded link is drawn",
+    );
     assert.deepEqual(model.unlinkedGenerationIds, []);
     assert.equal(describeLinkGap(model, 1, true), null);
   });
@@ -345,9 +363,7 @@ describe("buildLineage - recorded generation-to-run links", () => {
       layer: 1,
       external: true,
     });
-    const edge = model.edges.find((e) => e.source === "generation:g9" && e.target === "training-run:r1");
-    assert.ok(edge);
-    assert.equal(edge.inferred, undefined);
+    assert.ok(model.edges.some((e) => e.source === "generation:g9" && e.target === "training-run:r1"));
   });
 
   it("falls back to a short id when the link carries no name", () => {
@@ -386,7 +402,6 @@ describe("buildLineage - recorded generation-to-run links", () => {
 
     const recorded = model.edges.filter((e) => e.source.startsWith("generation:") && e.target.startsWith("training-run:"));
     assert.equal(recorded.length, 3);
-    assert.ok(recorded.every((e) => !e.inferred));
   });
 
   it("walks from the generation to the run's results and back, as recorded", () => {
@@ -397,21 +412,17 @@ describe("buildLineage - recorded generation-to-run links", () => {
 
     const down = reachOf("generation:g1", model);
     assert.deepEqual(down.downstream.map((n) => n.id).sort(), ["evaluation:e1", "training-run:r1"]);
-    assert.equal(down.viaInferred, false);
     assert.deepEqual(reachOf("training-run:r1", model).upstream.map((n) => n.id), ["generation:g1"]);
   });
 
-  it("does not guess a generation onto a run that recorded which generations it used", () => {
-    // g2 has no recorded link. r1 recorded using g1 only, so g2 is not guessed onto it;
-    // r2 recorded nothing, so the timing guess still applies to it.
+  it("draws no line for a generation with no recorded link, beside runs that recorded others", () => {
     const model = buildLineage(
       [gen("g1"), gen("g2")],
       [run("r1", { generationReferences: [used("g1")] }), run("r2")],
     );
 
-    const guessed = model.edges.filter((e) => e.inferred);
-    assert.ok(!guessed.some((e) => e.target === "training-run:r1"));
-    assert.ok(guessed.some((e) => e.source === "generation:g2" && e.target === "training-run:r2"));
+    assert.ok(!model.edges.some((e) => e.source === "generation:g2"));
+    assert.ok(!model.edges.some((e) => e.target === "training-run:r2"));
     assert.deepEqual(model.unlinkedGenerationIds, ["g2"]);
   });
 
@@ -420,6 +431,16 @@ describe("buildLineage - recorded generation-to-run links", () => {
     const without = buildLineage([gen("g1")], [run("r1")]);
 
     assert.deepEqual(withField, without);
+  });
+
+  it("says nothing is drawn for the gap, and never calls a line a guess", () => {
+    const named = describeLinkGap(buildLineage([gen("g1")], [run("r1", { datasets: [{ id: "dv-1", version: "1.0.0" }] })]), 1, true) ?? "";
+    const plain = describeLinkGap(buildLineage([gen("g1")], [run("r1")]), 1, true) ?? "";
+
+    for (const text of [named, plain]) {
+      assert.match(text, /no line is drawn/);
+      assert.doesNotMatch(text, /dashed|guess|timing|infer/i);
+    }
   });
 
   it("names the way to record a link in the gap note", () => {
