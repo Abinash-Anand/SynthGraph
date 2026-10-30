@@ -63,6 +63,8 @@ export function LineageTab({
         edges={model.edges}
         selectedId={selectedNodeId}
         onNodeSelect={(id, kind) => {
+          // A generation of another experiment is not loaded here, so there is nothing to inspect.
+          if (model.nodes.find((node) => node.id === id)?.external) return;
           if (kind === "generation") {
             onSelect({ type: "generation", id: id.replace("generation:", "") });
           } else if (kind === "training-run") {
