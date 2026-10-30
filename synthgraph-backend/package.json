@@ -14,6 +14,7 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
+    "smoke:boot": "node scripts/smoke-boot.mjs",
     "lint": "oxlint src/ test/",
     "test": "vitest run",
     "test:watch": "vitest",

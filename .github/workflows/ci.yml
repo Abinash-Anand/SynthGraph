@@ -56,6 +56,14 @@ jobs:
       - name: Run migrations
         run: npm run migration:run
 
+      # vitest runs the sources, not the build, and never applies the
+      # @nestjs/swagger CLI plugin, so a schema problem that only `nest build`
+      # introduces passes every test and then crashes the real server at
+      # startup. This boots dist/main.js and checks /docs-json; see
+      # scripts/smoke-boot.mjs.
+      - name: Boot the built backend
+        run: npm run smoke:boot
+
       - name: Unit tests
         run: npm test
 

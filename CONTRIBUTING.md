@@ -56,9 +56,15 @@ Before opening a PR:
 ```bash
 npm run lint
 npm run build              # also typechecks
+npm run smoke:boot         # boots the built app; needs DATABASE_URL and JWT_SECRET (see below)
 npm test                   # unit tests
 npm run test:e2e           # e2e tests - needs a real Postgres; see below
 ```
+
+`smoke:boot` starts `dist/main.js` and checks that it stays up and serves its OpenAPI
+document. The tests run the TypeScript sources and never apply the Swagger build plugin,
+so a schema problem (for example an inline object type on an entity property) passes
+every test and then crashes the real server at startup; only booting the build shows it.
 
 **Running e2e tests**: the e2e suite talks to a real, migrated Postgres
 database via `DATABASE_URL`. The straightforward way to get one locally:
