@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
+import { DatasetProjectScopeService } from '../../datasets/dataset-project-scope.service.js';
 import type { DatasetVersionRepository } from '../../datasets/repositories/dataset-version.repository.js';
 import { DATASET_VERSION_REPOSITORY } from '../../datasets/repositories/dataset.tokens.js';
 
@@ -27,6 +28,8 @@ export class CreateGenerationDatasetReferenceService {
 
     @Inject(GENERATION_REPOSITORY)
     private readonly generationRepository: GenerationRepository,
+
+    private readonly datasetProjectScope: DatasetProjectScopeService,
   ) {}
 
   async execute(
@@ -67,6 +70,11 @@ export class CreateGenerationDatasetReferenceService {
         'Dataset version is already referenced by this generation under this role',
       );
     }
+
+    await this.datasetProjectScope.enforceForExperiment(
+      input.datasetVersionId,
+      generation.experimentId,
+    );
 
     const reference = new GenerationDatasetReference();
 

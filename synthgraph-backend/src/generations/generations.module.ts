@@ -13,6 +13,7 @@ import { EXPERIMENT_REPOSITORY } from '../experiments/repositories/experiment.to
 
 import { DatasetVersion } from '../database/entities/dataset-version.entity.js';
 import { DATASET_VERSION_REPOSITORY } from '../datasets/repositories/dataset.tokens.js';
+import { DatasetProjectScopeService } from '../datasets/dataset-project-scope.service.js';
 import type { DatasetVersionRepository } from '../datasets/repositories/dataset-version.repository.js';
 import { TypeOrmDatasetVersionRepository } from '../datasets/repositories/typeorm-dataset-version.repository.js';
 
@@ -102,6 +103,7 @@ import { CreateGenerationAssetReferenceService } from './services/create-generat
     ListGenerationsService,
     UpdateGenerationStatusService,
     CreateGenerationDatasetReferenceService,
+    DatasetProjectScopeService,
     CreateGenerationAssetReferenceService,
   ],
 

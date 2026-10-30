@@ -7,6 +7,7 @@ import {
 
 import { TrainingRunDatasetReference } from '../../database/entities/training-run-dataset-reference.entity.js';
 
+import { DatasetProjectScopeService } from '../../datasets/dataset-project-scope.service.js';
 import { DATASET_VERSION_REPOSITORY } from '../../datasets/repositories/dataset.tokens.js';
 import type { DatasetVersionRepository } from '../../datasets/repositories/dataset-version.repository.js';
 
@@ -27,6 +28,8 @@ export class CreateTrainingRunDatasetReferenceService {
 
     @Inject(DATASET_VERSION_REPOSITORY)
     private readonly datasetVersionRepository: DatasetVersionRepository,
+
+    private readonly datasetProjectScope: DatasetProjectScopeService,
   ) {}
 
   async execute(
@@ -69,6 +72,11 @@ export class CreateTrainingRunDatasetReferenceService {
         'Training run dataset reference already exists',
       );
     }
+
+    await this.datasetProjectScope.enforceForExperiment(
+      input.datasetVersionId,
+      trainingRun.experimentId,
+    );
 
     const reference = Object.assign(
       new TrainingRunDatasetReference(),

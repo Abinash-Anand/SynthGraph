@@ -160,6 +160,9 @@ describe('M11 Generation dataset reference role uniqueness (e2e)', () => {
     await generationRepository.delete(generation.id);
     await experimentRepository.delete(experiment.id);
     await datasetVersionRepository.delete(datasetVersion.id);
+    // A dataset is scoped to the project of its first reference, and the project
+    // cannot be deleted while a dataset still points at it.
+    await datasetRepository.delete(datasetVersion.datasetId);
     await projectRepository.delete(project.id);
     await apiKeyRepository.delete({ userId: user.id });
     await userRepository.delete(user.id);

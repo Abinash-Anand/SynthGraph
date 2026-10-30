@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
+import { DatasetProjectScopeService } from '../../datasets/dataset-project-scope.service.js';
 import { DATASET_VERSION_REPOSITORY } from '../../datasets/repositories/dataset.tokens.js';
 import type { DatasetVersionRepository } from '../../datasets/repositories/dataset-version.repository.js';
 import { EvaluationResult } from '../../database/entities/evaluation-result.entity.js';
@@ -22,6 +23,8 @@ export class CreateEvaluationResultService {
 
     @Inject(DATASET_VERSION_REPOSITORY)
     private readonly datasetVersionRepository: DatasetVersionRepository,
+
+    private readonly datasetProjectScope: DatasetProjectScopeService,
   ) {}
 
   async execute(
@@ -52,6 +55,11 @@ export class CreateEvaluationResultService {
     if (!datasetVersion) {
       throw new NotFoundException('Dataset version not found');
     }
+
+    await this.datasetProjectScope.enforceForExperiment(
+      datasetVersionId,
+      trainingRun.experimentId,
+    );
 
     const evaluationResult = new EvaluationResult();
 
