@@ -1,53 +1,37 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { judgeTrend, judgeTrendFor, summarizeTrends } from "./trend-judgement.ts";
+import { judgementOf, summarizeTrends } from "./trend-judgement.ts";
 
-describe("judgeTrend", () => {
-  it("is good when a higher-is-better metric rises or a lower-is-better one falls", () => {
-    assert.equal(judgeTrend("increasing", "higher"), "good");
-    assert.equal(judgeTrend("decreasing", "lower"), "good");
+describe("judgementOf", () => {
+  it("reads the backend verdict and nothing else", () => {
+    assert.equal(judgementOf("improving"), "good");
+    assert.equal(judgementOf("worsening"), "bad");
+    assert.equal(judgementOf("neutral"), "neutral");
   });
 
-  it("is bad when a higher-is-better metric falls or a lower-is-better one rises", () => {
-    assert.equal(judgeTrend("decreasing", "higher"), "bad");
-    assert.equal(judgeTrend("increasing", "lower"), "bad");
-  });
-
-  it("does not judge without a direction, or a flat or unknown trend", () => {
-    assert.equal(judgeTrend("increasing", "neutral"), "neutral");
-    assert.equal(judgeTrend("flat", "higher"), "neutral");
-    assert.equal(judgeTrend("insufficient_data", "lower"), "neutral");
-  });
-});
-
-describe("judgeTrendFor", () => {
-  it("reads the direction from the metric name", () => {
-    assert.equal(judgeTrendFor("eval/episode_reward", "increasing"), "good");
-    assert.equal(judgeTrendFor("training/policy_loss", "increasing"), "bad");
-    assert.equal(judgeTrendFor("cpu_percent", "increasing"), "neutral");
-  });
-
-  it("does not call a rising or falling spread good or bad", () => {
-    assert.equal(judgeTrendFor("eval/episode_reward_std", "increasing"), "neutral");
-    assert.equal(judgeTrendFor("eval/episode_reward_std", "decreasing"), "neutral");
-    assert.equal(judgeTrendFor("value_loss_std", "increasing"), "neutral");
-  });
-
-  it("judges a rising collision rate as bad", () => {
-    assert.equal(judgeTrendFor("collision_rate", "increasing"), "bad");
-    assert.equal(judgeTrendFor("collision_rate", "decreasing"), "good");
+  it("is neutral when the backend sent no verdict", () => {
+    // An older backend, or a metric with no declared direction: the frontend
+    // must not fill the gap by guessing from the name.
+    assert.equal(judgementOf(undefined), "neutral");
+    assert.equal(judgementOf(null), "neutral");
   });
 });
 
 describe("summarizeTrends", () => {
-  it("counts directions and verdicts", () => {
+  it("counts trend directions and the backend verdicts", () => {
     const summary = summarizeTrends([
-      { metricKey: "episode_reward", trend: "increasing" },
-      { metricKey: "val_loss", trend: "increasing" },
-      { metricKey: "val_loss", trend: "decreasing" },
-      { metricKey: "cpu_percent", trend: "flat" },
-      { metricKey: "x", trend: "insufficient_data" },
+      { trend: "increasing", verdict: "improving" },
+      { trend: "increasing", verdict: "worsening" },
+      { trend: "decreasing", verdict: "improving" },
+      { trend: "flat", verdict: "neutral" },
+      { trend: "insufficient_data" },
     ]);
     assert.deepEqual(summary, { increasing: 2, decreasing: 1, flat: 1, unknown: 1, good: 2, bad: 1 });
+  });
+
+  it("never counts a verdict the backend did not give", () => {
+    const summary = summarizeTrends([{ trend: "increasing", verdict: "neutral" }, { trend: "decreasing" }]);
+    assert.equal(summary.good, 0);
+    assert.equal(summary.bad, 0);
   });
 });

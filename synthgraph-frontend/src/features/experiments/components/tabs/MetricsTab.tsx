@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import { MetricsTable } from "@/features/training-runs/components/MetricsTable";
+import type { MetricDirections } from "@/shared/lib/metric-direction";
 import { MetricKeyPicker, extractMetricKeys, useMetricKeySelection } from "@/shared/charts/MetricKeyPicker";
 import { READABLE_SERIES_LIMIT, TRIMMED_SERIES_COUNT, preferredSeriesKeys } from "@/shared/charts/metric-series";
 import { cn } from "@/lib/utils";
@@ -46,10 +47,12 @@ const MetricsLineChart = dynamic(
 
 export function MetricsTab({
   runs,
+  metricDirections,
   selectedRunId,
   onSelectRun,
 }: {
   runs: EnrichedTrainingRun[];
+  metricDirections: MetricDirections;
   selectedRunId: string | null;
   onSelectRun: (id: string) => void;
 }) {
@@ -115,7 +118,7 @@ export function MetricsTab({
         </div>
       </div>
       {currentView === "compare" ? (
-        <RunComparisonPanel runs={runsWithMetrics} />
+        <RunComparisonPanel runs={runsWithMetrics} metricDirections={metricDirections} />
       ) : currentView === "chart" ? (
         <>
           <div className="flex flex-wrap items-start justify-between gap-3">

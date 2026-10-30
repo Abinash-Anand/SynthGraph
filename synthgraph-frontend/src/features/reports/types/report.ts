@@ -1,3 +1,10 @@
+import type {
+  AggregatedDirections,
+  DeclaredDirection,
+  HealthVerdict,
+  MetricDirections,
+} from "@/shared/lib/metric-direction";
+
 export type CaptureCompletenessReport = {
   total: number;
   byStatus: {
@@ -24,6 +31,11 @@ export type EfficiencyLeaderboardEntry = {
 
 export type EfficiencyLeaderboard = {
   runs: EfficiencyLeaderboardEntry[];
+  /**
+   * Declared directions across the experiments these runs belong to. Absent from a
+   * backend that predates declared directions, which reads the same as nothing declared.
+   */
+  metricDirections?: AggregatedDirections;
 };
 
 export type ParameterCorrelationGroup = {
@@ -40,6 +52,8 @@ export type ParameterCorrelation = {
 export type ParameterCorrelationReport = {
   experimentId: string;
   runCount: number;
+  /** The directions declared in this experiment; a metric not listed has none. */
+  metricDirections?: MetricDirections;
   correlations: ParameterCorrelation[];
 };
 
@@ -50,6 +64,10 @@ export type TrainingRunHealthMetric = {
   slope: number | null;
   latestStep: number | null;
   latestValue: number | null;
+  /** The declared direction, or null when none was declared. */
+  direction?: DeclaredDirection | null;
+  /** The backend's reading of the trend against the declared direction. */
+  verdict?: HealthVerdict;
 };
 
 export type TrainingRunHealthReport = {
@@ -93,6 +111,8 @@ export type BestRunsReport = {
   projectId: string | null;
   runCount: number;
   records: BestRunsRecord[];
+  /** Declared directions across the experiments reporting each metric; undeclared metrics are absent. */
+  metricDirections?: AggregatedDirections;
 };
 
 export type TrainingRunDriftEntry = {

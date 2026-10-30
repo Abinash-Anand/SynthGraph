@@ -52,7 +52,10 @@ export type ParameterRun = {
   id: string;
   name: string;
   parameters: Record<string, unknown>;
-  /** The chosen outcome for this run (best evaluation in the metric's direction), or null. */
+  /**
+   * The chosen outcome for this run, or null: its best evaluation in the metric's
+   * declared direction, or its latest evaluation when none is declared.
+   */
   outcome: number | null;
 };
 

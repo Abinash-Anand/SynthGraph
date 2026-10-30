@@ -1,5 +1,11 @@
 // Relative import with extension: see best-runs-model.ts for why.
-import { type MetricDirection, compareMetricKeys, isOutcomeMetric, metricDirection } from "../../shared/lib/metric-semantics.ts";
+import {
+  type AggregatedDirections,
+  type RankingDirection,
+  aggregatedDirection,
+  rankingDirection,
+} from "../../shared/lib/metric-direction.ts";
+import { compareMetricKeys, isOutcomeMetric } from "../../shared/lib/metric-semantics.ts";
 
 export type EfficiencyRunInput = {
   trainingRunId: string;
@@ -12,9 +18,9 @@ export type EfficiencyRow = {
   runId: string;
   name: string;
   durationSeconds: number;
-  /** Best evaluation value in the chosen direction, or null if the run never recorded it. */
+  /** Best evaluation value in the ranking direction, or null if the run never recorded it. */
   value: number | null;
-  /** Value per hour of training - only meaningful when higher is better and the value is positive. */
+  /** Value per hour of training - only meaningful when maximizing and the value is positive. */
   perHour: number | null;
   /** On the frontier: no other run is both at-least-as-fast and at-least-as-good, and strictly better on one. */
   pareto: boolean;
@@ -35,25 +41,30 @@ export function rankableMetricKeys(runs: EfficiencyRunInput[]): string[] {
   return Array.from(keys).sort(compareMetricKeys);
 }
 
-/** Prefers a metric whose direction we can infer, so the default ranking is never arbitrary. */
-export function defaultMetricKey(keys: string[]): string {
-  return keys.find((key) => metricDirection(key) !== "neutral") ?? keys[0] ?? "";
+/** Prefers a metric with a declared direction, so the default ranking is never arbitrary. */
+export function defaultMetricKey(keys: string[], directions: AggregatedDirections | null | undefined): string {
+  return keys.find((key) => rankingDirection(aggregatedDirection(directions, key).direction) !== null) ?? keys[0] ?? "";
 }
 
-function bestOf(values: number[], direction: MetricDirection): number | null {
+function bestOf(values: number[], direction: RankingDirection): number | null {
   if (values.length === 0) return null;
-  return direction === "lower" ? Math.min(...values) : Math.max(...values);
+  return direction === "minimize" ? Math.min(...values) : Math.max(...values);
 }
 
 // "At least as good" in the chosen direction.
-function atLeastAsGood(a: number, b: number, direction: MetricDirection): boolean {
-  return direction === "lower" ? a <= b : a >= b;
+function atLeastAsGood(a: number, b: number, direction: RankingDirection): boolean {
+  return direction === "minimize" ? a <= b : a >= b;
 }
 
+/**
+ * Ranks runs and finds the frontier. The direction is required: with none there is no
+ * "best" value and no frontier, so callers decide first (declared, or chosen by the
+ * user for this view) and do not call this until they have one.
+ */
 export function analyzeEfficiency(
   runs: EfficiencyRunInput[],
   metricKey: string,
-  direction: MetricDirection,
+  direction: RankingDirection,
 ): EfficiencyRow[] {
   const rows: EfficiencyRow[] = runs.map((run) => {
     const values = run.evaluations
@@ -66,9 +77,9 @@ export function analyzeEfficiency(
       durationSeconds: run.durationSeconds,
       value,
       // A sub-second duration would divide by ~0 and sort above every real
-      // result, and a per-hour rate is meaningless for lower-is-better.
+      // result, and a per-hour rate is meaningless when minimizing.
       perHour:
-        value !== null && direction !== "lower" && value > 0 && run.durationSeconds > 0
+        value !== null && direction === "maximize" && value > 0 && run.durationSeconds > 0
           ? value / (run.durationSeconds / 3600)
           : null,
       pareto: false,
@@ -92,7 +103,7 @@ export function analyzeEfficiency(
     }
   }
 
-  const better = (a: number, b: number) => (direction === "lower" ? a - b : b - a);
+  const better = (a: number, b: number) => (direction === "minimize" ? a - b : b - a);
   return rows.sort((a, b) => {
     if (a.value === null || b.value === null) return a.value === b.value ? 0 : a.value === null ? 1 : -1;
     if (a.pareto !== b.pareto) return a.pareto ? -1 : 1;

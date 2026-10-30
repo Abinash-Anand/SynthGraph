@@ -6,7 +6,13 @@ import { useMemo, useState } from "react";
 import { SelectField } from "@/components/ui/Field";
 import { cn } from "@/lib/utils";
 import { formatMetricValue, pluralize } from "@/shared/lib/format";
-import { directionLabel, metricDirection } from "@/shared/lib/metric-semantics";
+import {
+  type DeclaredDirection,
+  type MetricDirections,
+  declaredDirection,
+  directionLabel,
+  rankingDirection,
+} from "@/shared/lib/metric-direction";
 import { bestEvaluationValue, outcomeMetricKeys, preferredOutcomeKey } from "../../outcomes";
 import {
   analyzeParameters,
@@ -22,13 +28,14 @@ const EChart = dynamic(() => import("@/shared/charts/EChart").then((m) => m.ECha
 
 const RELIABILITY_LABEL = { ok: "reliable", low: "weak evidence", none: "not enough data" } as const;
 
-function EffectRow({ effect, direction }: { effect: ParameterEffect; direction: ReturnType<typeof metricDirection> }) {
+function EffectRow({ effect, direction }: { effect: ParameterEffect; direction: DeclaredDirection | null }) {
   const estimable = effect.effect !== null;
   // Which way the knob pushes the outcome, in terms of "better" when we know it.
   let leaning: string | null = null;
   if (effect.correlation !== null && Math.abs(effect.correlation) > 0.2) {
     const bigger = effect.correlation > 0;
-    const better = direction === "neutral" ? null : direction === "higher" ? bigger : !bigger;
+    const ranking = rankingDirection(direction);
+    const better = ranking === null ? null : ranking === "maximize" ? bigger : !bigger;
     leaning =
       better === null
         ? `bigger values go with ${bigger ? "higher" : "lower"} outcomes`
@@ -78,11 +85,19 @@ function EffectRow({ effect, direction }: { effect: ParameterEffect; direction: 
   );
 }
 
-export function ParameterInsights({ runs }: { runs: EnrichedTrainingRun[] }) {
+export function ParameterInsights({
+  runs,
+  metricDirections,
+}: {
+  runs: EnrichedTrainingRun[];
+  /** The directions declared for this experiment; a metric not listed has none. */
+  metricDirections: MetricDirections;
+}) {
   const metricKeys = useMemo(() => outcomeMetricKeys(runs), [runs]);
   const [chosen, setChosen] = useState("");
-  const metricKey = metricKeys.includes(chosen) ? chosen : preferredOutcomeKey(metricKeys);
-  const direction = metricDirection(metricKey);
+  const metricKey = metricKeys.includes(chosen) ? chosen : preferredOutcomeKey(metricKeys, metricDirections);
+  const direction = declaredDirection(metricDirections, metricKey);
+  const ranking = rankingDirection(direction);
 
   const analysis = useMemo(() => {
     const analysisRuns = runs.map((r) => ({
@@ -143,8 +158,8 @@ export function ParameterInsights({ runs }: { runs: EnrichedTrainingRun[] }) {
         dimension: outcomeDim,
         min: Math.min(...outcomes),
         max: Math.max(...outcomes),
-        // Higher-is-better reads purple; lower-is-better flips so purple is still "good".
-        inRange: { color: direction === "lower" ? ["#a78bfa", "#3f3f46"] : ["#3f3f46", "#a78bfa"] },
+        // Brighter is higher, except for a declared minimize, which flips so purple is still "good".
+        inRange: { color: ranking === "minimize" ? ["#a78bfa", "#3f3f46"] : ["#3f3f46", "#a78bfa"] },
       },
       tooltip: { confine: true,
       backgroundColor: "#18181b", borderColor: "#27272a", textStyle: { color: "#f4f4f5", fontSize: 12 } },
@@ -162,7 +177,7 @@ export function ParameterInsights({ runs }: { runs: EnrichedTrainingRun[] }) {
         },
       ],
     };
-  }, [analysis.runs, knobs, metricKey, direction]);
+  }, [analysis.runs, knobs, metricKey, ranking]);
 
   if (metricKeys.length === 0) {
     return (
@@ -182,9 +197,9 @@ export function ParameterInsights({ runs }: { runs: EnrichedTrainingRun[] }) {
           <SelectField label="Outcome" value={metricKey} onChange={setChosen} options={metricKeys} />
         </div>
         <p className="max-w-[52ch] text-[12px] text-research-ink-muted">
-          Each run&apos;s outcome is its best evaluation of <span className="font-mono">{metricKey}</span> (
-          {directionLabel(direction)}
-          {direction === "neutral" ? ", so no better/worse reading is given" : ", inferred from the name"}).
+          Each run&apos;s outcome is its {ranking === null ? "latest" : "best"} evaluation of{" "}
+          <span className="font-mono">{metricKey}</span>: {directionLabel(direction)}
+          {ranking === null ? ", so no better/worse reading is given" : ""}.
           These are associations across {result.usableRuns} of {pluralize(result.totalRuns, "run")}, not proof of cause.
         </p>
       </div>
@@ -238,7 +253,7 @@ export function ParameterInsights({ runs }: { runs: EnrichedTrainingRun[] }) {
           <h3 className="mono-label text-research-ink-muted">Every run across the varying parameters</h3>
           <EChart option={parallelOption} height={280} />
           <p className="text-[12px] text-research-ink-muted">
-            One line per run, coloured by {metricKey} (brighter is {direction === "lower" ? "lower" : "higher"}). Look
+            One line per run, coloured by {metricKey} (brighter is {ranking === "minimize" ? "lower" : "higher"}). Look
             for a bright cluster that shares a value on one axis.
           </p>
         </div>

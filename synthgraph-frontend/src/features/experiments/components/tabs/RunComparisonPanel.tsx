@@ -15,7 +15,13 @@ import {
 } from "@/shared/charts/metric-series";
 import { SERIES_COLORS } from "@/shared/charts/series-colors";
 import { formatMetricValue } from "@/shared/lib/format";
-import { compareMetricKeys, directionLabel, metricDirection } from "@/shared/lib/metric-semantics";
+import {
+  type MetricDirections,
+  declaredDirection,
+  directionLabel,
+  rankingDirection,
+} from "@/shared/lib/metric-direction";
+import { compareMetricKeys } from "@/shared/lib/metric-semantics";
 import { describeEvaluationSummary, outcomeMetricKeys, preferredOutcomeKey, summarizeEvaluations } from "../../outcomes";
 import type { EnrichedTrainingRun } from "../../types/experiment-workspace";
 
@@ -215,7 +221,7 @@ function overlayOption(series: RunSeries[], showBand: boolean, domain: { from: n
   };
 }
 
-function TrainingCurves({ runs }: { runs: EnrichedTrainingRun[] }) {
+function TrainingCurves({ runs, metricDirections }: { runs: EnrichedTrainingRun[]; metricDirections: MetricDirections }) {
   const keys = useMemo(() => {
     const all = new Set<string>();
     for (const r of runs) for (const key of extractMetricKeys(r.metrics)) all.add(key);
@@ -233,15 +239,16 @@ function TrainingCurves({ runs }: { runs: EnrichedTrainingRun[] }) {
     () => splitStepDomains(live.flatMap((s) => s.points.map(([step]) => step))),
     [live],
   );
-  const direction = metricDirection(metricKey);
+  const direction = declaredDirection(metricDirections, metricKey);
+  const ranking = rankingDirection(direction);
 
   const rows = live.map((s) => {
     const values = s.points.map(([, v]) => v);
     const highest = Math.max(...values);
     const lowest = Math.min(...values);
-    // The extreme in the metric's good direction when it is known; with no
-    // known direction both ends are shown (see the extra column below).
-    const best = direction === "lower" ? lowest : highest;
+    // The extreme in the metric's declared good direction; with none declared
+    // (or a neutral one) both ends are shown (see the extra column below).
+    const best = ranking === "minimize" ? lowest : highest;
     return { ...s, last: values[values.length - 1], best, highest, lowest, steps: s.points[s.points.length - 1][0] };
   });
   const canBand = live.length >= 2;
@@ -298,14 +305,14 @@ function TrainingCurves({ runs }: { runs: EnrichedTrainingRun[] }) {
               <tr className="border-b border-research-border bg-research-panel">
                 <th className="px-3 py-2.5 text-left font-mono text-[11px] text-research-ink-muted">run</th>
                 <th className="px-3 py-2.5 text-left font-mono text-[11px] text-research-ink-muted">last</th>
-                {direction === "neutral" ? (
+                {ranking === null ? (
                   <>
                     <th className="px-3 py-2.5 text-left font-mono text-[11px] text-research-ink-muted">highest</th>
                     <th className="px-3 py-2.5 text-left font-mono text-[11px] text-research-ink-muted">lowest</th>
                   </>
                 ) : (
                   <th className="px-3 py-2.5 text-left font-mono text-[11px] text-research-ink-muted">
-                    {direction === "lower" ? "lowest" : "highest"}
+                    {ranking === "minimize" ? "lowest" : "highest"}
                   </th>
                 )}
                 <th className="px-3 py-2.5 text-left font-mono text-[11px] text-research-ink-muted">last step</th>
@@ -323,7 +330,7 @@ function TrainingCurves({ runs }: { runs: EnrichedTrainingRun[] }) {
                   <td className="px-3 py-2.5 font-mono tabular-nums text-research-ink" title={String(row.last)}>
                     {formatMetricValue(row.last)}
                   </td>
-                  {direction === "neutral" ? (
+                  {ranking === null ? (
                     <>
                       <td className="px-3 py-2.5 font-mono tabular-nums text-research-ink-secondary" title={String(row.highest)}>
                         {formatMetricValue(row.highest)}
@@ -375,10 +382,10 @@ function checkpointSeries(runs: EnrichedTrainingRun[], metricKey: string): { ser
   return { series, parsed };
 }
 
-function EvaluationCheckpoints({ runs }: { runs: EnrichedTrainingRun[] }) {
+function EvaluationCheckpoints({ runs, metricDirections }: { runs: EnrichedTrainingRun[]; metricDirections: MetricDirections }) {
   const keys = useMemo(() => outcomeMetricKeys(runs), [runs]);
   const [chosen, setChosen] = useState("");
-  const metricKey = keys.includes(chosen) ? chosen : preferredOutcomeKey(keys);
+  const metricKey = keys.includes(chosen) ? chosen : preferredOutcomeKey(keys, metricDirections);
   const [hidden, toggle] = useHidden();
 
   const { series, parsed } = useMemo(() => checkpointSeries(runs, metricKey), [runs, metricKey]);
@@ -434,7 +441,7 @@ function EvaluationCheckpoints({ runs }: { runs: EnrichedTrainingRun[] }) {
     );
   }
 
-  const direction = metricDirection(metricKey);
+  const direction = declaredDirection(metricDirections, metricKey);
 
   return (
     <div className="flex flex-col gap-4">
@@ -443,8 +450,7 @@ function EvaluationCheckpoints({ runs }: { runs: EnrichedTrainingRun[] }) {
           <SelectField label="Evaluation metric" value={metricKey} onChange={setChosen} options={keys} />
         </div>
         <p className="max-w-[48ch] text-[12px] text-research-ink-muted">
-          How each run scored at each evaluation checkpoint ({directionLabel(direction)}
-          {direction === "neutral" ? "" : ", inferred"}).
+          How each run scored at each evaluation checkpoint: {directionLabel(direction)}.
           {parsed ? "" : " Checkpoint steps couldn't be read from the evaluation names, so they're shown in order."}
         </p>
       </div>
@@ -469,16 +475,23 @@ function EvaluationCheckpoints({ runs }: { runs: EnrichedTrainingRun[] }) {
   );
 }
 
-export function RunComparisonPanel({ runs }: { runs: EnrichedTrainingRun[] }) {
+export function RunComparisonPanel({
+  runs,
+  metricDirections,
+}: {
+  runs: EnrichedTrainingRun[];
+  /** The directions declared for this experiment; a metric not listed has none. */
+  metricDirections: MetricDirections;
+}) {
   return (
     <div className="flex flex-col gap-8">
       <section className="flex flex-col gap-3">
         <h3 className="mono-label text-research-ink-muted">Training curves, one line per run</h3>
-        <TrainingCurves runs={runs} />
+        <TrainingCurves runs={runs} metricDirections={metricDirections} />
       </section>
       <section className="flex flex-col gap-3">
         <h3 className="mono-label text-research-ink-muted">Evaluation checkpoints</h3>
-        <EvaluationCheckpoints runs={runs} />
+        <EvaluationCheckpoints runs={runs} metricDirections={metricDirections} />
       </section>
     </div>
   );

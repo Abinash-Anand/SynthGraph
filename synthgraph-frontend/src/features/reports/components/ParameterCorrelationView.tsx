@@ -6,7 +6,8 @@ import { useMemo, useState } from "react";
 import { SelectField } from "@/components/ui/Field";
 import { classifyParameter } from "@/features/experiments/parameter-model";
 import { formatMetricValue } from "@/shared/lib/format";
-import { compareMetricKeys, metricDirection } from "@/shared/lib/metric-semantics";
+import { canRank } from "@/shared/lib/metric-direction";
+import { compareMetricKeys } from "@/shared/lib/metric-semantics";
 import type { ParameterCorrelation, ParameterCorrelationReport } from "../types/report";
 
 const EChart = dynamic(() => import("@/shared/charts/EChart").then((m) => m.EChart), {
@@ -27,7 +28,7 @@ export function ParameterCorrelationView({ report }: { report: ParameterCorrelat
   const [chosen, setChosen] = useState("");
   const metricKey = metricKeys.includes(chosen)
     ? chosen
-    : (metricKeys.find((key) => metricDirection(key) !== "neutral") ?? metricKeys[0] ?? "");
+    : (metricKeys.find((key) => canRank(report.metricDirections, key)) ?? metricKeys[0] ?? "");
 
   if (report.correlations.length === 0) {
     return (

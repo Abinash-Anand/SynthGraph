@@ -34,16 +34,33 @@ describe("rankableMetricKeys", () => {
 });
 
 describe("defaultMetricKey", () => {
-  it("prefers a metric with a known direction over an alphabetically earlier one", () => {
-    assert.equal(defaultMetricKey(["epochs", "episode_reward"]), "episode_reward");
+  it("prefers a metric with a declared direction over an earlier one", () => {
+    assert.equal(
+      defaultMetricKey(["epochs", "episode_reward"], { episode_reward: { direction: "maximize", mixed: false } }),
+      "episode_reward",
+    );
+  });
+  it("does not prefer a metric because of its name", () => {
+    assert.equal(defaultMetricKey(["epochs", "episode_reward"], {}), "epochs");
+    assert.equal(defaultMetricKey(["epochs", "episode_reward"], undefined), "epochs");
+  });
+  it("does not prefer a neutral or mixed metric", () => {
+    assert.equal(
+      defaultMetricKey(["a", "b", "c"], {
+        a: { direction: "neutral", mixed: false },
+        b: { direction: null, mixed: true },
+        c: { direction: "minimize", mixed: false },
+      }),
+      "c",
+    );
   });
   it("falls back to the first key, then empty", () => {
-    assert.equal(defaultMetricKey(["epochs"]), "epochs");
-    assert.equal(defaultMetricKey([]), "");
+    assert.equal(defaultMetricKey(["epochs"], {}), "epochs");
+    assert.equal(defaultMetricKey([], {}), "");
   });
 });
 
-describe("analyzeEfficiency (higher is better)", () => {
+describe("analyzeEfficiency (maximize)", () => {
   const runs = [
     run("fast-ok", 10, [{ score: 0.7 }]),
     run("slow-best", 60, [{ score: 0.9 }]),
@@ -52,7 +69,7 @@ describe("analyzeEfficiency (higher is better)", () => {
   ];
 
   it("marks the frontier and says who dominates the rest", () => {
-    const rows = analyzeEfficiency(runs, "score", "higher");
+    const rows = analyzeEfficiency(runs, "score", "maximize");
     const byId = Object.fromEntries(rows.map((r) => [r.runId, r]));
     assert.equal(byId["fast-ok"].pareto, true);
     assert.equal(byId["slow-best"].pareto, true);
@@ -61,40 +78,40 @@ describe("analyzeEfficiency (higher is better)", () => {
   });
 
   it("lists the frontier first, runs without the metric last", () => {
-    const rows = analyzeEfficiency(runs, "score", "higher");
+    const rows = analyzeEfficiency(runs, "score", "maximize");
     assert.deepEqual(rows.map((r) => r.runId), ["slow-best", "fast-ok", "slow-bad", "none"]);
   });
 
   it("computes per-hour only for positive values", () => {
-    const rows = analyzeEfficiency(runs, "score", "higher");
+    const rows = analyzeEfficiency(runs, "score", "maximize");
     assert.equal(rows.find((r) => r.runId === "fast-ok")?.perHour, 0.7 / (600 / 3600));
   });
 });
 
-describe("analyzeEfficiency (lower is better)", () => {
+describe("analyzeEfficiency (minimize)", () => {
   const runs = [run("a", 10, [{ loss: 0.5 }, { loss: 0.2 }]), run("b", 20, [{ loss: 0.3 }])];
 
   it("takes each run's best (lowest) evaluation", () => {
-    const rows = analyzeEfficiency(runs, "loss", "lower");
+    const rows = analyzeEfficiency(runs, "loss", "minimize");
     assert.equal(rows.find((r) => r.runId === "a")?.value, 0.2);
   });
 
   it("treats the faster, lower run as dominating", () => {
-    const rows = analyzeEfficiency(runs, "loss", "lower");
+    const rows = analyzeEfficiency(runs, "loss", "minimize");
     const b = rows.find((r) => r.runId === "b");
     assert.equal(b?.pareto, false);
     assert.equal(b?.dominatedBy?.runId, "a");
   });
 
   it("gives no per-hour rate", () => {
-    const rows = analyzeEfficiency(runs, "loss", "lower");
+    const rows = analyzeEfficiency(runs, "loss", "minimize");
     assert.ok(rows.every((r) => r.perHour === null));
   });
 });
 
 describe("analyzeEfficiency (edge cases)", () => {
   it("does not divide by a zero duration", () => {
-    const rows = analyzeEfficiency([run("instant", 0, [{ score: 1 }])], "score", "higher");
+    const rows = analyzeEfficiency([run("instant", 0, [{ score: 1 }])], "score", "maximize");
     assert.equal(rows[0].perHour, null);
   });
 
@@ -102,7 +119,7 @@ describe("analyzeEfficiency (edge cases)", () => {
     const rows = analyzeEfficiency(
       [run("x", 10, [{ score: 0.5 }]), run("y", 10, [{ score: 0.5 }])],
       "score",
-      "higher",
+      "maximize",
     );
     assert.ok(rows.every((r) => r.pareto));
   });
@@ -113,7 +130,7 @@ describe("paretoPath", () => {
     const rows = analyzeEfficiency(
       [run("fast", 30, [{ score: 0.6 }]), run("slow", 120, [{ score: 0.9 }]), run("bad", 150, [{ score: 0.4 }])],
       "score",
-      "higher",
+      "maximize",
     );
     assert.deepEqual(paretoPath(rows), [
       [0.5, 0.6],
