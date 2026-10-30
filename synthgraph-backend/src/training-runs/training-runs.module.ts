@@ -30,6 +30,7 @@ import { CreateTrainingRunService } from './services/create-training-run.service
 import { GetTrainingRunService } from './services/get-training-run.service.js';
 import { ListTrainingRunsService } from './services/list-training-runs.service.js';
 import { UpdateTrainingRunCaptureStatusService } from './services/update-training-run-capture-status.service.js';
+import { TrainingRunGenerationReferencesService } from './services/training-run-generation-references.service.js';
 import { UpdateTrainingRunStatusService } from './services/update-training-run-status.service.js';
 
 @Module({
@@ -76,7 +77,8 @@ import { UpdateTrainingRunStatusService } from './services/update-training-run-s
     UpdateTrainingRunCaptureStatusService,
     CreateTrainingRunDatasetReferenceService,
     DatasetProjectScopeService,
+    TrainingRunGenerationReferencesService,
   ],
-  exports: [ListTrainingRunsService],
+  exports: [ListTrainingRunsService, TrainingRunGenerationReferencesService],
 })
 export class TrainingRunsModule {}
