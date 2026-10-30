@@ -129,7 +129,7 @@ describe('GetExperimentWorkspaceService', () => {
       { trainingRunId: 'run-a' },
     ]);
     driftService.forTrainingRuns.mockResolvedValue([
-      { trainingRunId: 'run-a' },
+      { trainingRunId: 'run-a', baselineRunCount: 0, drift: [] },
     ]);
     listGenerationsService.execute.mockResolvedValue(generations);
     manifestsService.forGenerations.mockResolvedValue([{ id: 'm1' }]);
@@ -146,6 +146,48 @@ describe('GetExperimentWorkspaceService', () => {
       100,
       0,
     );
+  });
+
+  it('flags attention from the very runs and drift it returns', async () => {
+    getExperimentService.executeForUser.mockResolvedValue({ id: 'experiment-1' });
+    parameterCorrelationService.execute.mockResolvedValue({});
+    const runs = [
+      { id: 'run-ok', status: 'completed', captureStatus: { status: 'complete' } },
+      { id: 'run-bad', status: 'failed', captureStatus: null },
+      { id: 'run-drift', status: 'completed', captureStatus: { status: 'complete' } },
+    ];
+    listTrainingRunsService.execute.mockResolvedValue(runs);
+    listTrainingRunMetricsService.execute.mockResolvedValue([]);
+    listEvaluationResultsService.execute.mockResolvedValue([]);
+    healthService.forTrainingRuns.mockResolvedValue(runs.map((r) => ({ trainingRunId: r.id })));
+    driftService.forTrainingRuns.mockResolvedValue([
+      { trainingRunId: 'run-ok', baselineRunCount: 0, drift: [] },
+      { trainingRunId: 'run-bad', baselineRunCount: 0, drift: [] },
+      { trainingRunId: 'run-drift', baselineRunCount: 2, drift: [{}, {}] },
+    ]);
+    listGenerationsService.execute.mockResolvedValue([]);
+    manifestsService.forGenerations.mockResolvedValue([]);
+
+    const workspace = await service.execute('experiment-1', 'user-1');
+
+    expect(workspace.attention.runsChecked).toBe(3);
+    expect(workspace.attention.runs).toEqual([
+      {
+        trainingRunId: 'run-bad',
+        reasons: [{ code: 'run_failed' }, { code: 'capture_not_reported' }],
+      },
+      {
+        trainingRunId: 'run-drift',
+        reasons: [{ code: 'drift', driftFields: 2 }],
+      },
+    ]);
+    expect(workspace.attention.checks.map((check) => check.code)).toEqual([
+      'run_failed',
+      'capture_partial',
+      'capture_unknown',
+      'capture_not_reported',
+      'drift',
+    ]);
   });
 
   it("is not found, and returns nothing, when the experiment is not the user's", async () => {

@@ -13,6 +13,7 @@ import type { TrainingRun } from "@/features/training-runs/types/training-run";
 import type { TrainingRunMetric } from "@/features/training-runs/types/training-run-metric";
 import { backendFetch, type BackendCallTiming } from "@/shared/http/http";
 import { NotFoundError } from "@/shared/http/errors";
+import type { ExperimentAttention } from "../attention-model";
 import { slimGeneration } from "../slim-generation";
 import type { Experiment } from "../types/experiment";
 import type { EnrichedGeneration, EnrichedTrainingRun } from "../types/experiment-workspace";
@@ -25,6 +26,12 @@ export type ExperimentWorkspaceData = {
   correlationReport: ParameterCorrelationReport;
   trainingRuns: EnrichedTrainingRun[];
   generations: EnrichedGeneration[];
+  /**
+   * Which runs need a look, as the backend decided (ARCH-005). Null from a backend
+   * that predates it: the page then says the checks are unavailable rather than
+   * working the flags out itself.
+   */
+  attention: ExperimentAttention | null;
   /**
    * How the data was loaded: the one workspace request (with how long it took
    * and the backend's per-part breakdown), or the separate routes.
@@ -44,6 +51,7 @@ type WorkspaceResponse = {
     drift: TrainingRunDriftReport;
   }>;
   generations: Array<{ generation: Generation; manifest: ReproductionManifest }>;
+  attention?: ExperimentAttention;
 };
 
 /**
@@ -87,6 +95,7 @@ export const loadExperimentWorkspace = cache(async function loadExperimentWorksp
     correlationReport: workspace.correlation,
     trainingRuns: workspace.trainingRuns,
     generations: workspace.generations.map(({ generation, manifest }) => slimGeneration({ generation, manifest })),
+    attention: workspace.attention ?? null,
     load: call ? { source: "workspace", call } : { source: "separate" },
   };
 });
@@ -102,5 +111,5 @@ async function loadFromSeparateRoutes(
     loadEnrichedTrainingRuns(apiKey, experimentId),
     loadEnrichedGenerations(apiKey, experimentId),
   ]);
-  return { experiment, correlationReport, trainingRuns, generations, load: { source: "separate" } };
+  return { experiment, correlationReport, trainingRuns, generations, attention: null, load: { source: "separate" } };
 }

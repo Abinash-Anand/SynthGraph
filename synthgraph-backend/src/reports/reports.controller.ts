@@ -8,6 +8,7 @@ import { CaptureCompletenessQueryDto } from './dto/capture-completeness-query.dt
 import { DatasetImpactQueryDto } from './dto/dataset-impact-query.dto.js';
 import { EfficiencyLeaderboardQueryDto } from './dto/efficiency-leaderboard-query.dto.js';
 import { ParameterCorrelationQueryDto } from './dto/parameter-correlation-query.dto.js';
+import { ExperimentAttentionQueryDto } from './dto/experiment-attention-query.dto.js';
 import { ExperimentTrainingRunDriftQueryDto } from './dto/experiment-training-run-drift-query.dto.js';
 import { ExperimentTrainingRunHealthQueryDto } from './dto/experiment-training-run-health-query.dto.js';
 import { TrainingRunDriftQueryDto } from './dto/training-run-drift-query.dto.js';
@@ -19,6 +20,7 @@ import { GetCaptureCompletenessReportService } from './services/get-capture-comp
 import { GetDatasetImpactReportService } from './services/get-dataset-impact-report.service.js';
 import { GetEfficiencyLeaderboardService } from './services/get-efficiency-leaderboard.service.js';
 import { GetParameterCorrelationReportService } from './services/get-parameter-correlation-report.service.js';
+import { GetExperimentAttentionService } from './services/get-experiment-attention.service.js';
 import { GetExperimentTrainingRunDriftService } from './services/get-experiment-training-run-drift.service.js';
 import { GetExperimentTrainingRunHealthService } from './services/get-experiment-training-run-health.service.js';
 import { GetTrainingRunDriftService } from './services/get-training-run-drift.service.js';
@@ -41,6 +43,7 @@ export class ReportsController {
     private readonly trainingRunKeysService: GetTrainingRunKeysService,
     private readonly experimentTrainingRunHealthService: GetExperimentTrainingRunHealthService,
     private readonly experimentTrainingRunDriftService: GetExperimentTrainingRunDriftService,
+    private readonly experimentAttentionService: GetExperimentAttentionService,
   ) {}
 
   @Get('capture-completeness')
@@ -111,6 +114,19 @@ export class ReportsController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.experimentTrainingRunDriftService.execute(
+      query.experimentId,
+      request.user.id,
+      query.limit,
+      query.offset,
+    );
+  }
+
+  @Get('experiment-attention')
+  async experimentAttention(
+    @Query() query: ExperimentAttentionQueryDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.experimentAttentionService.execute(
       query.experimentId,
       request.user.id,
       query.limit,

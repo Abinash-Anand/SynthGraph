@@ -6,7 +6,12 @@ import type { TrainingRunStatus } from "@/features/training-runs/types/training-
 import { cn } from "@/lib/utils";
 import { formatDateTime, formatDurationSeconds, formatMetricValue } from "@/shared/lib/format";
 import { compareMetricKeys, isOutcomeMetric } from "@/shared/lib/metric-semantics";
-import { computeAttentionEntries, describeEmptyAttention } from "../../attention-model";
+import {
+  ATTENTION_UNAVAILABLE,
+  type ExperimentAttention,
+  describeAttentionEntries,
+  describeEmptyAttention,
+} from "../../attention-model";
 import type { EnrichedGeneration, EnrichedTrainingRun } from "../../types/experiment-workspace";
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
@@ -205,13 +210,27 @@ function ResultPanel({ trainingRuns }: { trainingRuns: EnrichedTrainingRun[] }) 
 }
 
 function AttentionPanel({
+  attention,
   trainingRuns,
   onSelectRun,
 }: {
+  attention: ExperimentAttention | null;
   trainingRuns: EnrichedTrainingRun[];
   onSelectRun: (id: string) => void;
 }) {
-  const entries = computeAttentionEntries(trainingRuns);
+  // The backend decides which runs are flagged and which checks that covers; this only words it.
+  if (attention === null) {
+    return (
+      <div className="flex min-w-0 flex-col gap-3 overflow-x-hidden rounded-xl border border-research-border bg-research-panel p-4">
+        <p className="mono-label text-research-ink-muted">Flagged runs</p>
+        <p className="text-[13px] text-research-ink-secondary">{ATTENTION_UNAVAILABLE}</p>
+      </div>
+    );
+  }
+  const entries = describeAttentionEntries(
+    attention,
+    new Map(trainingRuns.map(({ run }) => [run.id, run.name])),
+  );
 
   return (
     <div
@@ -224,7 +243,7 @@ function AttentionPanel({
     >
       <p className="mono-label text-research-ink-muted">Flagged runs</p>
       {entries.length === 0 ? (
-        <p className="text-[13px] text-research-ink-secondary">{describeEmptyAttention()}</p>
+        <p className="text-[13px] text-research-ink-secondary">{describeEmptyAttention(attention.checks)}</p>
       ) : (
         <div className="flex flex-col gap-1.5">
           {entries.map((entry) => (
@@ -247,6 +266,7 @@ function AttentionPanel({
 export function OverviewTab({
   generations,
   trainingRuns,
+  attention,
   onSelectGeneration,
   onSelectRun,
   compareMode = false,
@@ -255,6 +275,8 @@ export function OverviewTab({
 }: {
   generations: EnrichedGeneration[];
   trainingRuns: EnrichedTrainingRun[];
+  /** The backend's answer to "which runs need a look"; null when it did not send one. */
+  attention: ExperimentAttention | null;
   onSelectGeneration: (id: string) => void;
   onSelectRun: (id: string) => void;
   /** When true, the generations list becomes a checkbox picker instead of
@@ -295,7 +317,7 @@ export function OverviewTab({
         </p>
       ) : null}
 
-      <AttentionPanel trainingRuns={trainingRuns} onSelectRun={onSelectRun} />
+      <AttentionPanel attention={attention} trainingRuns={trainingRuns} onSelectRun={onSelectRun} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <RunStatusPanel trainingRuns={trainingRuns} />

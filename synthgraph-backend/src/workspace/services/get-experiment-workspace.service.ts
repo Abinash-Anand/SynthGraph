@@ -14,6 +14,10 @@ import {
 import { ListGenerationsService } from '../../generations/services/list-generations.service.js';
 import type { MetricDirection } from '../../metric-directions/metric-direction.js';
 import { MetricDirectionsService } from '../../metric-directions/metric-directions.service.js';
+import {
+  buildExperimentAttention,
+  type ExperimentAttention,
+} from '../../reports/attention.js';
 import { GetExperimentTrainingRunDriftService } from '../../reports/services/get-experiment-training-run-drift.service.js';
 import { GetExperimentTrainingRunHealthService } from '../../reports/services/get-experiment-training-run-health.service.js';
 import { GetParameterCorrelationReportService } from '../../reports/services/get-parameter-correlation-report.service.js';
@@ -51,6 +55,12 @@ export type ExperimentWorkspace = {
   metricDirections: Record<string, MetricDirection>;
   correlation: ParameterCorrelationReport;
   trainingRuns: WorkspaceTrainingRun[];
+  /**
+   * Which of these runs need a look, and which checks that covers: the same
+   * result as `GET /reports/experiment-attention`, from the runs and drift
+   * already loaded here.
+   */
+  attention: ExperimentAttention;
   generations: WorkspaceGeneration[];
 };
 
@@ -113,6 +123,12 @@ export class GetExperimentWorkspaceService {
       metricDirections: directions,
       correlation,
       trainingRuns,
+      attention: buildExperimentAttention(
+        trainingRuns.map(({ run, drift }) => ({
+          run,
+          driftFieldCount: drift.drift.length,
+        })),
+      ),
       generations,
     };
   }

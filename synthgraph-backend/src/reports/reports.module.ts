@@ -20,6 +20,7 @@ import { GetDatasetImpactReportService } from './services/get-dataset-impact-rep
 import { GetEfficiencyLeaderboardService } from './services/get-efficiency-leaderboard.service.js';
 import { GetParameterCorrelationReportService } from './services/get-parameter-correlation-report.service.js';
 import { MetricDirectionsModule } from '../metric-directions/metric-directions.module.js';
+import { GetExperimentAttentionService } from './services/get-experiment-attention.service.js';
 import { GetExperimentTrainingRunDriftService } from './services/get-experiment-training-run-drift.service.js';
 import { GetExperimentTrainingRunHealthService } from './services/get-experiment-training-run-health.service.js';
 import { GetTrainingRunDriftService } from './services/get-training-run-drift.service.js';
@@ -74,6 +75,7 @@ import { SearchTrainingRunsService } from './services/search-training-runs.servi
     GetTrainingRunKeysService,
     GetExperimentTrainingRunHealthService,
     GetExperimentTrainingRunDriftService,
+    GetExperimentAttentionService,
   ],
   exports: [
     GetParameterCorrelationReportService,

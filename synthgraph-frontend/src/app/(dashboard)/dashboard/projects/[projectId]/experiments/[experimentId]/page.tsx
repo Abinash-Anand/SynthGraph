@@ -63,6 +63,7 @@ export default async function ExperimentDetailPage({ params }: { params: Promise
     correlationReport,
     trainingRuns: enrichedTrainingRuns,
     generations: enrichedGenerations,
+    attention,
     load,
   } = workspace;
   console.info("experiment_workspace.loaded", {
@@ -95,6 +96,7 @@ export default async function ExperimentDetailPage({ params }: { params: Promise
       generations={enrichedGenerations}
       trainingRuns={enrichedTrainingRuns}
       correlationReport={correlationReport}
+      attention={attention}
     />
   );
 }

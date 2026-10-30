@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 import type { Experiment } from "@/features/experiments/types/experiment";
 import type { ParameterCorrelationReport } from "@/features/reports/types/report";
+import type { ExperimentAttention } from "../attention-model";
 import { WorkspaceTourAutoStart } from "@/features/onboarding/components/WorkspaceTourAutoStart";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { pushSearchParams } from "@/shared/lib/shallow-url";
@@ -39,6 +40,7 @@ export function ExperimentWorkspace({
   generations,
   trainingRuns,
   correlationReport,
+  attention,
   workspaceTourDue = false,
 }: {
   workspaceTourDue?: boolean;
@@ -48,6 +50,8 @@ export function ExperimentWorkspace({
   generations: EnrichedGeneration[];
   trainingRuns: EnrichedTrainingRun[];
   correlationReport: ParameterCorrelationReport;
+  /** The backend's answer to "which runs need a look"; null when it did not send one. */
+  attention: ExperimentAttention | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -180,6 +184,7 @@ export function ExperimentWorkspace({
         <OverviewTab
           generations={generations}
           trainingRuns={trainingRuns}
+          attention={attention}
           onSelectGeneration={(id) => setSelected({ type: "generation", id })}
           onSelectRun={(id) => setSelected({ type: "run", id })}
           compareMode={compareMode && compareTarget === "generation"}
