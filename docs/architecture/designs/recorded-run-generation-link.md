@@ -1,74 +1,51 @@
-# Design: a recorded link between a training run and the generations it used
+# Design: recorded lineage, and removing the guessed edges
 
-Status: **proposed, awaiting owner review.** Nothing in this design has been implemented.
+Status: **approved 2026-10-30 (owner decisions in the registry, section 2a). PR 1 of 5 is implemented; the rest are not.**
 Closes: registry entry ARCH-004.
-Decision it implements (2026-10-30): remove the guessed lineage edges, and add the recorded link first.
 
 ## Problem
 
-`docs/frontendarchitecture.md` says the frontend must not infer lineage from timestamps. When no link is recorded, the lineage graph draws dashed edges guessed from when a generation finished and when a run started (`synthgraph-frontend/src/features/experiments/lineage-model.ts`). In your Phase 1 experiment, 15 of 16 generations had no recorded link, so most of that graph is a guess.
+`docs/frontendarchitecture.md` says the frontend must not infer lineage from timestamps. When no link is recorded, the lineage graph draws dashed edges guessed from when a generation finished and when a run started (`synthgraph-frontend/src/features/experiments/lineage-model.ts`). In the Phase 1 experiment, 15 of 16 generations had no recorded link, so most of that graph is a guess.
 
-## What exists today, and why the gap exists
+## Approved decisions
 
-- The data model records generation to dataset (`generation_dataset_refs`) and training run to dataset (`training_run_dataset_refs`). Lineage is currently built **through datasets**.
-- The SDK already has `training.use(generation)`, which attaches the datasets that generation *produced* to the run (`synthgraph-sdk-cli/src/synthgraph/fluent.py`, `TrainingHandle.use`).
-- There is **no direct generation-to-run relationship** in the schema.
-- In Phase 1, the generations are domain-randomisation variants and the training happens in the simulator. The generations produced no dataset, so there was no dataset to link through. The relationship exists in reality but has nowhere to be recorded.
+- A dataset can be reused across experiments **within one project**; across projects it cannot (MVP). The backend enforces this.
+- A generation can produce many dataset versions; a training run can consume many; an evaluation references the one exact dataset version it was scored against.
+- References are exact and immutable (no route updates or deletes a dataset version, a reference, or an evaluation's dataset version).
+- A timestamp inference is never shown as confirmed provenance, and existing guesses are never converted into recorded relationships.
+- The inferred edges are removed only after the replacement is verified.
 
-So the gap is not only recording practice. For simulator-driven training there is no way to say "this run used these generations".
+## What exists today
 
-## Proposal
+- Generation to dataset version (`generation_dataset_refs`), training run to dataset version (`training_run_dataset_refs`), and evaluation to dataset version (NOT NULL foreign key) are recorded. Many-to-many already holds for the first two.
+- A dataset was owned by a user only, so one dataset could be referenced from several projects. **There was no project on a dataset**, so "same project" had no definition.
+- There is **no direct generation-to-run link**. For simulator-driven training the generations produce no dataset, so there is nothing to link through. That gap is why the frontend guesses.
 
-### 1. Data (backend)
+## Plan: five small pull requests
 
-A junction table that mirrors the existing dataset-reference tables:
+1. **Project scope for datasets (backend). Implemented.**
+   - `datasets.project_id`, nullable, additive, no backfill. Every existing dataset starts unscoped.
+   - Every write that references a dataset version (generation reference, run reference, evaluation) calls one service. A dataset scoped to another project is rejected with 409 `cross_project_reference` and nothing is written. An unscoped dataset is scoped to the referencing project in the same request, atomically, so two simultaneous first references from different projects cannot both win.
+   - Datasets that already have references decide by them: none, or only this project, scopes it; exactly one other project rejects (that is its project, and a failed request does not scope it); two or more projects leaves it unscoped and accepts the reference, because it cannot be attributed to one. Existing references are never changed or revalidated.
+   - `projectId` is returned on dataset responses.
+2. **Recorded generation-to-run link (backend).** A `training_run_generation_refs(training_run_id, generation_id, created_at)` table, `POST` and `GET /training-runs/:id/generations`, and `generationReferences` on the run and workspace responses. Same project required (409 `cross_project_reference`), same experiment not. No `role`.
+3. **SDK and CLI.** `training.use(generation)` records the direct link and still attaches the produced datasets; `experiment.training(..., generations=[...])`; `training.generations()`; `synthgraph training-runs link-generation`.
+4. **Frontend draws recorded links.** Generation-to-run edges appear solid. A generation from another experiment of the project is an external node showing its name. The guessed edges are still shown and still labelled.
+5. **Remove the inference.** Delete the timestamp edges, `inferredEdgeCount`, the legend and the "includes inferred links" note. An unlinked generation is shown as unlinked with no edge. Ships only after 4 is verified and the owner agrees to the visible cost below.
 
-- `training_run_generation_refs(training_run_id uuid, generation_id uuid, role varchar default 'input', created_at timestamptz)`, primary key `(training_run_id, generation_id, role)`, foreign keys `ON DELETE RESTRICT`, an index on each foreign key.
-- Ownership: the run and the generation must belong to the same user. They may sit in different experiments; the graph shows only links inside the experiment being viewed.
+## Known limits (MVP)
 
-Migration: `CreateTrainingRunGenerationRefs`, additive. The migration is yours to run.
+- **Existing datasets are unscoped** until something new references them, and a dataset already used by two or more projects stays unscoped and accepts references. A read-only report of datasets referenced from more than one project would show them; it is not built.
+- **Scope is per dataset, not per version**: every version of a dataset belongs to the dataset's project.
+- A scoped dataset's project cannot be changed through the API.
+- The claim and the reference are two statements, not one transaction. If recording the reference fails after the claim (for example a database error), the dataset stays scoped to that project.
+- The SDK creates a dataset version before attaching it. If the attach is rejected (cross-project), the new version stays unattached. PR 3 is the place to check first.
+- No backfill: existing runs are linked only explicitly, through the CLI (PR 3). The dataset-based edges the graph already draws are recorded and unchanged.
 
-### 2. API (additive)
+## Visible cost of step 5
 
-- `POST /training-runs/:id/generations` with `{ generationId, role? }`, `201` on success, `404` when either record is not the caller's, `409` on a duplicate (the same behaviour as `POST /training-runs/:id/datasets`).
-- `GET /training-runs/:id/generations` lists them.
-- The training-run response and the workspace route gain `generationReferences: [{ generationId, role }]` (an empty list when none). No existing field changes.
-
-### 3. SDK and CLI
-
-- `training.use(generation)` records the direct link **and** keeps attaching the generation's produced datasets, so existing code keeps working and gains the new link.
-- `experiment.training(..., generations=[...])` as a convenience at creation, and `training.generations()` to read them back.
-- CLI: `synthgraph training link-generation RUN GENERATION`, so existing runs can be linked after the fact.
-- Bump the SDK minor version and update `CONTRACT.md`.
-
-### 4. Frontend
-
-- The lineage model draws a generation-to-run edge from `generationReferences` as recorded provenance (solid), alongside the existing dataset-based edges.
-- Then, as a **separate final commit**, remove the timing-based inference and its legend and note. A generation with no recorded link is shown as unlinked, with no guessed edge.
-
-## Rollout order
-
-1. Backend: migration, routes, response fields.
-2. SDK release and CLI command.
-3. Frontend draws recorded links (the guessed edges still shown, still labelled).
-4. A way to link existing runs (the CLI command above, and optionally a link action in the app).
-5. **Remove the guessed edges.**
-
-As with the metric-direction design, step 5 has a visible cost: until existing runs are linked, graphs for existing experiments lose their guessed edges and show unlinked nodes. It should ship only after step 4, or with your explicit agreement.
-
-## Tests
-
-- Backend: duplicate handling, ownership, deletion restrictions, the new fields on the training-run and workspace responses, end-to-end against a real database.
-- SDK: `use(generation)` makes both requests and is idempotent; creation with `generations=`.
-- Frontend: a recorded link renders as a solid edge; with the inference removed, an unlinked generation has no edge to any run; the lineage model contains no timestamp comparison.
-
-## Open questions for you
-
-1. Should a link across experiments be allowed (it is useful for a model trained on another experiment's data), or restricted to the same experiment in v1?
-2. Is `role` needed (for example `input` and `evaluation`), or is a bare link enough for now?
-3. For step 5: do you want a small "link this run to a generation" action in the app, or is the CLI enough?
-4. Should a run created through `training.use(generation)` before this change be linked retroactively by matching on the datasets it already attached? That is a stricter, recorded-data-only backfill and is safe, but it will not cover Phase 1-style runs.
+Until existing runs are linked, graphs for experiments like Phase 1 lose their dashed edges and show unlinked generations. That is the intended result of not showing guesses, but it means step 5 should ship after the linking path exists and the runs you care about are linked.
 
 ## Not in this design
 
-Generation-to-generation lineage, and any change to how dataset-based lineage is built.
+Generation-to-generation lineage, asset project scope, and any change to how dataset-based lineage is built.

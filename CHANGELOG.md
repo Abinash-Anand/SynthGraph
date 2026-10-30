@@ -36,6 +36,11 @@ This project does not yet have tagged releases - entries accumulate under
   have none, and it is never read from the evaluation name.
 
 ### Changed
+- A dataset is now used within one project. The first generation, training run or evaluation
+  that references a dataset scopes it to its project (`projectId` on dataset responses), and a
+  reference from another project is rejected with 409 `cross_project_reference`. Reuse across
+  experiments of the same project is unchanged. Existing datasets start unscoped; none is changed
+  by the migration.
 - The dashboard no longer guesses which direction of a metric is better from its
   name. It reads the direction declared through the SDK and the backend's health
   verdict: a best run, a frontier, a "higher is better" label or an improving/
