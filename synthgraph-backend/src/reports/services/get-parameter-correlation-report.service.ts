@@ -4,6 +4,8 @@ import { EvaluationResult } from '../../database/entities/evaluation-result.enti
 import { TrainingRun } from '../../database/entities/training-run.entity.js';
 import type { ExperimentRepository } from '../../experiments/repositories/experiment.repository.js';
 import { EXPERIMENT_REPOSITORY } from '../../experiments/repositories/experiment.tokens.js';
+import type { MetricDirection } from '../../metric-directions/metric-direction.js';
+import { MetricDirectionsService } from '../../metric-directions/metric-directions.service.js';
 import { ReportsRepository } from '../repositories/reports.repository.js';
 
 export type ParameterCorrelationGroup = {
@@ -20,6 +22,8 @@ export type ParameterCorrelation = {
 export type ParameterCorrelationReport = {
   experimentId: string;
   runCount: number;
+  /** The directions declared in this experiment; a metric not listed has none (unknown). */
+  metricDirections: Record<string, MetricDirection>;
   correlations: ParameterCorrelation[];
 };
 
@@ -32,6 +36,8 @@ export class GetParameterCorrelationReportService {
     // Reproduction do the same against generations/datasets).
     @Inject(EXPERIMENT_REPOSITORY)
     private readonly experimentRepository: ExperimentRepository,
+
+    private readonly metricDirectionsService: MetricDirectionsService,
   ) {}
 
   // Grouping/averaging happens in application code, not SQL: parameter
@@ -56,8 +62,11 @@ export class GetParameterCorrelationReportService {
         userId,
       );
 
+    const metricDirections =
+      await this.metricDirectionsService.forExperiment(experimentId);
+
     if (trainingRuns.length === 0) {
-      return { experimentId, runCount: 0, correlations: [] };
+      return { experimentId, runCount: 0, metricDirections, correlations: [] };
     }
 
     const evaluations =
@@ -132,6 +141,7 @@ export class GetParameterCorrelationReportService {
     return {
       experimentId,
       runCount: trainingRuns.length,
+      metricDirections,
       correlations,
     };
   }

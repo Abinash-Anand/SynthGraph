@@ -1,6 +1,12 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 
 import type { TrainingRunMetric } from '../../database/entities/training-run-metric.entity.js';
+import {
+  healthVerdict,
+  type HealthVerdict,
+  type MetricDirection,
+} from '../../metric-directions/metric-direction.js';
+import { MetricDirectionsService } from '../../metric-directions/metric-directions.service.js';
 import type { TrainingRunRepository } from '../../training-runs/repositories/training-run.repository.js';
 import { TRAINING_RUN_REPOSITORY } from '../../training-runs/repositories/training-run.tokens.js';
 import { ReportsRepository } from '../repositories/reports.repository.js';
@@ -20,6 +26,17 @@ export type TrainingRunHealthMetric = {
   slope: number | null;
   latestStep: number | null;
   latestValue: number | null;
+  /**
+   * The direction declared for this metric in the run's experiment, or null when
+   * none was declared (unknown: never guessed from the name).
+   */
+  direction: MetricDirection | null;
+  /**
+   * Whether the trend is good news, decided here from the declared direction so
+   * every client reads the same verdict. `neutral` when there is no direction,
+   * or no real movement.
+   */
+  verdict: HealthVerdict;
 };
 
 export type TrainingRunHealthReport = {
@@ -55,6 +72,7 @@ export function buildTrainingRunHealthReport(
   trainingRunId: string,
   windowSize: number,
   recentRows: TrainingRunMetric[],
+  directions: Readonly<Record<string, MetricDirection>> = {},
 ): TrainingRunHealthReport {
   const pointsByKey = new Map<string, Array<{ step: number; value: number }>>();
   for (const row of recentRows) {
@@ -69,6 +87,7 @@ export function buildTrainingRunHealthReport(
   const metrics: TrainingRunHealthMetric[] = [];
   for (const [metricKey, points] of pointsByKey) {
     const latest = points[points.length - 1];
+    const direction = directions[metricKey] ?? null;
 
     if (points.length < 2) {
       metrics.push({
@@ -78,6 +97,8 @@ export function buildTrainingRunHealthReport(
         slope: null,
         latestStep: latest?.step ?? null,
         latestValue: latest?.value ?? null,
+        direction,
+        verdict: healthVerdict('insufficient_data', direction),
       });
       continue;
     }
@@ -103,6 +124,8 @@ export function buildTrainingRunHealthReport(
       slope,
       latestStep: latest.step,
       latestValue: latest.value,
+      direction,
+      verdict: healthVerdict(trend, direction),
     });
   }
 
@@ -118,6 +141,8 @@ export class GetTrainingRunHealthService {
     // lookup every training-run route already uses.
     @Inject(TRAINING_RUN_REPOSITORY)
     private readonly trainingRunRepository: TrainingRunRepository,
+
+    private readonly metricDirectionsService: MetricDirectionsService,
   ) {}
 
   async execute(
@@ -138,6 +163,15 @@ export class GetTrainingRunHealthService {
       windowSize,
     );
 
-    return buildTrainingRunHealthReport(trainingRunId, windowSize, recentRows);
+    const directions = await this.metricDirectionsService.forExperiment(
+      trainingRun.experimentId,
+    );
+
+    return buildTrainingRunHealthReport(
+      trainingRunId,
+      windowSize,
+      recentRows,
+      directions,
+    );
   }
 }

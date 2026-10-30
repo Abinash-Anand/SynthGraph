@@ -667,6 +667,8 @@ describe('M8 Reports (e2e)', () => {
       expect(response.body).toEqual({
         experimentId: emptyExperiment.id,
         runCount: 0,
+        // Nothing declared: every metric's direction is unknown, never guessed.
+        metricDirections: {},
         correlations: [],
       });
 

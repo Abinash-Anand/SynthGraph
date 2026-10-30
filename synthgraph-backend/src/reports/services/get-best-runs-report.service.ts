@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
 
+import {
+  aggregateMetricDirections,
+  type AggregatedMetricDirection,
+} from '../../metric-directions/metric-direction.js';
+import { MetricDirectionsService } from '../../metric-directions/metric-directions.service.js';
 import { ReportsRepository } from '../repositories/reports.repository.js';
 
 export type BestRunsRecord = {
@@ -16,6 +21,14 @@ export type BestRunsReport = {
   projectId: string | null;
   runCount: number;
   records: BestRunsRecord[];
+  /**
+   * The declared direction for a metric, only where every experiment in scope
+   * that reports it declares the same one; `mixed` (direction null) where they
+   * disagree or some have not declared it. A metric with no declaration anywhere
+   * is absent. Without a direction there is no "best": the report keeps both
+   * extremes and picks neither.
+   */
+  metricDirections: Record<string, AggregatedMetricDirection>;
 };
 
 @Injectable()
@@ -27,7 +40,10 @@ export class GetBestRunsReportService {
   // (mAP vs. loss) is a UI-level judgment call this service deliberately
   // doesn't make, same principle as the efficiency leaderboard's
   // client-side metric picker.
-  constructor(private readonly reportsRepository: ReportsRepository) {}
+  constructor(
+    private readonly reportsRepository: ReportsRepository,
+    private readonly metricDirectionsService: MetricDirectionsService,
+  ) {}
 
   async execute(userId: string, projectId?: string): Promise<BestRunsReport> {
     const trainingRuns = await this.reportsRepository.findCompletedTrainingRunsForUser(
@@ -36,13 +52,45 @@ export class GetBestRunsReportService {
     );
 
     if (trainingRuns.length === 0) {
-      return { projectId: projectId ?? null, runCount: 0, records: [] };
+      return {
+        projectId: projectId ?? null,
+        runCount: 0,
+        records: [],
+        metricDirections: {},
+      };
     }
 
     const nameByRunId = new Map(trainingRuns.map((run) => [run.id, run.name]));
     const evaluations = await this.reportsRepository.findEvaluationsForTrainingRunIds(
       trainingRuns.map((run) => run.id),
     );
+
+    // Which numeric metrics each experiment in scope reports, to decide where a
+    // declared direction applies.
+    const experimentByRunId = new Map(
+      trainingRuns.map((run) => [run.id, run.experimentId]),
+    );
+    const keysByExperiment = new Map<string, Set<string>>();
+    for (const evaluation of evaluations) {
+      const experimentId = experimentByRunId.get(evaluation.trainingRunId);
+      if (!experimentId) continue;
+      const keys = keysByExperiment.get(experimentId) ?? new Set<string>();
+      for (const [metricKey, rawValue] of Object.entries(evaluation.metrics ?? {})) {
+        if (typeof rawValue === 'number') keys.add(metricKey);
+      }
+      keysByExperiment.set(experimentId, keys);
+    }
+    const declared = await this.metricDirectionsService.forExperiments([
+      ...keysByExperiment.keys(),
+    ]);
+    const metricDirections: Record<string, AggregatedMetricDirection> =
+      aggregateMetricDirections(
+        [...keysByExperiment].map(([experimentId, metricKeys]) => ({
+          experimentId,
+          metricKeys,
+        })),
+        declared,
+      );
 
     type Extremum = { value: number; trainingRunId: string };
     const maxByMetric = new Map<string, Extremum>();
@@ -84,6 +132,11 @@ export class GetBestRunsReportService {
       });
     }
 
-    return { projectId: projectId ?? null, runCount: trainingRuns.length, records };
+    return {
+      projectId: projectId ?? null,
+      runCount: trainingRuns.length,
+      records,
+      metricDirections,
+    };
   }
 }
