@@ -10,6 +10,7 @@ import { TrainingRunDatasetReference } from '../database/entities/training-run-d
 import { TrainingRun } from '../database/entities/training-run.entity.js';
 
 import { DATASET_VERSION_REPOSITORY } from '../datasets/repositories/dataset.tokens.js';
+import { DatasetProjectScopeService } from '../datasets/dataset-project-scope.service.js';
 import type { DatasetVersionRepository } from '../datasets/repositories/dataset-version.repository.js';
 import { TypeOrmDatasetVersionRepository } from '../datasets/repositories/typeorm-dataset-version.repository.js';
 
@@ -74,6 +75,7 @@ import { UpdateTrainingRunStatusService } from './services/update-training-run-s
     UpdateTrainingRunStatusService,
     UpdateTrainingRunCaptureStatusService,
     CreateTrainingRunDatasetReferenceService,
+    DatasetProjectScopeService,
   ],
   exports: [ListTrainingRunsService],
 })

@@ -9,6 +9,7 @@ import { EvaluationResult } from '../database/entities/evaluation-result.entity.
 import { TrainingRun } from '../database/entities/training-run.entity.js';
 
 import { DATASET_VERSION_REPOSITORY } from '../datasets/repositories/dataset.tokens.js';
+import { DatasetProjectScopeService } from '../datasets/dataset-project-scope.service.js';
 import type { DatasetVersionRepository } from '../datasets/repositories/dataset-version.repository.js';
 import { TypeOrmDatasetVersionRepository } from '../datasets/repositories/typeorm-dataset-version.repository.js';
 
@@ -72,6 +73,7 @@ import { ListEvaluationResultsService } from './services/list-evaluation-results
     },
 
     CreateEvaluationResultService,
+    DatasetProjectScopeService,
     GetEvaluationResultService,
     ListEvaluationResultsService,
   ],

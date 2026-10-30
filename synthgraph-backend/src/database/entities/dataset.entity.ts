@@ -16,6 +16,14 @@ export class Dataset {
   @Column({ type: 'uuid', name: 'user_id' })
   userId: string;
 
+  /**
+   * The project this dataset is used within. NULL means not scoped yet: datasets
+   * created before this rule, which are scoped by their first new reference.
+   */
+  @Index('IDX_datasets_project_id')
+  @Column({ type: 'uuid', name: 'project_id', nullable: true })
+  projectId: string | null;
+
   @Column({ type: 'varchar' })
   name: string;
 

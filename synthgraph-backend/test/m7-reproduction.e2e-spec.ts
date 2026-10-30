@@ -270,6 +270,10 @@ describe('M7 Reproduction manifest (e2e)', () => {
       datasetVersion.id,
     );
 
+    // A dataset is scoped to the project of its first reference, and the project
+    // cannot be deleted while a dataset still points at it.
+    await datasetRepository.delete(datasetVersion.datasetId);
+
     await projectRepository.delete([
       projectA.id,
       projectB.id,
