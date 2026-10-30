@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
 import { requireSession } from "@/features/auth/server/session";
 import { listProjects } from "@/features/projects/server/projects-api";
-import { parseStatusFilter, type CaptureStatusFilter } from "@/features/reports/capture-model";
+import { parseStatusFilter } from "@/features/reports/capture-model";
 import { CaptureCompletenessView } from "@/features/reports/components/CaptureCompletenessView";
 import { ProjectFilterField } from "@/features/reports/components/ProjectFilterField";
-import { listRunsByCaptureStatus } from "@/features/reports/server/capture-runs";
-import { getCaptureCompletenessReport } from "@/features/reports/server/reports-api";
+import { getCaptureCompletenessReport, getCaptureCompletenessRuns } from "@/features/reports/server/reports-api";
 
 export const metadata: Metadata = { title: "Capture Completeness" };
 
@@ -18,14 +17,12 @@ export default async function CaptureCompletenessPage({
   const activeStatus = parseStatusFilter(status);
   const session = await requireSession();
 
-  // Default view is "what needs attention": the partial and unknown runs. A
-  // clicked status card narrows it (or, for "complete", shows the healthy ones).
-  const statuses: CaptureStatusFilter[] = activeStatus ? [activeStatus] : ["partial", "unknown"];
-
+  // The default view is "what needs attention" (partial and unknown); the backend decides
+  // that, and which problems each run has. A clicked status card narrows it.
   const [report, projects, drilldown] = await Promise.all([
     getCaptureCompletenessReport(session.apiKey, projectId),
     listProjects(session.apiKey),
-    listRunsByCaptureStatus(session.apiKey, statuses, projectId),
+    getCaptureCompletenessRuns(session.apiKey, { projectId, status: activeStatus ?? undefined }),
   ]);
 
   return (
@@ -44,8 +41,7 @@ export default async function CaptureCompletenessPage({
 
       <CaptureCompletenessView
         report={report}
-        runs={drilldown.runs}
-        truncated={drilldown.truncated}
+        drilldown={drilldown}
         activeStatus={activeStatus}
         projectId={projectId}
       />

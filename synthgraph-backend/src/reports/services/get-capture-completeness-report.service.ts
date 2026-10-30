@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
 
+import {
+  integrationHealth,
+  type IntegrationHealth,
+} from '../capture-issues.js';
 import { ReportsRepository } from '../repositories/reports.repository.js';
 
 export type CaptureCompletenessReport = {
@@ -13,6 +17,8 @@ export type CaptureCompletenessReport = {
     string,
     { total: number; attached: number; closed: number }
   >;
+  /** The same integrations rated: left open, close rate and coverage. */
+  integrations: IntegrationHealth[];
 };
 
 @Injectable()
@@ -52,6 +58,11 @@ export class GetCaptureCompletenessReportService {
       };
     }
 
-    return { total, byStatus, byIntegration };
+    return {
+      total,
+      byStatus,
+      byIntegration,
+      integrations: integrationHealth(byIntegration, total),
+    };
   }
 }

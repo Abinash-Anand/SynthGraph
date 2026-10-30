@@ -1,53 +1,74 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { describeRunCapture, integrationHealth, parseStatusFilter } from "./capture-model.ts";
+import {
+  CAPTURE_RUNS_UNAVAILABLE,
+  type CaptureIssue,
+  describeCaptureIssue,
+  parseStatusFilter,
+  weakestFirst,
+} from "./capture-model.ts";
 
-const byIntegration = {
-  resource_monitor: { total: 8, attached: 8, closed: 8 },
-  tensorboard: { total: 2, attached: 2, closed: 1 },
-};
-
-describe("describeRunCapture", () => {
-  it("is empty for a run with everything attached and closed", () => {
-    assert.deepEqual(
-      describeRunCapture({ resource_monitor: { attached: true, closed: true } }, byIntegration, 10),
-      [],
+describe("describeCaptureIssue", () => {
+  it("words a reported but never attached integration", () => {
+    assert.equal(
+      describeCaptureIssue({ kind: "not_attached", integration: "tensorboard" }),
+      "tensorboard was reported but never attached.",
     );
   });
 
-  it("flags an integration that was attached but never closed", () => {
-    const issues = describeRunCapture({ tensorboard: { attached: true, closed: false } }, byIntegration, 10);
-    assert.equal(issues.find((i) => i.integration === "tensorboard")?.kind, "never-closed");
+  it("words an integration attached but never closed", () => {
+    assert.match(
+      describeCaptureIssue({ kind: "never_closed", integration: "tensorboard" }),
+      /^tensorboard attached but was never closed out, so its data may be incomplete\.$/,
+    );
   });
 
-  it("flags one that was reported but never attached", () => {
-    const issues = describeRunCapture({ tensorboard: { attached: false, closed: false } }, byIntegration, 10);
-    assert.equal(issues[0].kind, "not-attached");
+  it("says how many runs report an integration this one is missing", () => {
+    assert.equal(
+      describeCaptureIssue({ kind: "not_reported", integration: "resource_monitor", reportedBy: 8, totalRuns: 10 }),
+      "resource_monitor is reported by 8 of 10 runs but not this one.",
+    );
   });
 
-  it("flags a missing integration only when most runs have it", () => {
-    const issues = describeRunCapture({}, byIntegration, 10);
-    assert.deepEqual(issues.map((i) => i.integration), ["resource_monitor"]);
-    assert.equal(issues[0].kind, "not-reported");
-    assert.match(issues[0].message, /8 of 10 runs/);
+  it("shows an issue kind from a newer backend rather than dropping it", () => {
+    const future = { kind: "wrong_version", integration: "wandb" } as unknown as CaptureIssue;
+
+    assert.equal(describeCaptureIssue(future), "wandb: wrong version.");
   });
 
-  it("treats a run that never reported capture at all as reporting nothing", () => {
-    assert.equal(describeRunCapture(null, byIntegration, 10).length, 1);
-    assert.deepEqual(describeRunCapture(undefined, {}, 0), []);
+  it("decides nothing: it words exactly the issue it is given", () => {
+    // No majority arithmetic here: a "not_reported" issue is worded even for a
+    // minority, because whether to flag it is the backend's call.
+    assert.match(
+      describeCaptureIssue({ kind: "not_reported", integration: "x", reportedBy: 1, totalRuns: 10 }),
+      /1 of 10 runs/,
+    );
   });
 });
 
-describe("integrationHealth", () => {
-  it("rates each integration and puts the worst first", () => {
-    const health = integrationHealth(byIntegration, 10);
-    assert.deepEqual(health.map((h) => h.integration), ["tensorboard", "resource_monitor"]);
-    assert.equal(health[0].closeRate, 0.5);
-    assert.equal(health[0].dangling, 1);
-    assert.equal(health[1].coverage, 0.8);
+describe("weakestFirst", () => {
+  const health = (integration: string, closeRate: number) => ({
+    integration,
+    total: 10,
+    attached: 10,
+    closed: closeRate * 10,
+    dangling: 10 - closeRate * 10,
+    closeRate,
+    coverage: 1,
   });
-  it("handles an integration nobody reported", () => {
-    assert.equal(integrationHealth({ x: { total: 0, attached: 0, closed: 0 } }, 0)[0].closeRate, 0);
+
+  it("orders by close rate, then name, without changing the ratings", () => {
+    const ordered = weakestFirst([health("b", 1), health("tensorboard", 0.5), health("a", 1)]);
+
+    assert.deepEqual(ordered.map((h) => h.integration), ["tensorboard", "a", "b"]);
+    assert.equal(ordered[0].closeRate, 0.5);
+  });
+
+  it("does not modify the list it is given", () => {
+    const input = [health("b", 1), health("a", 0)];
+    weakestFirst(input);
+
+    assert.deepEqual(input.map((h) => h.integration), ["b", "a"]);
   });
 });
 
@@ -56,5 +77,11 @@ describe("parseStatusFilter", () => {
     assert.equal(parseStatusFilter("partial"), "partial");
     assert.equal(parseStatusFilter("bogus"), null);
     assert.equal(parseStatusFilter(undefined), null);
+  });
+});
+
+describe("when the backend returned no runs", () => {
+  it("says so rather than implying nothing needs fixing", () => {
+    assert.match(CAPTURE_RUNS_UNAVAILABLE, /not available from this backend version/);
   });
 });

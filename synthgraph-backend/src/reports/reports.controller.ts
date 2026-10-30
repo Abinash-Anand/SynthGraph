@@ -5,6 +5,7 @@ import type { AuthenticatedRequest } from '../auth/types/authenticated-request.j
 
 import { BestRunsQueryDto } from './dto/best-runs-query.dto.js';
 import { CaptureCompletenessQueryDto } from './dto/capture-completeness-query.dto.js';
+import { CaptureCompletenessRunsQueryDto } from './dto/capture-completeness-runs-query.dto.js';
 import { DatasetImpactQueryDto } from './dto/dataset-impact-query.dto.js';
 import { EfficiencyLeaderboardQueryDto } from './dto/efficiency-leaderboard-query.dto.js';
 import { ParameterCorrelationQueryDto } from './dto/parameter-correlation-query.dto.js';
@@ -17,6 +18,7 @@ import { TrainingRunKeysQueryDto } from './dto/training-run-keys-query.dto.js';
 import { TrainingRunSearchQueryDto } from './dto/training-run-search-query.dto.js';
 import { GetBestRunsReportService } from './services/get-best-runs-report.service.js';
 import { GetCaptureCompletenessReportService } from './services/get-capture-completeness-report.service.js';
+import { GetCaptureCompletenessRunsService } from './services/get-capture-completeness-runs.service.js';
 import { GetDatasetImpactReportService } from './services/get-dataset-impact-report.service.js';
 import { GetEfficiencyLeaderboardService } from './services/get-efficiency-leaderboard.service.js';
 import { GetParameterCorrelationReportService } from './services/get-parameter-correlation-report.service.js';
@@ -44,6 +46,7 @@ export class ReportsController {
     private readonly experimentTrainingRunHealthService: GetExperimentTrainingRunHealthService,
     private readonly experimentTrainingRunDriftService: GetExperimentTrainingRunDriftService,
     private readonly experimentAttentionService: GetExperimentAttentionService,
+    private readonly captureCompletenessRunsService: GetCaptureCompletenessRunsService,
   ) {}
 
   @Get('capture-completeness')
@@ -54,6 +57,19 @@ export class ReportsController {
     return this.captureCompletenessReportService.execute(
       request.user.id,
       query.projectId,
+    );
+  }
+
+  @Get('capture-completeness/runs')
+  async captureCompletenessRuns(
+    @Query() query: CaptureCompletenessRunsQueryDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.captureCompletenessRunsService.execute(
+      request.user.id,
+      query.status,
+      query.projectId,
+      query.limit,
     );
   }
 

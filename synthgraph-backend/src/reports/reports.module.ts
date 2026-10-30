@@ -16,6 +16,7 @@ import { ReportsController } from './reports.controller.js';
 import { ReportsRepository } from './repositories/reports.repository.js';
 import { GetBestRunsReportService } from './services/get-best-runs-report.service.js';
 import { GetCaptureCompletenessReportService } from './services/get-capture-completeness-report.service.js';
+import { GetCaptureCompletenessRunsService } from './services/get-capture-completeness-runs.service.js';
 import { GetDatasetImpactReportService } from './services/get-dataset-impact-report.service.js';
 import { GetEfficiencyLeaderboardService } from './services/get-efficiency-leaderboard.service.js';
 import { GetParameterCorrelationReportService } from './services/get-parameter-correlation-report.service.js';
@@ -65,6 +66,7 @@ import { SearchTrainingRunsService } from './services/search-training-runs.servi
     },
 
     GetCaptureCompletenessReportService,
+    GetCaptureCompletenessRunsService,
     GetEfficiencyLeaderboardService,
     GetParameterCorrelationReportService,
     GetTrainingRunHealthService,

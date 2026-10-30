@@ -4,12 +4,12 @@ import { Card } from "@/components/ui/Card";
 import { cn } from "@/lib/utils";
 import { formatDateTime, pluralize } from "@/shared/lib/format";
 import {
+  CAPTURE_RUNS_UNAVAILABLE,
   type CaptureStatusFilter,
-  describeRunCapture,
-  integrationHealth,
+  describeCaptureIssue,
+  weakestFirst,
 } from "../capture-model";
-import type { CaptureRun } from "../server/capture-runs";
-import type { CaptureCompletenessReport } from "../types/report";
+import type { CaptureCompletenessReport, CaptureCompletenessRuns } from "../types/report";
 
 const STATUS_TONE = {
   complete: "ok",
@@ -47,22 +47,22 @@ function statusHref(status: CaptureStatusFilter | null, projectId?: string): str
 
 export function CaptureCompletenessView({
   report,
-  runs,
-  truncated,
+  drilldown,
   activeStatus,
   projectId,
 }: {
   report: CaptureCompletenessReport;
-  /** Runs behind the selected status(es); empty when none need attention. */
-  runs: CaptureRun[];
-  truncated: boolean;
+  /** The runs behind the counts, as the backend judged them; null from a backend that predates it. */
+  drilldown: CaptureCompletenessRuns | null;
   /** The status the user drilled into, or null for the default "needs attention" view. */
   activeStatus: CaptureStatusFilter | null;
   projectId?: string;
 }) {
-  const { total, byStatus, byIntegration } = report;
+  const { total, byStatus } = report;
+  const runs = drilldown?.runs ?? [];
+  const truncated = drilldown?.truncated ?? false;
   const statuses = Object.entries(byStatus) as Array<[CaptureStatusFilter, number]>;
-  const health = integrationHealth(byIntegration, total);
+  const health = report.integrations ? weakestFirst(report.integrations) : null;
   const needAttention = byStatus.partial + byStatus.unknown;
 
   return (
@@ -106,7 +106,9 @@ export function CaptureCompletenessView({
           {activeStatus ? `${activeStatus} runs` : needAttention > 0 ? "Runs that need attention" : "Runs"}
         </h2>
 
-        {runs.length === 0 ? (
+        {drilldown === null ? (
+          <p className="text-[13.5px] text-ink-faint">{CAPTURE_RUNS_UNAVAILABLE}</p>
+        ) : runs.length === 0 ? (
           <p className="text-[13.5px] text-ink-faint">
             {activeStatus
               ? `No ${activeStatus} runs${projectId ? " in this project" : ""}.`
@@ -118,14 +120,14 @@ export function CaptureCompletenessView({
           </p>
         ) : (
           <ul className="flex flex-col gap-2">
-            {runs.map(({ run, projectId: runProjectId, projectName, experimentId, experimentName }) => {
-              const issues = describeRunCapture(run.captureStatus?.integrations, byIntegration, total);
+            {runs.map((run) => {
+              const { projectId: runProjectId, projectName, experimentId, experimentName, issues } = run;
               return (
-                <li key={run.id} className="rounded-xl border border-research-border bg-research-panel p-4">
+                <li key={run.trainingRunId} className="rounded-xl border border-research-border bg-research-panel p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="min-w-0">
                       <Link
-                        href={`/dashboard/projects/${runProjectId}/experiments/${experimentId}?entity=run:${run.id}`}
+                        href={`/dashboard/projects/${runProjectId}/experiments/${experimentId}?entity=run:${run.trainingRunId}`}
                         className="inline-block max-w-full truncate py-1 text-[14.5px] font-medium text-ink underline underline-offset-2 hover:text-research-accent-hover"
                       >
                         {run.name}
@@ -134,8 +136,8 @@ export function CaptureCompletenessView({
                         {projectName} / {experimentName} · {formatDateTime(run.createdAt)}
                       </p>
                     </div>
-                    <Badge tone={STATUS_TONE[run.captureStatus?.status ?? "unknown"]} dot>
-                      {run.captureStatus?.status ?? "not reported"}
+                    <Badge tone={STATUS_TONE[run.captureStatus ?? "unknown"]} dot>
+                      {run.captureStatus ?? "not reported"}
                     </Badge>
                   </div>
                   {issues.length > 0 ? (
@@ -145,15 +147,15 @@ export function CaptureCompletenessView({
                           <span className="text-research-warning" aria-hidden>
                             ●
                           </span>
-                          {issue.message}
+                          {describeCaptureIssue(issue)}
                         </li>
                       ))}
                     </ul>
                   ) : (
                     <p className="mt-3 text-[13px] text-research-ink-muted">
-                      {run.captureStatus?.status === "complete"
+                      {run.captureStatus === "complete"
                         ? "Every integration this run reported was attached and closed."
-                        : run.captureStatus?.status === "partial"
+                        : run.captureStatus === "partial"
                           ? "Marked partial, but no specific integration problem was recorded."
                           : "This run never reported whether its capture finished."}
                     </p>
@@ -170,7 +172,9 @@ export function CaptureCompletenessView({
 
       <section>
         <h2 className="mono-label mb-3">By integration</h2>
-        {health.length === 0 ? (
+        {health === null ? (
+          <p className="text-[13.5px] text-ink-faint">{CAPTURE_RUNS_UNAVAILABLE}</p>
+        ) : health.length === 0 ? (
           <p className="text-[13.5px] text-ink-faint">No integrations reported yet.</p>
         ) : (
           <div className="flex flex-col gap-3">
