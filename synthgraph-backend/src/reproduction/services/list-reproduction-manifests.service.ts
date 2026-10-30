@@ -6,6 +6,7 @@ import {
 
 import type { ExperimentRepository } from '../../experiments/repositories/experiment.repository.js';
 import { EXPERIMENT_REPOSITORY } from '../../experiments/repositories/experiment.tokens.js';
+import type { Generation } from '../../database/entities/generation.entity.js';
 import type { GenerationRepository } from '../../generations/repositories/generation.repository.js';
 import { GENERATION_REPOSITORY } from '../../generations/repositories/generation.tokens.js';
 
@@ -60,6 +61,14 @@ export class ListReproductionManifestsService {
         offset,
       );
 
+    return this.forGenerations(generations);
+  }
+
+  /**
+   * Manifests for generations the caller has already listed (and already
+   * checked ownership of), in the same order.
+   */
+  async forGenerations(generations: readonly Generation[]) {
     const references =
       await this.reproductionRepository.findDatasetReferencesForGenerations(
         generations.map((generation) => generation.id),

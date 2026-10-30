@@ -8,6 +8,8 @@ import { CaptureCompletenessQueryDto } from './dto/capture-completeness-query.dt
 import { DatasetImpactQueryDto } from './dto/dataset-impact-query.dto.js';
 import { EfficiencyLeaderboardQueryDto } from './dto/efficiency-leaderboard-query.dto.js';
 import { ParameterCorrelationQueryDto } from './dto/parameter-correlation-query.dto.js';
+import { ExperimentTrainingRunDriftQueryDto } from './dto/experiment-training-run-drift-query.dto.js';
+import { ExperimentTrainingRunHealthQueryDto } from './dto/experiment-training-run-health-query.dto.js';
 import { TrainingRunDriftQueryDto } from './dto/training-run-drift-query.dto.js';
 import { TrainingRunHealthQueryDto } from './dto/training-run-health-query.dto.js';
 import { TrainingRunKeysQueryDto } from './dto/training-run-keys-query.dto.js';
@@ -17,6 +19,8 @@ import { GetCaptureCompletenessReportService } from './services/get-capture-comp
 import { GetDatasetImpactReportService } from './services/get-dataset-impact-report.service.js';
 import { GetEfficiencyLeaderboardService } from './services/get-efficiency-leaderboard.service.js';
 import { GetParameterCorrelationReportService } from './services/get-parameter-correlation-report.service.js';
+import { GetExperimentTrainingRunDriftService } from './services/get-experiment-training-run-drift.service.js';
+import { GetExperimentTrainingRunHealthService } from './services/get-experiment-training-run-health.service.js';
 import { GetTrainingRunDriftService } from './services/get-training-run-drift.service.js';
 import { GetTrainingRunHealthService } from './services/get-training-run-health.service.js';
 import { GetTrainingRunKeysService } from './services/get-training-run-keys.service.js';
@@ -35,6 +39,8 @@ export class ReportsController {
     private readonly trainingRunDriftService: GetTrainingRunDriftService,
     private readonly datasetImpactReportService: GetDatasetImpactReportService,
     private readonly trainingRunKeysService: GetTrainingRunKeysService,
+    private readonly experimentTrainingRunHealthService: GetExperimentTrainingRunHealthService,
+    private readonly experimentTrainingRunDriftService: GetExperimentTrainingRunDriftService,
   ) {}
 
   @Get('capture-completeness')
@@ -79,6 +85,36 @@ export class ReportsController {
       query.trainingRunId,
       request.user.id,
       query.windowSize,
+    );
+  }
+
+  // Whole-experiment counterparts of training-run-health / training-run-drift:
+  // the same per-run reports for every run in one request (additive - the
+  // per-run routes are unchanged).
+  @Get('experiment-training-run-health')
+  async experimentTrainingRunHealth(
+    @Query() query: ExperimentTrainingRunHealthQueryDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.experimentTrainingRunHealthService.execute(
+      query.experimentId,
+      request.user.id,
+      query.limit,
+      query.offset,
+      query.windowSize,
+    );
+  }
+
+  @Get('experiment-training-run-drift')
+  async experimentTrainingRunDrift(
+    @Query() query: ExperimentTrainingRunDriftQueryDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.experimentTrainingRunDriftService.execute(
+      query.experimentId,
+      request.user.id,
+      query.limit,
+      query.offset,
     );
   }
 

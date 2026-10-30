@@ -39,6 +39,48 @@ function findConsensusValue(values: unknown[]): { value: unknown } | null {
   return allEqual ? { value: values[0] } : null;
 }
 
+/**
+ * One run's drift against the completed runs that came before it. Shared by the
+ * per-run route and the whole-experiment route.
+ */
+export function buildTrainingRunDriftReport(
+  trainingRun: TrainingRun,
+  baseline: TrainingRun[],
+): TrainingRunDriftReport {
+  const trainingRunId = trainingRun.id;
+  if (baseline.length === 0) {
+    return { trainingRunId, baselineRunCount: 0, drift: [] };
+  }
+
+  const drift: TrainingRunDriftEntry[] = [];
+
+  const checkField = (field: string, getValue: (run: TrainingRun) => unknown) => {
+    const consensus = findConsensusValue(baseline.map(getValue));
+    if (!consensus) return;
+
+    const currentValue = getValue(trainingRun);
+    if (serialize(currentValue) !== serialize(consensus.value)) {
+      drift.push({ field, currentValue, baselineValue: consensus.value });
+    }
+  };
+
+  for (const field of TRAINER_FIELDS) {
+    checkField(`trainer.${field}`, (run) => run.trainer?.[field]);
+  }
+
+  const metadataKeys = new Set<string>();
+  for (const run of baseline) {
+    for (const key of Object.keys(run.metadata ?? {})) {
+      metadataKeys.add(key);
+    }
+  }
+  for (const key of metadataKeys) {
+    checkField(`metadata.${key}`, (run) => (run.metadata ?? {})[key]);
+  }
+
+  return { trainingRunId, baselineRunCount: baseline.length, drift };
+}
+
 @Injectable()
 export class GetTrainingRunDriftService {
   constructor(
@@ -67,36 +109,6 @@ export class GetTrainingRunDriftService {
         trainingRun.id,
       );
 
-    if (baseline.length === 0) {
-      return { trainingRunId, baselineRunCount: 0, drift: [] };
-    }
-
-    const drift: TrainingRunDriftEntry[] = [];
-
-    const checkField = (field: string, getValue: (run: TrainingRun) => unknown) => {
-      const consensus = findConsensusValue(baseline.map(getValue));
-      if (!consensus) return;
-
-      const currentValue = getValue(trainingRun);
-      if (serialize(currentValue) !== serialize(consensus.value)) {
-        drift.push({ field, currentValue, baselineValue: consensus.value });
-      }
-    };
-
-    for (const field of TRAINER_FIELDS) {
-      checkField(`trainer.${field}`, (run) => run.trainer?.[field]);
-    }
-
-    const metadataKeys = new Set<string>();
-    for (const run of baseline) {
-      for (const key of Object.keys(run.metadata ?? {})) {
-        metadataKeys.add(key);
-      }
-    }
-    for (const key of metadataKeys) {
-      checkField(`metadata.${key}`, (run) => (run.metadata ?? {})[key]);
-    }
-
-    return { trainingRunId, baselineRunCount: baseline.length, drift };
+    return buildTrainingRunDriftReport(trainingRun, baseline);
   }
 }

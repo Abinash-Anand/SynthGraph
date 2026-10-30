@@ -75,5 +75,6 @@ import { UpdateTrainingRunStatusService } from './services/update-training-run-s
     UpdateTrainingRunCaptureStatusService,
     CreateTrainingRunDatasetReferenceService,
   ],
+  exports: [ListTrainingRunsService],
 })
 export class TrainingRunsModule {}
