@@ -1,0 +1,66 @@
+{
+  "capturedOn": "2026-10-30",
+  "environment": "Local production builds (next build + next start) against a mock backend shaped like the production Phase 1 experiment (16 generations, 3 runs x 57 metric rows x 60 keys, ~2.6 KB source per generation, 60 ms mock latency per call). NOT production numbers.",
+  "before": {
+    "build": "origin/main 9e32854",
+    "throttler": "120/min per IP",
+    "clicks": [
+      {
+        "tab": "Runs",
+        "uiMs": 295
+      },
+      {
+        "tab": "Lineage",
+        "uiMs": 261
+      },
+      {
+        "tab": "Metrics",
+        "uiMs": 284
+      }
+    ],
+    "backendCallsPerClick": "33-34",
+    "fourthClick": "429 on /auth/me/api-key -> session treated as logged out -> redirected to /login",
+    "rscDecodedKB": 521,
+    "noisyNeighbour": "another user's 200-request burst -> this user bounced to /login"
+  },
+  "after": {
+    "build": "perf/workspace-tab-navigation (uncommitted)",
+    "throttler": "120/min per bearer credential + 3000/min IP ceiling",
+    "clicks": [
+      20,
+      12,
+      23,
+      18,
+      10,
+      6,
+      6,
+      16,
+      7,
+      14,
+      31,
+      15,
+      19,
+      6,
+      7,
+      15,
+      7,
+      14,
+      25,
+      14,
+      22,
+      6,
+      6,
+      14
+    ],
+    "clicksMinMs": 6,
+    "clicksMaxMs": 31,
+    "clicksMedianMs": 14.0,
+    "serverRequestsPerClick": 0,
+    "backendCallsPerClick": 0,
+    "backendCallsPerWorkspaceRender": 18,
+    "rscDecodedKB": 435,
+    "normalizedMirrorsInPayload": 0,
+    "errors": 0,
+    "noisyNeighbour": "another user's 200-request burst -> this user unaffected, 16/16 manifests loaded"
+  }
+}

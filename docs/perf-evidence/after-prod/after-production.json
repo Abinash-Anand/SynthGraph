@@ -1,0 +1,23 @@
+{
+  "capturedOn": "2026-10-30",
+  "environment": "https://synthgraph.dev (production, after deploy of 379c83c), built-in browser pane, signed-in user, Phase 1 experiment (3 runs, 16 generations)",
+  "method": "same as before/baseline.json: click tab, poll until aria-selected + ?tab= match, 3.5 s gap, Resource Timing for _rsc/api requests",
+  "clicks": [
+    { "tab": "Runs", "uiMs": 24, "requests": 0 },
+    { "tab": "Lineage", "uiMs": 8, "requests": 0 },
+    { "tab": "Metrics", "uiMs": 22, "requests": 0 },
+    { "tab": "Lineage (revisit)", "uiMs": 14, "requests": 0 },
+    { "tab": "Parameters", "uiMs": 23, "requests": 0 },
+    { "tab": "Reproduction", "uiMs": 11, "requests": 0 },
+    { "tab": "Overview", "uiMs": 11, "requests": 0 },
+    { "tab": "Lineage (revisit)", "uiMs": 12, "requests": 0 }
+  ],
+  "summary": { "minMs": 8, "maxMs": 24, "medianMs": 13, "requestsPerClick": 0, "before": { "minMs": 1387, "maxMs": 2601, "medianMs": 1922, "requestsPerClick": 1 } },
+  "stressBurst": { "clicks": 30, "intervalMs": 40, "newRequests": 0, "signedOut": false, "reproductionUnknown": 0, "reproductionUnavailable": 0 },
+  "reproductionTab": "16 partly reproducible, 82% of fields recorded on average, 0 'Unknown', 0 'Unavailable' after the click burst (before: 16 Unknown)",
+  "rscProbe": { "decodedKB": 274, "domainRandomizeMentions": 90, "normalizedMirrors": 0, "fetchMs": 2015, "before": { "decodedKB": "390 (manifests loaded) / 268 (manifests failed)", "normalizedMirrors": 16, "domainRandomizeMentions": 90 } },
+  "refreshData": { "labelWhileRunning": "Refreshing...", "completedMs": 2074 },
+  "backForward": "Overview -> Metrics (click) -> back = Overview -> forward = Metrics; URL followed",
+  "notChanged": "Full page load still ~2 s (navDCL 2439 ms, RSC fetch 2015 ms): health/drift are still fetched per run on the server (PERF-02 partial); source still duplicated (domain_randomize x90, PERF-05 partial)",
+  "screenshots": ["01-reproduction-16-of-16-manifests.jpg", "02-lineage-instant.jpg"]
+}
