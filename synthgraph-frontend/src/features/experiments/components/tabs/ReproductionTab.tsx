@@ -8,6 +8,7 @@ import type { Experiment } from "@/features/experiments/types/experiment";
 import type { ClassifiedField } from "@/features/reproduction/types/reproduction-manifest";
 import { KeyValueList, type KeyValueRow } from "@/shared/ui/KeyValueList";
 import { buildProvenanceJson, buildProvenanceMarkdown, reportFilename } from "../../provenance-report";
+import { withManifestParameters } from "../../slim-generation";
 import {
   assessmentFor,
   assessmentMethodOf,
@@ -309,7 +310,7 @@ export function ReproductionTab({
                 </button>
                 {showRaw ? (
                   <div className="mt-2">
-                    <CodeBlock language="json" code={JSON.stringify(manifest, null, 2)} />
+                    <CodeBlock language="json" code={JSON.stringify(withManifestParameters(active.enriched), null, 2)} />
                   </div>
                 ) : null}
               </div>
