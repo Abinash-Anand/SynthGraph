@@ -158,6 +158,7 @@ export function ExperimentWorkspace({
       canvas = (
         <MetricsTab
           runs={trainingRuns}
+          metricDirections={correlationReport.metricDirections ?? {}}
           // An evaluation belongs to a run, so selecting one anywhere
           // (e.g. in Lineage) must put this tab on that run - otherwise the
           // chart shows one run while the inspector describes another's.

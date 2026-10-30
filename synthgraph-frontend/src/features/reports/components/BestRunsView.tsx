@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { formatMetricValue } from "@/shared/lib/format";
-import { directionLabel } from "@/shared/lib/metric-semantics";
+import { directionLabel, noRankingReason } from "@/shared/lib/metric-direction";
 import { type BestRunRow, buildBestRunsModel, type RunValue } from "../best-runs-model";
 import type { RunLink } from "../server/resolve-run-links";
 import type { BestRunsReport } from "../types/report";
@@ -39,13 +39,18 @@ function ValueRun({ entry, linksByRunId }: { entry: RunValue; linksByRunId: Reco
 }
 
 function DirectionChip({ row }: { row: BestRunRow }) {
-  if (row.direction === "neutral") return null;
+  const className = "rounded border border-research-border px-1.5 py-0.5 font-mono text-[10px] text-research-ink-muted";
+  if (row.mixed) {
+    return (
+      <span title={noRankingReason(null, true)} className={className}>
+        directions differ
+      </span>
+    );
+  }
+  if (row.direction !== "maximize" && row.direction !== "minimize") return null;
   return (
-    <span
-      title={`${directionLabel(row.direction)} (inferred from the metric's name)`}
-      className="rounded border border-research-border px-1.5 py-0.5 font-mono text-[10px] text-research-ink-muted"
-    >
-      {row.direction === "higher" ? "↑ higher" : "↓ lower"}
+    <span title={directionLabel(row.direction)} className={className}>
+      {row.direction === "maximize" ? "↑ higher" : "↓ lower"}
     </span>
   );
 }
@@ -194,13 +199,14 @@ export function BestRunsView({
     );
   }
 
-  const { outcomes, readings } = buildBestRunsModel(report.records);
+  const { outcomes, readings } = buildBestRunsModel(report.records, report.metricDirections);
 
   return (
     <div className="flex flex-col gap-6">
       <p className="text-[12.5px] text-research-ink-muted">
-        Which direction counts as better is inferred from each metric&apos;s name (reward and accuracy up, loss and
-        error down). Metrics with no clear direction show both extremes instead of picking a winner.
+        A best run is shown only for metrics whose direction was declared when they were logged, and only where every
+        experiment that reports the metric declared the same one. Every other metric shows both extremes instead of
+        picking a winner.
       </p>
 
       {outcomes.length > 0 ? <MetricRows rows={outcomes} linksByRunId={linksByRunId} /> : null}

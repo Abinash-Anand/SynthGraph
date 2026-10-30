@@ -1,8 +1,14 @@
 // Relative with extension so plain Node can run the tests - see
 // features/reports/best-runs-model.ts.
-import { compareMetricKeys, isOutcomeMetric, type MetricDirection, metricDirection } from "../../shared/lib/metric-semantics.ts";
+import {
+  type DeclaredDirection,
+  type MetricDirections,
+  canRank,
+  rankingDirection,
+} from "../../shared/lib/metric-direction.ts";
+import { compareMetricKeys, isOutcomeMetric } from "../../shared/lib/metric-semantics.ts";
 
-type WithEvaluations = { evaluations: Array<{ metrics: Record<string, unknown> }> };
+type WithEvaluations = { evaluations: Array<{ metrics: Record<string, unknown>; createdAt?: string }> };
 
 function numbersFor(run: WithEvaluations, key: string): number[] {
   return run.evaluations
@@ -23,30 +29,52 @@ export function outcomeMetricKeys(runs: WithEvaluations[]): string[] {
   return Array.from(keys).sort(compareMetricKeys);
 }
 
-/** A metric whose direction we can infer beats one we'd have to guess about. */
-export function preferredOutcomeKey(keys: string[]): string {
-  return keys.find((key) => metricDirection(key) !== "neutral") ?? keys[0] ?? "";
+/** A metric with a declared direction beats one we would have nothing to say about. */
+export function preferredOutcomeKey(keys: string[], directions: MetricDirections | null | undefined): string {
+  return keys.find((key) => canRank(directions, key)) ?? keys[0] ?? "";
 }
 
 /**
- * One number per run: its best evaluation in the metric's direction
- * ("higher" when unknown). Evaluations are checkpoints of the same run, so
- * the best one is the run's result - averaging would blend early,
- * under-trained checkpoints into it.
+ * The value of a run's most recent evaluation of a metric. Evaluations are
+ * ordered by when they were recorded; one without a timestamp counts as
+ * recorded in the order it was listed.
+ */
+export function latestEvaluationValue(run: WithEvaluations, key: string): number | null {
+  let latest: { value: number; at: string; index: number } | null = null;
+  run.evaluations.forEach((evaluation, index) => {
+    const value = evaluation.metrics[key];
+    if (typeof value !== "number" || !Number.isFinite(value)) return;
+    const at = evaluation.createdAt ?? "";
+    if (latest === null || at > latest.at || (at === latest.at && index > latest.index)) {
+      latest = { value, at, index };
+    }
+  });
+  return latest === null ? null : (latest as { value: number }).value;
+}
+
+/**
+ * One number per run. With a declared direction that is its best evaluation in
+ * that direction: evaluations are checkpoints of the same run, so the best one
+ * is the run's result - averaging would blend early, under-trained checkpoints
+ * into it. With no direction (never declared, or declared neutral) nothing
+ * makes one checkpoint better than another, so the run's latest evaluation is
+ * used instead; picking the highest would quietly treat bigger as better.
  */
 export function bestEvaluationValue(
   run: WithEvaluations,
   key: string,
-  direction: MetricDirection = metricDirection(key),
+  direction: DeclaredDirection | null,
 ): number | null {
+  const ranking = rankingDirection(direction);
+  if (ranking === null) return latestEvaluationValue(run, key);
   const values = numbersFor(run, key);
   if (values.length === 0) return null;
-  return direction === "lower" ? Math.min(...values) : Math.max(...values);
+  return ranking === "minimize" ? Math.min(...values) : Math.max(...values);
 }
 
 /**
  * What to say about one run's evaluations of a metric. A run only has a "best"
- * checkpoint when the metric's direction is known; otherwise the honest summary
+ * checkpoint when the metric's direction is declared; otherwise the honest summary
  * is the range it covered, because the highest value is not the best one for a
  * metric like a collision rate or a spread.
  */
@@ -55,12 +83,13 @@ export type EvaluationSummary = { kind: "best"; value: number } | { kind: "range
 export function summarizeEvaluations(
   run: WithEvaluations,
   key: string,
-  direction: MetricDirection = metricDirection(key),
+  direction: DeclaredDirection | null,
 ): EvaluationSummary | null {
   const values = numbersFor(run, key);
   if (values.length === 0) return null;
-  if (direction === "higher") return { kind: "best", value: Math.max(...values) };
-  if (direction === "lower") return { kind: "best", value: Math.min(...values) };
+  const ranking = rankingDirection(direction);
+  if (ranking === "maximize") return { kind: "best", value: Math.max(...values) };
+  if (ranking === "minimize") return { kind: "best", value: Math.min(...values) };
   return { kind: "range", highest: Math.max(...values), lowest: Math.min(...values) };
 }
 

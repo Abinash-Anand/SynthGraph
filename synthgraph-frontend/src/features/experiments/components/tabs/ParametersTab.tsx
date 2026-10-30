@@ -160,7 +160,7 @@ export function ParametersTab({
           </span>
         </div>
         <p className="mt-1 mb-4 max-w-[62ch] text-[13px] text-research-ink-muted">{PARAMETER_ANALYSIS_INTRO}</p>
-        <ParameterInsights runs={runs} />
+        <ParameterInsights runs={runs} metricDirections={correlationReport.metricDirections ?? {}} />
       </div>
 
       <div>

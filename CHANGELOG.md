@@ -30,6 +30,16 @@ This project does not yet have tagged releases - entries accumulate under
   response
 - `CONTRIBUTING.md`, `SECURITY.md`, issue/PR templates
 
+### Changed
+- The dashboard no longer guesses which direction of a metric is better from its
+  name. It reads the direction declared through the SDK and the backend's health
+  verdict: a best run, a frontier, a "higher is better" label or an improving/
+  worsening colour appears only for a metric with a declared direction. Metrics
+  that were never declared show highest and lowest instead, and the Efficiency
+  Leaderboard asks the user to choose a direction for the view (not saved)
+  rather than assuming "higher". Experiments recorded before directions existed
+  show none until someone declares one.
+
 ### Fixed
 - CORS now requires an explicit origin allowlist in production, instead of
   reflecting any origin

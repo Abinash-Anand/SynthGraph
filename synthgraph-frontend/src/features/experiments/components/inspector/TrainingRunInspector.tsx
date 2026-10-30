@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { preferredSeriesKeys } from "@/shared/charts/metric-series";
 import { formatDateTime, formatMetricValue } from "@/shared/lib/format";
 import { isOutcomeMetric } from "@/shared/lib/metric-semantics";
-import { judgeTrendFor, summarizeTrends } from "@/shared/lib/trend-judgement";
+import { judgementOf, summarizeTrends } from "@/shared/lib/trend-judgement";
 import { ConfigSummary } from "@/shared/ui/ConfigSummary";
 import { KeyValueList } from "@/shared/ui/KeyValueList";
 import type { EnrichedTrainingRun } from "../../types/experiment-workspace";
@@ -27,8 +27,8 @@ const TREND_LABEL: Record<TrainingRunHealthMetric["trend"], string> = {
 
 // The backend's trend is a directionless classifier (increasing loss is bad,
 // increasing reward is good, and it can't tell which metric is which), so
-// colour only comes from a judgement the frontend makes when the metric's
-// direction can be inferred from its name; otherwise it stays neutral.
+// colour only comes from the verdict the backend gives when a direction was
+// declared for the metric; otherwise it stays neutral.
 const JUDGEMENT_TONE = {
   good: "text-research-success",
   bad: "text-research-warning",
@@ -86,12 +86,14 @@ export function TrainingRunInspector({
   );
   const [showAllHealth, setShowAllHealth] = useState(false);
 
-  // Model metrics first, then by judgement so what's going wrong surfaces at
-  // the top of a 40-row list instead of being buried in it.
+  // Model metrics first, then by the backend's verdict so what's going wrong
+  // surfaces at the top of a 40-row list instead of being buried in it.
   const healthRows = [...health.metrics].sort((a, b) => {
-    const rank = (key: string, trend: TrainingRunHealthMetric["trend"]) =>
-      (isOutcomeMetric(key) ? 0 : 10) + (judgeTrendFor(key, trend) === "bad" ? 0 : judgeTrendFor(key, trend) === "good" ? 1 : 2);
-    return rank(a.metricKey, a.trend) - rank(b.metricKey, b.trend) || a.metricKey.localeCompare(b.metricKey);
+    const rank = (metric: TrainingRunHealthMetric) => {
+      const judgement = judgementOf(metric.verdict);
+      return (isOutcomeMetric(metric.metricKey) ? 0 : 10) + (judgement === "bad" ? 0 : judgement === "good" ? 1 : 2);
+    };
+    return rank(a) - rank(b) || a.metricKey.localeCompare(b.metricKey);
   });
   const healthSummary = summarizeTrends(health.metrics);
   const visibleHealth = showAllHealth ? healthRows : healthRows.slice(0, HEALTH_PREVIEW_COUNT);
@@ -237,7 +239,7 @@ export function TrainingRunInspector({
               </p>
               <div className="flex flex-col gap-1.5">
                 {visibleHealth.map((metric) => {
-                  const judgement = judgeTrendFor(metric.metricKey, metric.trend);
+                  const judgement = judgementOf(metric.verdict);
                   return (
                     <div
                       key={metric.metricKey}
@@ -254,8 +256,8 @@ export function TrainingRunInspector({
                           judgement === "neutral"
                             ? undefined
                             : judgement === "good"
-                              ? "Moving the right way (direction inferred from the name)"
-                              : "Moving the wrong way (direction inferred from the name)"
+                              ? "Moving the right way (against the direction declared for this metric)"
+                              : "Moving the wrong way (against the direction declared for this metric)"
                         }
                       >
                         {TREND_LABEL[metric.trend]}

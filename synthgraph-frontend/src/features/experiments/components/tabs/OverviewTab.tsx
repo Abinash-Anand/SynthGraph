@@ -175,9 +175,8 @@ function ResultPanel({ trainingRuns }: { trainingRuns: EnrichedTrainingRun[] }) 
             otherwise push this card's height far past its RunStatus/
             Provenance siblings and crowd the rest of the tab. */}
         <div className="flex max-h-[420px] flex-col gap-2 overflow-y-auto pr-1">
-          {/* Mean/range, not a single "best" value - this app has no way to
-              know whether higher or lower is better for an arbitrary metric
-              key (same reasoning as TrainingRunInspector's health trends). */}
+          {/* Mean/range, not a single "best" value: a best value needs a declared
+              direction, and most metrics in a workspace have none. */}
           {metrics.map((metric) => (
             <div key={metric.key} className="flex items-center justify-between gap-3">
               <span className="min-w-0 truncate font-mono text-[12.5px] text-research-ink-secondary">

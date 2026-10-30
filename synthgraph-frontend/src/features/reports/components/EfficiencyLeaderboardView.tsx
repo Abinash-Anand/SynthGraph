@@ -8,7 +8,12 @@ import { Card } from "@/components/ui/Card";
 import { SelectField } from "@/components/ui/Field";
 import { cn } from "@/lib/utils";
 import { formatDurationSeconds, formatMetricValue } from "@/shared/lib/format";
-import { type MetricDirection, directionLabel, metricDirection } from "@/shared/lib/metric-semantics";
+import {
+  type RankingDirection,
+  aggregatedDirection,
+  directionLabel,
+  noRankingReason,
+} from "@/shared/lib/metric-direction";
 import {
   analyzeEfficiency,
   closeResultsSpread,
@@ -16,6 +21,7 @@ import {
   paddedAxisRange,
   paretoPath,
   rankableMetricKeys,
+  type EfficiencyRow,
 } from "../efficiency-model";
 import type { RunLink } from "../server/resolve-run-links";
 import type { EfficiencyLeaderboard } from "../types/report";
@@ -28,12 +34,15 @@ const EChart = dynamic(() => import("@/shared/charts/EChart").then((m) => m.ECha
 const FRONTIER_COLOR = "#a78bfa";
 const DOMINATED_COLOR = "#52525b";
 
-type DirectionChoice = "higher" | "lower";
+const CHOICES: Array<{ value: RankingDirection; label: string }> = [
+  { value: "maximize", label: "↑ higher" },
+  { value: "minimize", label: "↓ lower" },
+];
 
-// Deliberately client-side: which metric matters and whether higher is
-// "better" is a per-researcher judgment call the backend can't make - it
-// just hands over duration + every evaluation. We infer a direction from the
-// metric's name and let the user override it.
+// Which metric matters is the researcher's call, but which direction is better is
+// declared when the metric is logged and read from the backend. With no usable
+// declaration nothing is ranked until the user chooses a direction for this
+// view; that choice is theirs, is not saved, and is labelled as such.
 export function EfficiencyLeaderboardView({
   leaderboard,
   linksByRunId = {},
@@ -45,18 +54,40 @@ export function EfficiencyLeaderboardView({
   projectScoped?: boolean;
 }) {
   const metricKeys = useMemo(() => rankableMetricKeys(leaderboard.runs), [leaderboard.runs]);
-  const [metricKey, setMetricKey] = useState(() => defaultMetricKey(metricKeys));
-  const [override, setOverride] = useState<DirectionChoice | null>(null);
+  const [metricKey, setMetricKey] = useState(() => defaultMetricKey(metricKeys, leaderboard.metricDirections));
+  const [override, setOverride] = useState<RankingDirection | null>(null);
 
-  const activeMetricKey = metricKeys.includes(metricKey) ? metricKey : defaultMetricKey(metricKeys);
-  const inferred: MetricDirection = metricDirection(activeMetricKey);
-  const direction: DirectionChoice = override ?? (inferred === "lower" ? "lower" : "higher");
-  const directionIsAssumed = override === null && inferred === "neutral";
-
-  const rows = useMemo(
-    () => analyzeEfficiency(leaderboard.runs, activeMetricKey, direction),
-    [leaderboard.runs, activeMetricKey, direction],
+  const activeMetricKey = metricKeys.includes(metricKey)
+    ? metricKey
+    : defaultMetricKey(metricKeys, leaderboard.metricDirections);
+  const { direction: declaredValue, mixed: declaredMixed } = aggregatedDirection(
+    leaderboard.metricDirections,
+    activeMetricKey,
   );
+  // Spelled out rather than calling rankingDirection(): the React Compiler cannot
+  // prove a call result is a primitive and would stop memoizing this component.
+  const declaredRanking: RankingDirection | null =
+    declaredValue === "maximize" ? "maximize" : declaredValue === "minimize" ? "minimize" : null;
+  const direction: RankingDirection | null = override ?? declaredRanking;
+
+  const rows = useMemo<EfficiencyRow[]>(() => {
+    if (direction === null) {
+      // Nothing says which way is better, so there is no value, frontier or order
+      // to compute: just the runs, fastest first.
+      return [...leaderboard.runs]
+        .sort((a, b) => a.durationSeconds - b.durationSeconds)
+        .map((run) => ({
+          runId: run.trainingRunId,
+          name: run.name,
+          durationSeconds: run.durationSeconds,
+          value: null,
+          perHour: null,
+          pareto: false,
+          dominatedBy: null,
+        }));
+    }
+    return analyzeEfficiency(leaderboard.runs, activeMetricKey, direction);
+  }, [leaderboard.runs, activeMetricKey, direction]);
 
   const projectCount = useMemo(() => {
     const ids = new Set<string>();
@@ -108,7 +139,7 @@ export function EfficiencyLeaderboardView({
         type: "value",
         min: yRange?.min,
         max: yRange?.max,
-        name: `${activeMetricKey} (${direction === "lower" ? "lower" : "higher"} is better)`,
+        name: `${activeMetricKey} (${direction === "minimize" ? "lower" : "higher"} is better)`,
         nameTextStyle: { color: "#71717a", fontSize: 11, align: "left" },
         axisLine: { show: false },
         splitLine: { lineStyle: { color: "#1f1f23" } },
@@ -186,7 +217,7 @@ export function EfficiencyLeaderboardView({
           <div className="flex flex-col gap-1.5">
             <span className="text-[13px] text-research-ink-muted">Better means</span>
             <div role="group" aria-label="Better means" className="inline-flex rounded-md border border-research-border p-0.5">
-              {(["higher", "lower"] as const).map((choice) => (
+              {CHOICES.map(({ value: choice, label }) => (
                 <button
                   key={choice}
                   type="button"
@@ -199,17 +230,17 @@ export function EfficiencyLeaderboardView({
                       : "text-research-ink-muted hover:text-research-ink",
                   )}
                 >
-                  {choice === "higher" ? "↑ higher" : "↓ lower"}
+                  {label}
                 </button>
               ))}
             </div>
           </div>
           <p className="max-w-[44ch] pb-1 text-[12px] text-research-ink-muted">
-            {directionIsAssumed
-              ? "No direction could be inferred from this metric's name, so higher is assumed. Change it if that's wrong."
-              : override
-                ? `You set "${directionLabel(override)}".`
-                : `Inferred from the name: ${directionLabel(inferred)}.`}
+            {override
+              ? `Your choice for this view: ${override === "maximize" ? "higher" : "lower"} is better. It is not saved.`
+              : direction
+                ? `Direction: ${directionLabel(direction)}.`
+                : `${noRankingReason(declaredValue, declaredMixed)} Choose how to compare these runs for this view; the choice is not saved.`}
           </p>
         </div>
       ) : (
@@ -219,7 +250,7 @@ export function EfficiencyLeaderboardView({
         </p>
       )}
 
-      {activeMetricKey ? (
+      {activeMetricKey && direction ? (
         <div>
           <EChart option={scatterOption} height={300} />
           <p className="mt-1 flex items-center gap-4 text-[12px] text-research-ink-muted">
@@ -279,7 +310,7 @@ export function EfficiencyLeaderboardView({
                     ) : null}
                   </>
                 ) : (
-                  <p className="text-[13px] text-ink-faint">No {activeMetricKey || "metric"} recorded</p>
+                  direction ? <p className="text-[13px] text-ink-faint">No {activeMetricKey || "metric"} recorded</p> : null
                 )}
               </div>
             </Card>
