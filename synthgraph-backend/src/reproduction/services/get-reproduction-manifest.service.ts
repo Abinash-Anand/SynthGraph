@@ -9,6 +9,7 @@ import { GENERATION_REPOSITORY } from '../../generations/repositories/generation
 import type { Generation } from '../../database/entities/generation.entity.js';
 import { toNormalizedGeneration } from '../../generations/responses/generation.response.js';
 
+import { assessReproducibility } from '../assessment/reproducibility-assessment.js';
 import type { ReproductionRepository } from '../repositories/reproduction.repository.js';
 import { REPRODUCTION_REPOSITORY } from '../repositories/reproduction.repository.token.js';
 
@@ -110,13 +111,20 @@ export function buildReproductionManifest(
   generation: Generation,
   mappedReferences: DatasetReferenceSummary[],
 ) {
+  const classification = classify(generation, mappedReferences);
+
   return {
     schemaVersion: '1.0',
 
     // Additive: which rules `classification` used (see CLASSIFICATION_VERSION).
     classificationVersion: CLASSIFICATION_VERSION,
 
-    classification: classify(generation, mappedReferences),
+    classification,
+
+    // Additive: how completely the generation was recorded - the score, grade,
+    // blockers and explanations, with the method that produced them. Clients
+    // display this; none of them computes its own.
+    assessment: assessReproducibility(classification, generation.reproducibility),
 
     generation: {
       id: generation.id,

@@ -323,6 +323,10 @@ describe('M7 Reproduction manifest (e2e)', () => {
         value: 'a1b2c3d',
       });
       expect(body.classification.missing).not.toContain('Code version');
+      // The assessment is the backend's: a recorded commit is not a blocker, a
+      // dirty working tree is, and the two are reported separately.
+      expect(body.assessment.method.version).toBe(2);
+      expect(body.assessment.blockerTags).toEqual(['uncommitted code']);
       // A dirty working tree is a separate, ordinary environment field.
       expect(body.classification.supplied).toContainEqual({
         field: 'dirty',

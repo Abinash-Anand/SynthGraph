@@ -3,8 +3,7 @@
 // on the page - no new backend call - and deterministic: `generatedAt` is
 // passed in rather than read from the clock.
 import {
-  ASSESSMENT_METHOD,
-  ASSESSMENT_VERSION,
+  type AssessmentMethod,
   GRADE_LABEL,
   type ReproAssessment,
   summarizeReproducibility,
@@ -13,6 +12,8 @@ import {
 export type ProvenanceInput = {
   generatedAt: string;
   experiment: { id: string; name: string; description?: string | null };
+  /** The rules behind the assessments below, as the backend states them; null when none came with one. */
+  assessmentMethod: AssessmentMethod | null;
   generations: Array<{
     id: string;
     name: string;
@@ -58,7 +59,7 @@ export function buildProvenanceMarkdown(input: ProvenanceInput): string {
   lines.push(`- Generations: ${generations.length}`);
   if (generations.length > 0) {
     lines.push(
-      `- Recording completeness (assessment version ${ASSESSMENT_VERSION}): ${summary.byGrade.complete} well recorded, ` +
+      `- Recording completeness (${input.assessmentMethod ? `assessment version ${input.assessmentMethod.version}` : "no assessment available"}): ${summary.byGrade.complete} well recorded, ` +
         `${summary.byGrade.mostly} with some gaps, ${summary.byGrade.partial} with major gaps, ` +
         `${summary.byGrade.unknown} not assessed (average ${percent(summary.averageScore)} of fields recorded)`,
     );
@@ -117,16 +118,21 @@ export function buildProvenanceMarkdown(input: ProvenanceInput): string {
     "",
   );
   lines.push("## How the assessment was made", "");
-  lines.push(
-    `Assessment version ${ASSESSMENT_VERSION}. The share of fields recorded counts known and supplied fields in full ` +
-      `and external fields (data held outside SynthGraph) at ${ASSESSMENT_METHOD.externalWeight}. ` +
-      `At ${Math.round(ASSESSMENT_METHOD.completeAt * 100)}% or more, with nothing blocking, a generation is "well recorded"; ` +
-      `at ${Math.round(ASSESSMENT_METHOD.mostlyAt * 100)}% or more it has "some gaps"; below that, "major gaps". ` +
-      "Uncommitted code limits the grade to \"major gaps\", and a missing seed or code version limits it to \"some gaps\", " +
-      "whatever the share. Reports made before version 2 called these grades reproducible, mostly reproducible and " +
-      "partly reproducible; the scores and thresholds are unchanged.",
-    "",
-  );
+  const method = input.assessmentMethod;
+  if (method === null) {
+    lines.push("No assessment was available from the server, so no grades are reported.", "");
+  } else {
+    lines.push(
+      `Assessment version ${method.version}, produced by the backend. The share of fields recorded counts known and ` +
+        `supplied fields in full and external fields (data held outside SynthGraph) at ${method.externalWeight}. ` +
+        `At ${Math.round(method.completeAt * 100)}% or more, with nothing blocking, a generation is "well recorded"; ` +
+        `at ${Math.round(method.mostlyAt * 100)}% or more it has "some gaps"; below that, "major gaps". ` +
+        "Uncommitted code limits the grade to \"major gaps\", and a missing seed or code version limits it to \"some gaps\", " +
+        "whatever the share. Reports made before version 2 called these grades reproducible, mostly reproducible and " +
+        "partly reproducible; the scores and thresholds are unchanged.",
+      "",
+    );
+  }
   return lines.join("\n");
 }
 
@@ -145,13 +151,5 @@ export function reportFilename(experimentName: string, extension: "md" | "json")
  * the older `reproducible`.
  */
 export function buildProvenanceJson(input: ProvenanceInput): string {
-  return JSON.stringify(
-    {
-      assessmentVersion: ASSESSMENT_VERSION,
-      assessmentMethod: ASSESSMENT_METHOD,
-      ...input,
-    },
-    null,
-    2,
-  );
+  return JSON.stringify({ assessmentVersion: input.assessmentMethod?.version ?? null, ...input }, null, 2);
 }
