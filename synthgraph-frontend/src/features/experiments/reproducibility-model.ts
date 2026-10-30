@@ -1,11 +1,16 @@
-// How reproducible is a generation, from what was actually recorded?
+// How completely was a generation recorded?
 //
 // Deliberately modest. It reads the backend's own classification of the
 // generation's fields (known / supplied / external / missing) and the
-// recorded reproducibility block, and says what could and couldn't be
-// rebuilt. It does NOT verify anything - in particular it doesn't check that
-// data still exists or matches a checksum - so the wording is "recorded",
-// never "verified".
+// recorded reproducibility block, and says how much of what a rebuild would
+// need was captured and what is known to stand in the way. It does NOT verify
+// anything - in particular it doesn't check that the values are right, or that
+// data still exists or matches a checksum - and it is not a statement that the
+// result can be reproduced, so the wording is "recorded", never "reproducible"
+// or "verified".
+//
+// Scoring and grading still live in the frontend (registry entry ARCH-003);
+// ASSESSMENT_VERSION says which rules produced a result.
 
 export type ClassifiedFieldLike = { field: string; value?: string };
 
@@ -22,7 +27,31 @@ export type ReproducibilityLike = {
   environment?: Record<string, unknown>;
 };
 
-export type ReproGrade = "reproducible" | "mostly" | "partial" | "unknown";
+/**
+ * Which rules produced an assessment, so a stored or downloaded result can be
+ * read against the right method.
+ *
+ * 1 - grades were named reproducible / mostly reproducible / partly reproducible
+ *     (key `reproducible` for the top grade), and this model recovered the code
+ *     version from `environment.commit` itself.
+ * 2 - the same score, thresholds and caps; the top grade's key is `complete` and
+ *     the grades are named for what they measure, how completely the generation
+ *     was recorded; the code version is read from the backend's classification
+ *     (classification version 2), which now counts `environment.commit`.
+ */
+export const ASSESSMENT_VERSION = 2;
+
+/** The numbers behind the score and the grades, so reports can state them. */
+export const ASSESSMENT_METHOD = {
+  /** At or above this share of fields recorded (with no blocker) the grade is `complete`. */
+  completeAt: 0.85,
+  /** At or above this share it is `mostly`; below it `partial`. */
+  mostlyAt: 0.6,
+  /** An external field is recorded as a pointer to something SynthGraph doesn't hold. */
+  externalWeight: 0.5,
+} as const;
+
+export type ReproGrade = "complete" | "mostly" | "partial" | "unknown";
 
 export type ReproAssessment = {
   grade: ReproGrade;
@@ -44,13 +73,21 @@ export type ReproAssessment = {
 const CODE_VERSION_FIELD = "Code version";
 
 export const GRADE_LABEL: Record<ReproGrade, string> = {
-  reproducible: "Reproducible",
-  mostly: "Mostly reproducible",
-  partial: "Partly reproducible",
-  unknown: "Unknown",
+  complete: "Well recorded",
+  mostly: "Some gaps",
+  partial: "Major gaps",
+  unknown: "Not assessed",
 };
 
-const GRADE_ORDER: ReproGrade[] = ["unknown", "partial", "mostly", "reproducible"];
+/** The same grades as a phrase after a count: "3 well recorded", "16 with major gaps". */
+export const GRADE_COUNT_PHRASE: Record<ReproGrade, string> = {
+  complete: "well recorded",
+  mostly: "with some gaps",
+  partial: "with major gaps",
+  unknown: "not assessed",
+};
+
+const GRADE_ORDER: ReproGrade[] = ["unknown", "partial", "mostly", "complete"];
 
 function capAt(grade: ReproGrade, ceiling: ReproGrade): ReproGrade {
   return GRADE_ORDER.indexOf(grade) > GRADE_ORDER.indexOf(ceiling) ? ceiling : grade;
@@ -88,7 +125,10 @@ export function assessReproducibility(
   const total = counts.known + counts.supplied + counts.external + counts.missing;
   // Known and supplied fields are recorded; an external one is recorded as a
   // pointer to something SynthGraph doesn't hold, so it counts for half.
-  const score = total === 0 ? null : (counts.known + counts.supplied + counts.external * 0.5) / total;
+  const score =
+    total === 0
+      ? null
+      : (counts.known + counts.supplied + counts.external * ASSESSMENT_METHOD.externalWeight) / total;
 
   const blockers: string[] = [];
   const blockerTags: string[] = [];
@@ -120,8 +160,8 @@ export function assessReproducibility(
 
   let grade: ReproGrade;
   if (score === null) grade = "unknown";
-  else if (score >= 0.85) grade = "reproducible";
-  else if (score >= 0.6) grade = "mostly";
+  else if (score >= ASSESSMENT_METHOD.completeAt) grade = "complete";
+  else if (score >= ASSESSMENT_METHOD.mostlyAt) grade = "mostly";
   else grade = "partial";
 
   // A high field count can't outweigh a blocker: a run on dirty code is not
@@ -140,7 +180,7 @@ export type ReproSummary = {
 };
 
 export function summarizeReproducibility(assessments: ReproAssessment[]): ReproSummary {
-  const byGrade: Record<ReproGrade, number> = { reproducible: 0, mostly: 0, partial: 0, unknown: 0 };
+  const byGrade: Record<ReproGrade, number> = { complete: 0, mostly: 0, partial: 0, unknown: 0 };
   const scores: number[] = [];
   for (const assessment of assessments) {
     byGrade[assessment.grade]++;

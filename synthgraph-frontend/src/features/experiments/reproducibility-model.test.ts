@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  ASSESSMENT_METHOD,
+  ASSESSMENT_VERSION,
   assessReproducibility,
   type ClassificationLike,
   compareByRisk,
+  GRADE_COUNT_PHRASE,
+  GRADE_LABEL,
   summarizeReproducibility,
 } from "./reproducibility-model.ts";
 
@@ -17,9 +21,9 @@ const classification = (known: number, supplied = 0, external = 0, missing = 0):
 const clean = { seed: 1, code_version: "abc123", environment: { dirty: false } };
 
 describe("assessReproducibility", () => {
-  it("is reproducible when nearly everything is recorded and nothing blocks", () => {
+  it("is complete when nearly everything is recorded and nothing blocks", () => {
     const result = assessReproducibility(classification(9, 1, 0, 0), clean);
-    assert.equal(result.grade, "reproducible");
+    assert.equal(result.grade, "complete");
     assert.equal(result.score, 1);
     assert.deepEqual(result.blockers, []);
   });
@@ -72,7 +76,7 @@ describe("summarizeReproducibility", () => {
       assessReproducibility(null, clean),
     ]);
     assert.equal(summary.total, 3);
-    assert.deepEqual(summary.byGrade, { reproducible: 1, mostly: 0, partial: 1, unknown: 1 });
+    assert.deepEqual(summary.byGrade, { complete: 1, mostly: 0, partial: 1, unknown: 1 });
     assert.equal(summary.averageScore, 0.75);
   });
   it("has no average with no scores", () => {
@@ -85,7 +89,7 @@ describe("compareByRisk", () => {
     const good = assessReproducibility(classification(10), clean);
     const weak = assessReproducibility(classification(3, 0, 0, 7), clean);
     const none = assessReproducibility(null, clean);
-    assert.deepEqual([good, weak, none].sort(compareByRisk).map((a) => a.grade), ["unknown", "partial", "reproducible"]);
+    assert.deepEqual([good, weak, none].sort(compareByRisk).map((a) => a.grade), ["unknown", "partial", "complete"]);
   });
 });
 
@@ -168,6 +172,40 @@ describe("code version comes from the backend's classification", () => {
     const oldScore = (7 + 1 + 2) / (7 + 1 + 2 + 1);
     const result = assessReproducibility(codeVersionKnown(), clean);
     assert.equal(result.score, oldScore);
-    assert.equal(result.grade, "reproducible");
+    assert.equal(result.grade, "complete");
+  });
+});
+
+describe("grade names and assessment version", () => {
+  it("names the grades for what they measure, never for reproducibility", () => {
+    // Regression: the top grade was labelled "Reproducible", which claims more
+    // than a share of recorded fields can show.
+    const everything = [...Object.values(GRADE_LABEL), ...Object.values(GRADE_COUNT_PHRASE)].join(" ");
+    assert.doesNotMatch(everything, /reproduc/i);
+    assert.deepEqual(GRADE_LABEL, {
+      complete: "Well recorded",
+      mostly: "Some gaps",
+      partial: "Major gaps",
+      unknown: "Not assessed",
+    });
+  });
+
+  it("completes a count phrase", () => {
+    assert.equal(`16 ${GRADE_COUNT_PHRASE.partial}`, "16 with major gaps");
+    assert.equal(`3 ${GRADE_COUNT_PHRASE.complete}`, "3 well recorded");
+  });
+
+  it("states the version and the thresholds, and keeps the historical numbers", () => {
+    assert.equal(ASSESSMENT_VERSION, 2);
+    // Unchanged from version 1: scores and grades of existing generations stay put.
+    assert.deepEqual(ASSESSMENT_METHOD, { completeAt: 0.85, mostlyAt: 0.6, externalWeight: 0.5 });
+  });
+
+  it("grades exactly at the documented thresholds", () => {
+    // 85% recorded, nothing blocking, is complete; just under is not.
+    assert.equal(assessReproducibility(classification(17, 0, 0, 3), clean).grade, "complete");
+    assert.equal(assessReproducibility(classification(16, 0, 0, 4), clean).grade, "mostly");
+    assert.equal(assessReproducibility(classification(3, 0, 0, 2), clean).grade, "mostly");
+    assert.equal(assessReproducibility(classification(5, 0, 0, 4), clean).grade, "partial");
   });
 });
