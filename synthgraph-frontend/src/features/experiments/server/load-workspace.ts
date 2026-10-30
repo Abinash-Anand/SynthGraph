@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import type { Generation } from "@/features/generations/types/generation";
 import type { ReproductionManifest } from "@/features/reproduction/types/reproduction-manifest";
 import type { EvaluationResult } from "@/features/evaluation-results/types/evaluation-result";
@@ -53,8 +54,11 @@ type WorkspaceResponse = {
  * predates it answers 404 for the route, and then the page is assembled from
  * the separate routes exactly as before, so the frontend can ship ahead of the
  * backend. A missing or foreign experiment is a 404 either way.
+ *
+ * cache()'d, so the page and its generateMetadata (which only needs the
+ * experiment's name) share one request instead of each making their own.
  */
-export async function loadExperimentWorkspace(
+export const loadExperimentWorkspace = cache(async function loadExperimentWorkspace(
   apiKey: string,
   projectId: string,
   experimentId: string,
@@ -85,7 +89,7 @@ export async function loadExperimentWorkspace(
     generations: workspace.generations.map(({ generation, manifest }) => slimGeneration({ generation, manifest })),
     load: call ? { source: "workspace", call } : { source: "separate" },
   };
-}
+});
 
 async function loadFromSeparateRoutes(
   apiKey: string,

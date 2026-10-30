@@ -1,13 +1,13 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { getSession, requireSession } from "@/features/auth/server/session";
+import { getSession, readSessionCookie, requireSession } from "@/features/auth/server/session";
 import { ExperimentWorkspace } from "@/features/experiments/components/ExperimentWorkspace";
 import { isSeen } from "@/features/onboarding/onboarding-rules";
 import { readOnboardingSeen } from "@/features/onboarding/server/onboarding-state";
 import { WORKSPACE_TOUR } from "@/features/onboarding/tours/workspace-tour";
-import { getExperimentForProject } from "@/features/experiments/server/experiments-api";
 import { loadExperimentWorkspace } from "@/features/experiments/server/load-workspace";
 import { stopwatch } from "@/features/experiments/server/workspace-payload";
+import { settle } from "@/shared/lib/settle";
 import { NotFoundError } from "@/shared/http/errors";
 
 type PageParams = { projectId: string; experimentId: string };
@@ -18,18 +18,31 @@ export async function generateMetadata({
   params: Promise<PageParams>;
 }): Promise<Metadata> {
   const { projectId, experimentId } = await params;
-  const session = await getSession();
-  if (!session) return {};
-  try {
-    const experiment = await getExperimentForProject(session.apiKey, projectId, experimentId);
-    return { title: experiment.name };
-  } catch {
-    return {};
-  }
+  // The title is the experiment's name, which the page loads anyway: share its
+  // (cache()'d) workspace request, started with the cookie's key beside the
+  // session check, rather than asking the backend again after it.
+  const cookie = await readSessionCookie();
+  if (!cookie) return {};
+  const [session, workspace] = await Promise.all([
+    getSession(),
+    settle(loadExperimentWorkspace(cookie.apiKey, projectId, experimentId)),
+  ]);
+  if (!session || !workspace.ok) return {};
+  return { title: workspace.value.experiment.name };
 }
 
 export default async function ExperimentDetailPage({ params }: { params: Promise<PageParams> }) {
   const { projectId, experimentId } = await params;
+  const elapsedMs = stopwatch();
+
+  // The workspace request does not need the session check's answer to be sent:
+  // the backend checks the key itself on every request. So when there is a
+  // session cookie, start the request with its key right away and let it run
+  // beside the session check instead of after it. The data is used only if the
+  // session turns out to be valid (requireSession redirects otherwise), so
+  // nothing is shown that the check would have refused.
+  const cookie = await readSessionCookie();
+  const early = cookie ? settle(loadExperimentWorkspace(cookie.apiKey, projectId, experimentId)) : null;
   const session = await requireSession();
 
   // Everything the workspace needs is prefetched once here (experiment-
@@ -39,14 +52,12 @@ export default async function ExperimentDetailPage({ params }: { params: Promise
   // One backend request when the backend has the workspace route, the separate
   // routes otherwise (see loadExperimentWorkspace). Any NotFoundError
   // (experiment missing or not the user's) still becomes a 404.
-  const elapsedMs = stopwatch();
-  let workspace;
-  try {
-    workspace = await loadExperimentWorkspace(session.apiKey, projectId, experimentId);
-  } catch (error) {
-    if (error instanceof NotFoundError) notFound();
-    throw error;
+  const loaded = await (early ?? settle(loadExperimentWorkspace(session.apiKey, projectId, experimentId)));
+  if (!loaded.ok) {
+    if (loaded.error instanceof NotFoundError) notFound();
+    throw loaded.error;
   }
+  const workspace = loaded.value;
   const {
     experiment,
     correlationReport,
