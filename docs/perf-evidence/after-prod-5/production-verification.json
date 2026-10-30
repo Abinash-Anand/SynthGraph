@@ -1,0 +1,78 @@
+{
+  "capturedOn": "2026-10-30",
+  "environment": "https://synthgraph.dev (production), after the deploy of PRs 167 to 171, built-in browser pane, signed-in user, Phase 1 experiment (3 runs, 16 generations). Read-only: nothing was changed on the site.",
+  "scope": "Verification of the metric-semantics and wording fixes (167), the backend reproducibility assessment (168), the duplicate-parameters removal (169) and the Overview and Parameters changes (171).",
+  "reproductionTab": {
+    "heading": "How completely was this experiment recorded?",
+    "summary": ["16 with major gaps", "82% of fields recorded on average"],
+    "generationChips": ["Major gaps · 79% recorded · uncommitted code, no code version", "Major gaps · 82% recorded · uncommitted code, no code version"],
+    "generationsAssessedByBackend": 16,
+    "notAssessedShown": 0,
+    "oldWordingPresent": false,
+    "reading": "The backend assessment is live and the frontend displays it. The numbers match what production showed when the frontend computed them."
+  },
+  "rawManifest": {
+    "topLevelKeys": ["schemaVersion", "classificationVersion", "classification", "assessment", "generation", "datasetReferences"],
+    "classificationVersion": 2,
+    "assessmentMethodVersion": 2,
+    "assessmentGrade": "partial",
+    "blockerTags": ["uncommitted code", "no code version"],
+    "generationKeyOrder": ["id", "experimentId", "name", "description", "generator", "parameters", "reproducibility", "status", "inputs", "outputs"],
+    "parametersRestored": { "keys": ["env_config", "sampled_variant", "domain_randomize"], "serialisedChars": 3832 },
+    "normalizedMirrorPresent": false,
+    "reading": "The manifest the raw view shows has its parameters back in their original position, with the full source."
+  },
+  "pagePayload": {
+    "method": "Page fetched with the RSC header, 8 fetches 1.3 s apart.",
+    "caveat": "The 'before' figures were measured on the ?tab=reproduction URL and the 'after' figures on ?tab=overview. The data the page carries is the same for both, but the tab's own output differs by a few KB (about 5 KB on a local build), so the 46 KB difference is not exact. A local before-and-after build of the same page measured 40.9 KB (7.8%).",
+    "decodedKB": { "before": 274, "after": 228 },
+    "domainRandomizeMentions": { "before": 90, "after": 45 },
+    "normalizedMirrors": 0,
+    "manifestsInPayload": 16,
+    "assessmentsInPayload": 16,
+    "serverRenderMs": { "runs": [1476, 868, 806, 795, 847, 724, 779, 723], "median": 800.5, "min": 723, "max": 1476, "previousMedianAfterThirdDeploy": 889 }
+  },
+  "metricSemantics": {
+    "stdMetricsInRun": 22,
+    "stdMetricsShownGreyInHealthPanel": 22,
+    "episodeRewardStdRising": "grey (no verdict)",
+    "curvesTableForStdMetric": ["run", "last", "highest", "lowest", "last step"],
+    "curvesTableForReward": ["run", "last", "highest", "last step"],
+    "curvesTableForLossMetrics": ["run", "last", "lowest", "last step"],
+    "curvesTableForNoDirectionMetrics": ["run", "last", "highest", "lowest", "last step"],
+    "healthSummaryForFirstRun": "21 rising · 27 falling · 12 flat — 16 improving, 5 worsening",
+    "stillGuessedFromNames": "Examples of verdicts that are still name-based guesses: training/entropy_loss rising shows orange; falling reward terms such as eval/episode_reward/pose show orange. Declared direction metadata (registry ARCH-001) is the open fix."
+  },
+  "overview": {
+    "heading": "Flagged runs",
+    "emptyState": "No runs flagged. Checks run here: failed runs, capture reported as partial, capture reported as unknown, capture never reported and drift from earlier completed runs. Metric behaviour, such as a loss that diverges, is not checked.",
+    "oldHeadingOrWordingPresent": false
+  },
+  "parametersTab": {
+    "title": "What moved the outcome",
+    "badge": "Exploratory",
+    "introductionStatesNotOfficialResult": true,
+    "introductionStatesAssociationNotCause": true
+  },
+  "runComparison": {
+    "evaluationMetricsAvailable": ["episode_reward"],
+    "caption": "How each run scored at each evaluation checkpoint (higher is better, inferred).",
+    "perRunLabel": "best <value> (direction known, so \"best\" is correct)",
+    "note": "The only evaluation metric has a known direction, so the highest/lowest summary for an unknown direction was verified in the training-curves table instead."
+  },
+  "regressions": {
+    "tabClickUiChangedMs": [16, 15, 33, 23, 25, 16, 16, 19],
+    "tabClickMedianMs": 19,
+    "burst30Clicks": { "dataRequests": 0, "unknown": 0, "notAssessed": 0, "reproductionSummary": "16 with major gaps" },
+    "refreshDataMs": 1394,
+    "signedIn": true,
+    "consoleErrors": 0
+  },
+  "notVerified": [
+    "The Overview rule that flags a run with no reported capture: all three production runs report capture, so nothing is flagged and the rule cannot be seen firing here (covered by unit tests).",
+    "The 'Not assessed' fallback against a backend without assessments: production already has the backend; verified locally only.",
+    "Server-Timing and the experiment_workspace.loaded log line: in the hosting provider's logs, not visible from the browser.",
+    "The Retry banner under real throttling, the per-user rate limit, and the sign-in and invalid-key redirects.",
+    "Screenshots were not saved: they show the account email."
+  ]
+}
