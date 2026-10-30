@@ -1,19 +1,31 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { buildProvenanceJson, buildProvenanceMarkdown, type ProvenanceInput, reportFilename } from "./provenance-report.ts";
-import { ASSESSMENT_VERSION, assessReproducibility } from "./reproducibility-model.ts";
+import type { ReproAssessment } from "./reproducibility-model.ts";
 
-const fields = (n: number) => Array.from({ length: n }, (_, i) => ({ field: `f${i}` }));
-const clean = { seed: 1, code_version: "abc", environment: { dirty: false } };
-const good = assessReproducibility({ known: fields(10), supplied: [], external: [], missing: [] }, clean);
-const dirty = assessReproducibility(
-  { known: fields(10), supplied: [], external: [], missing: [] },
-  { ...clean, environment: { dirty: true } },
-);
+const METHOD = { version: 2, completeAt: 0.85, mostlyAt: 0.6, externalWeight: 0.5 };
+// Assessments as the backend returns them: the report only presents them.
+const good: ReproAssessment = {
+  method: METHOD,
+  grade: "complete",
+  score: 1,
+  counts: { known: 10, supplied: 0, external: 0, missing: 0 },
+  blockers: [],
+  blockerTags: [],
+  notes: [],
+};
+const dirty: ReproAssessment = {
+  ...good,
+  grade: "partial",
+  blockers: ["The code had uncommitted changes when this ran, so it can't be rebuilt from the recorded commit."],
+  blockerTags: ["uncommitted code"],
+};
+const ASSESSMENT_VERSION = METHOD.version;
 
 const base: ProvenanceInput = {
   generatedAt: "2026-10-24T10:00:00.000Z",
   experiment: { id: "e1", name: "Phase 1", description: "PPO on Go1" },
+  assessmentMethod: METHOD,
   generations: [
     {
       id: "g1", name: "variant | 01", status: "completed", generatorName: "mujoco", generatorVersion: "0.2",
@@ -103,14 +115,42 @@ describe("reportFilename", () => {
 describe("buildProvenanceJson", () => {
   const parsed = JSON.parse(buildProvenanceJson(base));
 
-  it("says which assessment rules produced it", () => {
+  it("says which assessment rules produced it, as the backend stated them", () => {
     assert.equal(parsed.assessmentVersion, ASSESSMENT_VERSION);
-    assert.deepEqual(parsed.assessmentMethod, { completeAt: 0.85, mostlyAt: 0.6, externalWeight: 0.5 });
+    assert.deepEqual(parsed.assessmentMethod, METHOD);
   });
 
   it("carries the report content unchanged", () => {
     assert.equal(parsed.experiment.id, "e1");
     assert.equal(parsed.generations[0].assessment.grade, "complete");
     assert.equal(parsed.generations[1].assessment.grade, "partial");
+  });
+});
+
+describe("a report with no assessment from the server", () => {
+  const notAssessed: ReproAssessment = {
+    method: null,
+    grade: "unknown",
+    score: null,
+    counts: { known: 0, supplied: 0, external: 0, missing: 0 },
+    blockers: [],
+    blockerTags: [],
+    notes: ["This server did not return an assessment for this generation (it predates assessments), so it is not assessed here."],
+  };
+  const input: ProvenanceInput = {
+    ...base,
+    assessmentMethod: null,
+    generations: base.generations.map((g) => ({ ...g, assessment: notAssessed })),
+  };
+
+  it("says so instead of stating thresholds the server never gave", () => {
+    const md = buildProvenanceMarkdown(input);
+    assert.match(md, /no assessment available/);
+    assert.match(md, /No assessment was available from the server, so no grades are reported\./);
+    assert.doesNotMatch(md, /well recorded"; at/);
+  });
+
+  it("carries a null version in the JSON", () => {
+    assert.equal(JSON.parse(buildProvenanceJson(input)).assessmentVersion, null);
   });
 });
