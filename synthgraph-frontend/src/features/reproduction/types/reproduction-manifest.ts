@@ -28,6 +28,12 @@ export type ReproductionClassification = {
 
 export type ReproductionManifest = {
   schemaVersion: string;
+  /**
+   * Which rules `classification` was built with. Absent means version 1; 2 also
+   * counts the commit the SDK records under `environment.commit` as the code
+   * version. Added by the backend, so older responses lack it.
+   */
+  classificationVersion?: number;
   classification: ReproductionClassification;
   generation: {
     id: string;

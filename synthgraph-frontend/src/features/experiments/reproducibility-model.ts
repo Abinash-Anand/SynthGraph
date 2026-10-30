@@ -37,6 +37,10 @@ export type ReproAssessment = {
 };
 
 // The backend's own label for the field (see get-reproduction-manifest.service.ts).
+// Whether a code version was recorded is the backend's call: it counts an
+// explicit `code_version` and the commit the SDK records under
+// `environment.commit` (classification version 2). This model reads that
+// classification and does not second-guess it.
 const CODE_VERSION_FIELD = "Code version";
 
 export const GRADE_LABEL: Record<ReproGrade, string> = {
@@ -50,25 +54,6 @@ const GRADE_ORDER: ReproGrade[] = ["unknown", "partial", "mostly", "reproducible
 
 function capAt(grade: ReproGrade, ceiling: ReproGrade): ReproGrade {
   return GRADE_ORDER.indexOf(grade) > GRADE_ORDER.indexOf(ceiling) ? ceiling : grade;
-}
-
-/** The recorded git commit, if any - the code version the backend's classification can't see. */
-function recordedCommit(reproducibility: ReproducibilityLike | null | undefined): string | null {
-  const commit = reproducibility?.environment?.commit;
-  return typeof commit === "string" && commit.trim() !== "" ? commit : null;
-}
-
-/**
- * The classification's `missing` list with the code version removed when a
- * commit was recorded after all. Use this wherever missing fields are shown, so
- * the list and the grade never disagree.
- */
-export function missingFields(
-  classification: ClassificationLike,
-  reproducibility: ReproducibilityLike | null | undefined,
-): string[] {
-  if (recordedCommit(reproducibility) === null || reproducibility?.code_version) return classification.missing;
-  return classification.missing.filter((field) => field !== CODE_VERSION_FIELD);
 }
 
 export function assessReproducibility(
@@ -88,18 +73,14 @@ export function assessReproducibility(
 
   const environment = reproducibility?.environment;
 
-  // The SDK records the git commit automatically as `environment.commit`; it
-  // only fills the separate `code_version` field when the caller passes one.
-  // The backend classifies on `code_version` alone, so it lists "Code version"
-  // as missing for a run whose commit WAS recorded. That commit is the code
-  // version, so it must not be reported as missing, blocking, or scored down.
-  const commit = recordedCommit(reproducibility);
-  const hasCodeVersion = Boolean(reproducibility?.code_version) || commit !== null;
-  const missing = missingFields(classification, reproducibility);
-  const recoveredCodeVersion = classification.missing.length - missing.length;
+  // Commit presence and a dirty working tree are separate facts. Whether a
+  // version was recorded comes from the backend's classification; whether the
+  // tree was dirty (below) is read from the environment and blocks on its own.
+  const missing = classification.missing;
+  const hasCodeVersion = !missing.includes(CODE_VERSION_FIELD);
 
   const counts = {
-    known: classification.known.length + recoveredCodeVersion,
+    known: classification.known.length,
     supplied: classification.supplied.length,
     external: classification.external.length,
     missing: missing.length,

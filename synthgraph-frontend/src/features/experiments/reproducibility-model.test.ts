@@ -38,10 +38,11 @@ describe("assessReproducibility", () => {
     assert.match(result.blockers[0], /uncommitted changes/);
   });
 
-  it("caps at mostly when the seed or commit is missing", () => {
+  it("caps at mostly when the seed or the code version is missing", () => {
+    const noCodeVersion: ClassificationLike = { ...classification(9), missing: ["Code version"] };
     assert.equal(assessReproducibility(classification(10), { code_version: "abc" }).grade, "mostly");
-    assert.equal(assessReproducibility(classification(10), { seed: 3 }).grade, "mostly");
-    const both = assessReproducibility(classification(10), {});
+    assert.equal(assessReproducibility(noCodeVersion, { seed: 3 }).grade, "mostly");
+    const both = assessReproducibility(noCodeVersion, {});
     assert.equal(both.blockers.length, 2);
   });
 
@@ -98,58 +99,75 @@ describe("blocker tags", () => {
   });
 });
 
-describe("code version recorded as a git commit", () => {
-  // The backend lists "Code version" as missing whenever `code_version` is
-  // unset, even though the SDK records the commit under environment.commit.
-  const backendView = (): ClassificationLike => ({
+describe("code version comes from the backend's classification", () => {
+  // A backend at classification version 2 counts the commit the SDK records
+  // under environment.commit as the code version: it lists it as known, not
+  // missing. This model only reads that classification.
+  const codeVersionKnown = (): ClassificationLike => ({
+    known: [...fields(7), { field: "Code version", value: "3f2a9c1d" }],
+    supplied: fields(2),
+    external: [],
+    missing: ["Configuration hash"],
+  });
+  const codeVersionMissing = (): ClassificationLike => ({
     known: fields(8),
     supplied: fields(2),
     external: [],
     missing: ["Code version", "Configuration hash"],
   });
-  const withCommit = { seed: 0, environment: { dirty: false, commit: "3f2a9c1d" } };
+  const clean = { seed: 0, environment: { dirty: false } };
 
-  it("does not call a recorded commit 'no code version'", () => {
-    const result = assessReproducibility(backendView(), withCommit);
-    assert.equal(result.blockers.length, 0);
+  it("does not call a code version the backend knows 'no code version'", () => {
+    const result = assessReproducibility(codeVersionKnown(), clean);
     assert.deepEqual(result.blockerTags, []);
+    assert.equal(result.counts.known, 8);
+    assert.match(result.notes.join(" "), /Not recorded: Configuration hash/);
   });
 
-  it("does not report the code version as not recorded, but still reports what really is missing", () => {
-    const result = assessReproducibility(backendView(), withCommit);
-    const note = result.notes.join(" ");
-    assert.doesNotMatch(note, /Code version/);
-    assert.match(note, /Not recorded: Configuration hash/);
-    assert.equal(result.counts.missing, 1);
-  });
-
-  it("scores a recorded commit as recorded", () => {
-    const withoutCommit = assessReproducibility(backendView(), { seed: 0, environment: { dirty: false } });
-    const result = assessReproducibility(backendView(), withCommit);
-    assert.ok((result.score ?? 0) > (withoutCommit.score ?? 1));
-    assert.equal(result.counts.known, 9);
-  });
-
-  it("still blocks when there is neither a code_version nor a commit", () => {
-    const result = assessReproducibility(backendView(), { seed: 0, environment: { dirty: false } });
+  it("blocks and counts a code version the backend lists as missing", () => {
+    const result = assessReproducibility(codeVersionMissing(), clean);
     assert.deepEqual(result.blockerTags, ["no code version"]);
+    assert.equal(result.counts.missing, 2);
+    assert.match(result.notes.join(" "), /Not recorded: Code version, Configuration hash/);
   });
 
-  it("keeps the uncommitted-code blocker even when the commit is known", () => {
-    const result = assessReproducibility(backendView(), { seed: 0, environment: { dirty: true, commit: "3f2a9c1d" } });
-    assert.deepEqual(result.blockerTags, ["uncommitted code"]);
-    assert.equal(result.grade, "partial");
-  });
-
-  it("ignores a blank commit", () => {
-    const result = assessReproducibility(backendView(), { seed: 0, environment: { commit: "  " } });
+  it("does not second-guess the backend from the environment", () => {
+    // Regression: this model used to delete "Code version" from the backend's
+    // missing list when environment.commit existed. The backend now owns that
+    // rule, so a commit in the environment changes nothing here.
+    const withCommit = { seed: 0, environment: { dirty: false, commit: "3f2a9c1d" } };
+    const result = assessReproducibility(codeVersionMissing(), withCommit);
     assert.deepEqual(result.blockerTags, ["no code version"]);
+    assert.equal(result.counts.known, 8);
+    assert.equal(result.counts.missing, 2);
   });
 
-  it("does not double-count when code_version itself is set", () => {
-    const supplied: ClassificationLike = { known: fields(9), supplied: [], external: [], missing: ["Configuration hash"] };
-    const result = assessReproducibility(supplied, { seed: 0, code_version: "abc", environment: { commit: "def" } });
-    assert.equal(result.counts.known, 9);
-    assert.equal(result.counts.missing, 1);
+  it("scores a code version the backend knows as recorded", () => {
+    const known = assessReproducibility(codeVersionKnown(), clean);
+    const missing = assessReproducibility(codeVersionMissing(), clean);
+    assert.ok((known.score ?? 0) > (missing.score ?? 1));
+  });
+
+  it("treats uncommitted code and a missing code version as separate blockers", () => {
+    const dirtyWithVersion = assessReproducibility(codeVersionKnown(), { seed: 0, environment: { dirty: true } });
+    assert.deepEqual(dirtyWithVersion.blockerTags, ["uncommitted code"]);
+    assert.equal(dirtyWithVersion.grade, "partial");
+
+    const cleanWithoutVersion = assessReproducibility(codeVersionMissing(), clean);
+    assert.deepEqual(cleanWithoutVersion.blockerTags, ["no code version"]);
+
+    const both = assessReproducibility(codeVersionMissing(), { seed: 0, environment: { dirty: true } });
+    assert.deepEqual(both.blockerTags, ["uncommitted code", "no code version"]);
+  });
+
+  it("scores the same as before for a generation whose commit was recorded", () => {
+    // Historical semantics preserved. Before, the backend listed "Code version"
+    // as missing (7 known, 2 supplied, 2 missing) and this model moved it to
+    // known: (7 + 1 + 2) / (7 + 1 + 2 + 1). The backend now lists it as known
+    // (8 known, 2 supplied, 1 missing), which is the same arithmetic.
+    const oldScore = (7 + 1 + 2) / (7 + 1 + 2 + 1);
+    const result = assessReproducibility(codeVersionKnown(), clean);
+    assert.equal(result.score, oldScore);
+    assert.equal(result.grade, "reproducible");
   });
 });
