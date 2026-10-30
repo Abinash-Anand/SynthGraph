@@ -46,6 +46,20 @@ export type IntegrationBreakdownRow = {
   closedCount: string;
 };
 
+export type CaptureRunRow = {
+  id: string;
+  name: string;
+  createdAt: Date;
+  captureStatus: {
+    status?: string;
+    integrations?: Record<string, { attached?: boolean; closed?: boolean }>;
+  } | null;
+  experimentId: string;
+  experimentName: string;
+  projectId: string;
+  projectName: string;
+};
+
 export type TrainingRunKeyRow = {
   key: string;
 };
@@ -95,6 +109,41 @@ export class ReportsRepository {
     }
 
     return query.getRawMany<CaptureStatusCountRow>();
+  }
+
+  /**
+   * The runs behind the capture report's counts, newest first. A run is in a
+   * status bucket exactly as `getCaptureStatusCounts` buckets it (a run that never
+   * reported counts as 'unknown'), so what is counted is what is listed.
+   */
+  async findRunsByCaptureBucket(
+    userId: string,
+    buckets: readonly string[],
+    projectId: string | undefined,
+    limit: number,
+  ): Promise<CaptureRunRow[]> {
+    return this.dataSource.query<CaptureRunRow[]>(
+      `
+      SELECT
+        tr.id,
+        tr.name,
+        tr.created_at AS "createdAt",
+        tr.capture_status AS "captureStatus",
+        e.id AS "experimentId",
+        e.name AS "experimentName",
+        p.id AS "projectId",
+        p.name AS "projectName"
+      FROM training_runs tr
+      INNER JOIN experiments e ON e.id = tr.experiment_id
+      INNER JOIN projects p ON p.id = e.project_id
+      WHERE p.user_id = $1
+        AND ($2::uuid IS NULL OR p.id = $2)
+        AND COALESCE(tr.capture_status ->> 'status', 'unknown') = ANY($3::text[])
+      ORDER BY tr.created_at DESC, tr.id
+      LIMIT $4
+      `,
+      [userId, projectId ?? null, [...buckets], limit],
+    );
   }
 
   // TypeORM's QueryBuilder has no first-class support for
