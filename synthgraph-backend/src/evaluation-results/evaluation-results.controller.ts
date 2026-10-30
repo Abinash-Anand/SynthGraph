@@ -39,6 +39,7 @@ export class EvaluationResultsController {
       dto.metrics,
       dto.metadata,
       dto.name,
+      dto.checkpointStep,
     );
   }
 
