@@ -25,8 +25,6 @@ export type LineageEdge = {
   id: string;
   source: string;
   target: string;
-  /** Not recorded provenance - guessed from timing within one experiment. */
-  inferred?: boolean;
 };
 
 type DataRef = { id: string; name?: string; uri?: string; type?: string };
@@ -60,7 +58,7 @@ export type LineageRunInput = {
     startedAt: string | null;
     createdAt: string;
     datasets?: Array<{ id: string; version: string; uri?: string }>;
-    /** Generations this run was recorded as using (recorded, never inferred). */
+    /** Generations this run was recorded as using. */
     generationReferences?: Array<{ generationId: string; generationName?: string; experimentId?: string }>;
   };
   /** `datasetVersionId` is the dataset version the evaluation was run against (required by the backend). */
@@ -72,7 +70,6 @@ export type LineageModel = {
   edges: LineageEdge[];
   /** Generations with no recorded path to any training run. */
   unlinkedGenerationIds: string[];
-  inferredEdgeCount: number;
   /**
    * Dataset versions a training run recorded using that no generation claims to
    * have produced. This is the precise shape of the usual gap: the run side was
@@ -89,16 +86,6 @@ function refNode(ref: DataRef): { id: string; kind: LineageNodeKind } {
   // the link had been recorded.
   const asset = ref.type?.toLowerCase().includes("asset") ?? false;
   return asset ? { id: `asset:${ref.id}`, kind: "asset" } : { id: `dataset-version:${ref.id}`, kind: "dataset" };
-}
-
-function timeOf(...values: Array<string | null | undefined>): number | null {
-  for (const value of values) {
-    if (value) {
-      const time = Date.parse(value);
-      if (!Number.isNaN(time)) return time;
-    }
-  }
-  return null;
 }
 
 // A dataset version we only know by id (no run lists it, no output ref names it).
@@ -127,12 +114,10 @@ export function buildLineage(generations: LineageGenerationInput[], runs: Lineag
   const nodes = new Map<string, LineageNode>();
   const edges = new Map<string, LineageEdge>();
   const producedIds = new Set<string>();
-  // Runs that said which generations they used: a recorded statement beats a guess.
-  const runsWithRecordedGenerations = new Set<string>();
 
-  const addEdge = (source: string, target: string, inferred = false) => {
+  const addEdge = (source: string, target: string) => {
     const id = `${source}->${target}`;
-    if (!edges.has(id)) edges.set(id, { id, source, target, inferred: inferred || undefined });
+    if (!edges.has(id)) edges.set(id, { id, source, target });
   };
 
   for (const generation of generations) {
@@ -210,7 +195,6 @@ export function buildLineage(generations: LineageGenerationInput[], runs: Lineag
         });
       }
       addEdge(referencedId, runId);
-      runsWithRecordedGenerations.add(run.id);
     }
 
     for (const version of run.datasets ?? []) {
@@ -257,11 +241,11 @@ export function buildLineage(generations: LineageGenerationInput[], runs: Lineag
     if (node) node.layer = 2;
   }
 
-  // Which generations already have a recorded path to a run?
+  // Which generations have a recorded path to a run?
   const recorded = Array.from(edges.values());
   // A path to an evaluation counts as much as one to a run: it proves a
   // recorded relationship to a result (a generation's dataset that was later
-  // evaluated on), so guessing a link to a run for it would be redundant.
+  // evaluated on).
   const resultNodeIds = new Set([
     ...runs.map(({ run }) => `training-run:${run.id}`),
     ...runs.flatMap(({ evaluations }) => evaluations.map((evaluation) => `evaluation:${evaluation.id}`)),
@@ -274,70 +258,29 @@ export function buildLineage(generations: LineageGenerationInput[], runs: Lineag
   }
 
   // Training datasets nobody claims: a run says it trained on this version,
-  // but no generation says it produced it. Evaluation-only datasets don't count
-  // - a held-out test set often comes from somewhere else entirely, so guessing
-  // that a generation produced it would be a stretch.
+  // but no generation says it produced it. Both sides are recorded facts; the
+  // graph states the gap and draws nothing to bridge it. Evaluation-only datasets
+  // don't count - a held-out test set often comes from somewhere else entirely.
   const claimed = new Set(
     Array.from(edges.values())
       .filter((edge) => edge.source.startsWith("generation:") && edge.target.startsWith("dataset-version:"))
       .map((edge) => edge.target),
   );
-  const consumerStarts = new Map<string, number[]>();
+  const consumed = new Set<string>();
   for (const { run } of runs) {
-    const began = timeOf(run.startedAt, run.createdAt);
-    for (const version of run.datasets ?? []) {
-      const id = `dataset-version:${version.id}`;
-      consumerStarts.set(id, [...(consumerStarts.get(id) ?? []), ...(began === null ? [] : [began])]);
-    }
+    for (const version of run.datasets ?? []) consumed.add(`dataset-version:${version.id}`);
   }
-  const unclaimedDatasetIds = Array.from(consumerStarts.keys()).filter((id) => !claimed.has(id));
-
-  // Without any recorded link, the only honest statement is "same
-  // experiment, and what consumed it began after the generation finished".
-  // Flagged as inferred so the UI never presents it as provenance.
-  //
-  // The guess goes to the dataset when runs recorded one nobody claims: that is
-  // where the chain is actually broken, and drawing the line to the run would
-  // jump over a dataset node the graph already shows. With no such dataset it
-  // falls back to the runs themselves.
-  let inferredEdgeCount = 0;
-  for (const generation of generations) {
-    if (!unlinked.includes(generation.id)) continue;
-    const available = timeOf(generation.completed_at, generation.started_at, generation.created_at);
-    const genId = `generation:${generation.id}`;
-
-    if (unclaimedDatasetIds.length > 0) {
-      for (const versionId of unclaimedDatasetIds) {
-        const starts = consumerStarts.get(versionId) ?? [];
-        const usedAfter =
-          available === null || starts.length === 0 || starts.some((began) => began >= available);
-        if (!usedAfter) continue;
-        addEdge(genId, versionId, true);
-        inferredEdgeCount++;
-      }
-      continue;
-    }
-
-    for (const { run } of runs) {
-      // A run that recorded its generations is not also guessed to have used this one.
-      if (runsWithRecordedGenerations.has(run.id)) continue;
-      const began = timeOf(run.startedAt, run.createdAt);
-      if (available !== null && began !== null && began < available) continue;
-      addEdge(genId, `training-run:${run.id}`, true);
-      inferredEdgeCount++;
-    }
-  }
+  const unclaimedDatasetIds = Array.from(consumed).filter((id) => !claimed.has(id));
 
   return {
     nodes: Array.from(nodes.values()),
     edges: Array.from(edges.values()),
     unlinkedGenerationIds: unlinked,
-    inferredEdgeCount,
     unclaimedDatasetIds,
   };
 }
 
-export type Reach = { upstream: LineageNode[]; downstream: LineageNode[]; viaInferred: boolean };
+export type Reach = { upstream: LineageNode[]; downstream: LineageNode[] };
 
 /** Everything a node depends on and everything that depends on it. */
 export function reachOf(nodeId: string, model: Pick<LineageModel, "nodes" | "edges">): Reach {
@@ -349,7 +292,6 @@ export function reachOf(nodeId: string, model: Pick<LineageModel, "nodes" | "edg
     backward.set(edge.target, [...(backward.get(edge.target) ?? []), edge]);
   }
 
-  let viaInferred = false;
   const walk = (graph: Map<string, LineageEdge[]>, pick: (edge: LineageEdge) => string): LineageNode[] => {
     const seen = new Set<string>([nodeId]);
     const queue = [nodeId];
@@ -360,7 +302,6 @@ export function reachOf(nodeId: string, model: Pick<LineageModel, "nodes" | "edg
         const next = pick(edge);
         if (seen.has(next)) continue;
         seen.add(next);
-        if (edge.inferred) viaInferred = true;
         queue.push(next);
         const node = byId.get(next);
         if (node) found.push(node);
@@ -371,7 +312,7 @@ export function reachOf(nodeId: string, model: Pick<LineageModel, "nodes" | "edg
 
   const downstream = walk(forward, (edge) => edge.target);
   const upstream = walk(backward, (edge) => edge.source);
-  return { upstream, downstream, viaInferred };
+  return { upstream, downstream };
 }
 
 export function countByKind(nodes: LineageNode[]): Partial<Record<LineageNodeKind, number>> {
@@ -381,12 +322,13 @@ export function countByKind(nodes: LineageNode[]): Partial<Record<LineageNodeKin
 }
 
 const SDK_HINT =
-  "Record each generation's output with generation.dataset(...), or tell a run which generation it used with training.use(generation), to make them solid.";
+  "Record each generation's output with generation.dataset(...), or tell a run which generation it used with training.use(generation), to connect them.";
 
 /**
- * One sentence about why the graph has dashed lines, or null when it doesn't.
- * Says *which* link is missing: "no links recorded" used to be printed even when
- * the runs had recorded their datasets and only the generation side was missing.
+ * A note about generations the graph shows without a link, or null when there are none.
+ * Says *which* link is missing: "no links recorded" used to be printed even when the
+ * runs had recorded their datasets and only the generation side was missing. Nothing is
+ * drawn to bridge a gap: a connection appears only once someone records it.
  */
 export function describeLinkGap(model: LineageModel, generationCount: number, hasRuns: boolean): string | null {
   const unlinked = model.unlinkedGenerationIds.length;
@@ -402,12 +344,12 @@ export function describeLinkGap(model: LineageModel, generationCount: number, ha
     const subject = labels.length === 1 ? "dataset" : "datasets";
     return (
       `Your training runs recorded ${subject} ${named}, but no generation claims to have produced ${labels.length === 1 ? "it" : "them"}.${partial} ` +
-      `The dashed lines are a guess from timing, not recorded provenance. ${SDK_HINT}`
+      `Nothing recorded connects those generations to a run, so no line is drawn for them. ${SDK_HINT}`
     );
   }
   const lead =
     unlinked === generationCount
       ? "No dataset links were recorded between these generations and the training runs."
       : `${unlinked} of ${generationCount} generations have no recorded link to a training run.`;
-  return `${lead} The dashed lines are a guess from timing within this experiment, not recorded provenance. Register each generation's outputs and each run's dataset versions in the SDK, or tell a run which generation it used with training.use(generation), to make them solid.`;
+  return `${lead} Nothing recorded connects them, so no line is drawn. Register each generation's outputs and each run's dataset versions in the SDK, or tell a run which generation it used with training.use(generation), to connect them.`;
 }

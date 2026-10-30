@@ -59,8 +59,6 @@ export type LineageGraphEdge = {
   id: string;
   source: string;
   target: string;
-  /** Guessed, not recorded - drawn dashed so it can't pass for provenance. */
-  inferred?: boolean;
 };
 
 const NODE_COLOR_VAR: Record<LineageNodeKind, string> = {
@@ -147,7 +145,6 @@ function applyCollapse(
     });
   }
 
-  // Merged edges stay "inferred" only if every edge folded into them was.
   const merged = new Map<string, LineageGraphEdge>();
   for (const edge of edges) {
     const source = idRemap.get(edge.source) ?? edge.source;
@@ -155,8 +152,7 @@ function applyCollapse(
     if (source === target) continue;
     const key = `${source}->${target}`;
     const existing = merged.get(key);
-    if (!existing) merged.set(key, { id: key, source, target, inferred: edge.inferred });
-    else if (!edge.inferred) existing.inferred = undefined;
+    if (!existing) merged.set(key, { id: key, source, target });
   }
   const outEdges = Array.from(merged.values());
 
@@ -326,7 +322,7 @@ function LineageNodeRenderer({ data }: NodeProps) {
 
 const nodeTypes = { lineageNode: LineageNodeRenderer };
 
-type Reach = { all: Set<string>; upstream: Set<string>; downstream: Set<string>; viaInferred: boolean };
+type Reach = { all: Set<string>; upstream: Set<string>; downstream: Set<string> };
 
 /** Selecting a node highlights every node/edge on a path through it (both
  * directions) and mutes the rest - the "linked visualization" model from
@@ -334,7 +330,7 @@ type Reach = { all: Set<string>; upstream: Set<string>; downstream: Set<string>;
  * the blast-radius panel can say what depends on the node and what it
  * depends on. */
 function reachFrom(selectedId: string | null, edges: LineageGraphEdge[]): Reach {
-  const empty: Reach = { all: new Set(), upstream: new Set(), downstream: new Set(), viaInferred: false };
+  const empty: Reach = { all: new Set(), upstream: new Set(), downstream: new Set() };
   if (!selectedId) return empty;
 
   const forward = new Map<string, LineageGraphEdge[]>();
@@ -344,7 +340,6 @@ function reachFrom(selectedId: string | null, edges: LineageGraphEdge[]): Reach 
     backward.set(edge.target, [...(backward.get(edge.target) ?? []), edge]);
   }
 
-  let viaInferred = false;
   const walk = (graph: Map<string, LineageGraphEdge[]>, pick: (edge: LineageGraphEdge) => string) => {
     const seen = new Set<string>([selectedId]);
     const queue = [selectedId];
@@ -354,7 +349,6 @@ function reachFrom(selectedId: string | null, edges: LineageGraphEdge[]): Reach 
         const next = pick(edge);
         if (seen.has(next)) continue;
         seen.add(next);
-        if (edge.inferred) viaInferred = true;
         queue.push(next);
       }
     }
@@ -364,7 +358,7 @@ function reachFrom(selectedId: string | null, edges: LineageGraphEdge[]): Reach 
 
   const downstream = walk(forward, (edge) => edge.target);
   const upstream = walk(backward, (edge) => edge.source);
-  return { all: new Set([selectedId, ...downstream, ...upstream]), upstream, downstream, viaInferred };
+  return { all: new Set([selectedId, ...downstream, ...upstream]), upstream, downstream };
 }
 
 const KIND_PLURAL: Record<LineageNodeKind, [string, string]> = {
@@ -470,9 +464,7 @@ export function LineageGraph({
           style: {
             stroke: color,
             strokeWidth: highlighted ? 2 : 1.5,
-            opacity: muted ? 0.25 : edge.inferred ? 0.75 : 1,
-            // Dashed = guessed, solid = recorded.
-            strokeDasharray: edge.inferred ? "5 4" : undefined,
+            opacity: muted ? 0.25 : 1,
           },
           markerEnd: { type: MarkerType.ArrowClosed, color, width: 16, height: 16 },
           animated: false,
@@ -496,7 +488,6 @@ export function LineageGraph({
     return <p className="text-[13.5px] text-research-ink-muted">Nothing to show lineage for yet.</p>;
   }
 
-  const hasInferred = edges.some((edge) => edge.inferred);
   const hasExternal = nodes.some((node) => node.external);
   const selectedNode = selectedId ? nodesById.get(selectedId) : undefined;
   const downstreamNodes = Array.from(fullReach.downstream)
@@ -593,11 +584,6 @@ export function LineageGraph({
               <dd className="text-research-ink-secondary">{describeCounts(fullReach.upstream, nodesById)}</dd>
             </div>
           </dl>
-          {fullReach.viaInferred ? (
-            <p className="mt-2 text-research-ink-muted">
-              Includes inferred links (dashed), not recorded provenance.
-            </p>
-          ) : null}
           {downstreamNodes.length > 0 ? (
             <>
               <button
@@ -642,14 +628,6 @@ export function LineageGraph({
           <span className="inline-flex items-center gap-1.5">
             <span className="h-2.5 w-4 rounded-sm border border-dashed border-research-ink-muted" aria-hidden />
             generation in another experiment
-          </span>
-        ) : null}
-        {hasInferred ? (
-          <span className="inline-flex items-center gap-1.5">
-            <svg width="22" height="6" aria-hidden>
-              <line x1="0" y1="3" x2="22" y2="3" stroke="#a1a1aa" strokeWidth="1.5" strokeDasharray="5 4" />
-            </svg>
-            inferred from timing, not recorded
           </span>
         ) : null}
         <span className="inline-flex items-center gap-1.5">

@@ -1,6 +1,6 @@
 # Design: recorded lineage, and removing the guessed edges
 
-Status: **approved 2026-10-30 (owner decisions in the registry, section 2a). PRs 1 to 4 of 5 are implemented; only the removal of the guesses is not.**
+Status: **approved 2026-10-30 (owner decisions in the registry, section 2a). All five PRs are implemented. The guessed edges are gone.**
 Closes: registry entry ARCH-004.
 
 ## Problem
@@ -35,7 +35,7 @@ Closes: registry entry ARCH-004.
    - A generation in another experiment of the same project is allowed. No route updates or deletes a link.
 3. **SDK and CLI 0.6.0. Implemented.** `training.use(generation)` records the link to the generation and still attaches the datasets it produced (a generation that produced none is now fine); `experiment.training(..., generations=[...])`; `training.link_generation()`; `training.generations()`; `synthgraph training-runs link-generation` and `generations`. A generation or dataset of another project is refused by the SDK before anything is created where it can see the mismatch (so a rejected attach leaves no dataset version or run behind), and by the backend otherwise. `datasets=[generation]` stays a statement about data and does not record the link. Contract: `CONTRACT.md` 2.43.
 4. **Frontend draws recorded links. Implemented.** A generation-to-run edge from `generationReferences` is drawn solid like every recorded edge, with no dataset needed in between. A generation from another experiment of the project is a node of its own (dashed border, sublabel "another experiment", legend entry), named from the link; it is not loaded in this workspace, so selecting it does nothing. A generation with a recorded link counts as linked. A run that recorded its generations is no longer guessed to have used another one (a recorded statement beats a guess). The guessed edges for everything else are still shown and labelled, and the gap note now names `training.use(generation)`.
-5. **Remove the inference.** Delete the timestamp edges, `inferredEdgeCount`, the legend and the "includes inferred links" note. An unlinked generation is shown as unlinked with no edge. Ships only after 4 is verified and the owner agrees to the visible cost below.
+5. **Remove the inference. Implemented** (after 4 was verified, with the owner's agreement to the visible cost below). The timing edges, `inferredEdgeCount`, `LineageEdge.inferred`, `viaInferred`, the dashed edge style, the "inferred from timing" legend entry and the "includes inferred links" note are deleted from `lineage-model.ts` and `LineageGraph.tsx`. A generation with no recorded link is shown as unlinked with no line, and the note says "Nothing recorded connects them, so no line is drawn". The one thing kept from the old model is `unclaimedDatasetIds`, now computed without any timestamp: the datasets a run recorded using that no generation claims, which is a statement of two recorded facts, not a bridge between them.
 
 ## Known limits (MVP)
 
@@ -48,7 +48,7 @@ Closes: registry entry ARCH-004.
 
 ## Visible cost of step 5
 
-Until existing runs are linked, graphs for experiments like Phase 1 lose their dashed edges and show unlinked generations. That is the intended result of not showing guesses, but it means step 5 should ship after the linking path exists and the runs you care about are linked.
+Until existing runs are linked, graphs for experiments like Phase 1 (15 of 16 generations had no recorded link) show those generations without a line. That is the intended result of not showing guesses. A run is linked with `synthgraph training-runs link-generation RUN GENERATION`, or `training.use(generation)` in the SDK.
 
 ## Not in this design
 
