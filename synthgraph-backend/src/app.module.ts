@@ -21,6 +21,7 @@ import { ReproductionModule } from './reproduction/reproduction.module.js';
 import { SearchModule } from './search/search.module.js';
 import { TrainingRunsModule } from './training-runs/training-runs.module.js';
 import { TrainingRunMetricsModule } from './training-run-metrics/training-run-metrics.module.js';
+import { MetricDirectionsModule } from './metric-directions/metric-directions.module.js';
 import { WorkspaceModule } from './workspace/workspace.module.js';
 import { ApiKeysModule } from './api-keys/api-keys.module.js';
 
@@ -78,6 +79,7 @@ import { ApiKeysModule } from './api-keys/api-keys.module.js';
     ComparisonsModule,
     ReportsModule,
     SearchModule,
+    MetricDirectionsModule,
     WorkspaceModule,
     ApiKeysModule
   ],

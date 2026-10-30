@@ -4,6 +4,7 @@ import { AuthModule } from '../auth/auth.module.js';
 import { EvaluationResultsModule } from '../evaluation-results/evaluation-results.module.js';
 import { ExperimentsModule } from '../experiments/experiments.module.js';
 import { GenerationsModule } from '../generations/generations.module.js';
+import { MetricDirectionsModule } from '../metric-directions/metric-directions.module.js';
 import { ReportsModule } from '../reports/reports.module.js';
 import { ReproductionModule } from '../reproduction/reproduction.module.js';
 import { TrainingRunMetricsModule } from '../training-run-metrics/training-run-metrics.module.js';
@@ -22,6 +23,7 @@ import { WorkspaceController } from './workspace.controller.js';
     ReportsModule,
     GenerationsModule,
     ReproductionModule,
+    MetricDirectionsModule,
   ],
   controllers: [WorkspaceController],
   providers: [GetExperimentWorkspaceService],

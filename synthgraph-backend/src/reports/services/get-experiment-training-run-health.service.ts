@@ -4,6 +4,8 @@ import type { ExperimentRepository } from '../../experiments/repositories/experi
 import { EXPERIMENT_REPOSITORY } from '../../experiments/repositories/experiment.tokens.js';
 import type { TrainingRunRepository } from '../../training-runs/repositories/training-run.repository.js';
 import { TRAINING_RUN_REPOSITORY } from '../../training-runs/repositories/training-run.tokens.js';
+import type { MetricDirection } from '../../metric-directions/metric-direction.js';
+import { MetricDirectionsService } from '../../metric-directions/metric-directions.service.js';
 import { ReportsRepository } from '../repositories/reports.repository.js';
 import {
   buildTrainingRunHealthReport,
@@ -36,6 +38,8 @@ export class GetExperimentTrainingRunHealthService {
 
     @Inject(TRAINING_RUN_REPOSITORY)
     private readonly trainingRunRepository: TrainingRunRepository,
+
+    private readonly metricDirectionsService: MetricDirectionsService,
   ) {}
 
   async execute(
@@ -59,7 +63,10 @@ export class GetExperimentTrainingRunHealthService {
       offset,
     );
 
-    const runs = await this.forTrainingRuns(trainingRuns, windowSize);
+    const directions = await this.metricDirectionsService.forExperiment(
+      experiment.id,
+    );
+    const runs = await this.forTrainingRuns(trainingRuns, windowSize, directions);
 
     return { experimentId: experiment.id, windowSize, runs };
   }
@@ -73,6 +80,7 @@ export class GetExperimentTrainingRunHealthService {
   forTrainingRuns(
     trainingRuns: ReadonlyArray<{ id: string }>,
     windowSize: number = DEFAULT_HEALTH_WINDOW_SIZE,
+    directions: Readonly<Record<string, MetricDirection>> = {},
   ): Promise<TrainingRunHealthReport[]> {
     return Promise.all(
       trainingRuns.map(async (trainingRun) =>
@@ -83,6 +91,7 @@ export class GetExperimentTrainingRunHealthService {
             trainingRun.id,
             windowSize,
           ),
+          directions,
         ),
       ),
     );

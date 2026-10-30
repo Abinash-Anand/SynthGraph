@@ -12,6 +12,8 @@ import {
   toGenerationResponse,
 } from '../../generations/responses/generation.response.js';
 import { ListGenerationsService } from '../../generations/services/list-generations.service.js';
+import type { MetricDirection } from '../../metric-directions/metric-direction.js';
+import { MetricDirectionsService } from '../../metric-directions/metric-directions.service.js';
 import { GetExperimentTrainingRunDriftService } from '../../reports/services/get-experiment-training-run-drift.service.js';
 import { GetExperimentTrainingRunHealthService } from '../../reports/services/get-experiment-training-run-health.service.js';
 import { GetParameterCorrelationReportService } from '../../reports/services/get-parameter-correlation-report.service.js';
@@ -45,6 +47,8 @@ export type WorkspaceGeneration = {
 
 export type ExperimentWorkspace = {
   experiment: Experiment;
+  /** The directions declared in this experiment; a metric not listed has none (unknown). */
+  metricDirections: Record<string, MetricDirection>;
   correlation: ParameterCorrelationReport;
   trainingRuns: WorkspaceTrainingRun[];
   generations: WorkspaceGeneration[];
@@ -72,6 +76,7 @@ export class GetExperimentWorkspaceService {
     private readonly driftService: GetExperimentTrainingRunDriftService,
     private readonly listGenerationsService: ListGenerationsService,
     private readonly manifestsService: ListReproductionManifestsService,
+    private readonly metricDirectionsService: MetricDirectionsService,
   ) {}
 
   /**
@@ -83,7 +88,14 @@ export class GetExperimentWorkspaceService {
     userId: string,
     timings: ServerTimings = new ServerTimings(),
   ): Promise<ExperimentWorkspace> {
-    const [experiment, correlation, trainingRuns, generations] =
+    // Read once and shared: the health verdicts need it, and so does the
+    // response. Nothing here is returned unless the experiment is the user's:
+    // the other parts reject with a 404 otherwise.
+    const metricDirections = timings.measure('metric_directions', () =>
+      this.metricDirectionsService.forExperiment(experimentId),
+    );
+
+    const [experiment, correlation, trainingRuns, generations, directions] =
       await Promise.all([
         timings.measure('experiment', () =>
           this.getExperimentService.executeForUser(experimentId, userId),
@@ -91,17 +103,25 @@ export class GetExperimentWorkspaceService {
         timings.measure('correlation', () =>
           this.parameterCorrelationService.execute(experimentId, userId),
         ),
-        this.loadTrainingRuns(experimentId, userId, timings),
+        this.loadTrainingRuns(experimentId, userId, timings, metricDirections),
         this.loadGenerations(experimentId, userId, timings),
+        metricDirections,
       ]);
 
-    return { experiment, correlation, trainingRuns, generations };
+    return {
+      experiment,
+      metricDirections: directions,
+      correlation,
+      trainingRuns,
+      generations,
+    };
   }
 
   private async loadTrainingRuns(
     experimentId: string,
     userId: string,
     timings: ServerTimings,
+    metricDirections: Promise<Record<string, MetricDirection>>,
   ): Promise<WorkspaceTrainingRun[]> {
     const runs = await timings.measure('runs_list', () =>
       this.listTrainingRunsService.execute(
@@ -116,7 +136,13 @@ export class GetExperimentWorkspaceService {
     // Health and drift are computed from the run list just read, so a run
     // created while this loads cannot leave them out of step with it.
     const [health, drift, perRun] = await Promise.all([
-      timings.measure('health', () => this.healthService.forTrainingRuns(runs)),
+      timings.measure('health', async () =>
+        this.healthService.forTrainingRuns(
+          runs,
+          undefined,
+          await metricDirections,
+        ),
+      ),
       timings.measure('drift', () => this.driftService.forTrainingRuns(runs)),
       timings.measure('metrics_evaluations', () =>
         Promise.all(

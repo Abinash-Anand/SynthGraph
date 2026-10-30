@@ -19,6 +19,7 @@ import { GetCaptureCompletenessReportService } from './services/get-capture-comp
 import { GetDatasetImpactReportService } from './services/get-dataset-impact-report.service.js';
 import { GetEfficiencyLeaderboardService } from './services/get-efficiency-leaderboard.service.js';
 import { GetParameterCorrelationReportService } from './services/get-parameter-correlation-report.service.js';
+import { MetricDirectionsModule } from '../metric-directions/metric-directions.module.js';
 import { GetExperimentTrainingRunDriftService } from './services/get-experiment-training-run-drift.service.js';
 import { GetExperimentTrainingRunHealthService } from './services/get-experiment-training-run-health.service.js';
 import { GetTrainingRunDriftService } from './services/get-training-run-drift.service.js';
@@ -29,6 +30,7 @@ import { SearchTrainingRunsService } from './services/search-training-runs.servi
 @Module({
   imports: [
     AuthModule,
+    MetricDirectionsModule,
     // Experiment/TrainingRun are registered here too (not just in their own
     // modules) because their repositories are re-declared as this module's
     // own providers below (behind EXPERIMENT_REPOSITORY/TRAINING_RUN_REPOSITORY,

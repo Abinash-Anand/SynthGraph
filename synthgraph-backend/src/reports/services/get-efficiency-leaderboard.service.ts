@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 
 import { EvaluationResult } from '../../database/entities/evaluation-result.entity.js';
+import {
+  aggregateMetricDirections,
+  type AggregatedMetricDirection,
+} from '../../metric-directions/metric-direction.js';
+import { MetricDirectionsService } from '../../metric-directions/metric-directions.service.js';
 import { ReportsRepository } from '../repositories/reports.repository.js';
 
 export type EfficiencyLeaderboardEntry = {
@@ -16,7 +21,10 @@ export type EfficiencyLeaderboardEntry = {
 
 @Injectable()
 export class GetEfficiencyLeaderboardService {
-  constructor(private readonly reportsRepository: ReportsRepository) {}
+  constructor(
+    private readonly reportsRepository: ReportsRepository,
+    private readonly metricDirectionsService: MetricDirectionsService,
+  ) {}
 
   // Deliberately does not pre-rank or pick "the" metric: which metric
   // matters and which direction is "better" (higher mAP vs. lower loss)
@@ -26,7 +34,11 @@ export class GetEfficiencyLeaderboardService {
   async execute(
     userId: string,
     projectId?: string,
-  ): Promise<{ runs: EfficiencyLeaderboardEntry[] }> {
+  ): Promise<{
+    runs: EfficiencyLeaderboardEntry[];
+    /** See BestRunsReport.metricDirections: declared where every experiment agrees, mixed otherwise, absent if undeclared. */
+    metricDirections: Record<string, AggregatedMetricDirection>;
+  }> {
     const trainingRuns =
       await this.reportsRepository.findCompletedTrainingRunsForUser(
         userId,
@@ -67,6 +79,32 @@ export class GetEfficiencyLeaderboardService {
       };
     });
 
-    return { runs };
+    const experimentByRunId = new Map(
+      trainingRuns.map((run) => [run.id, run.experimentId]),
+    );
+    const keysByExperiment = new Map<string, Set<string>>();
+    for (const evaluation of evaluations) {
+      const experimentId = experimentByRunId.get(evaluation.trainingRunId);
+      if (!experimentId) continue;
+      const keys = keysByExperiment.get(experimentId) ?? new Set<string>();
+      for (const [metricKey, rawValue] of Object.entries(evaluation.metrics ?? {})) {
+        if (typeof rawValue === 'number') keys.add(metricKey);
+      }
+      keysByExperiment.set(experimentId, keys);
+    }
+    const declared = await this.metricDirectionsService.forExperiments([
+      ...keysByExperiment.keys(),
+    ]);
+
+    return {
+      runs,
+      metricDirections: aggregateMetricDirections(
+        [...keysByExperiment].map(([experimentId, metricKeys]) => ({
+          experimentId,
+          metricKeys,
+        })),
+        declared,
+      ),
+    };
   }
 }

@@ -31,6 +31,7 @@ describe('GetExperimentWorkspaceService', () => {
   const driftService = { forTrainingRuns: vi.fn() };
   const listGenerationsService = { execute: vi.fn() };
   const manifestsService = { forGenerations: vi.fn() };
+  const metricDirectionsService = { forExperiment: vi.fn() };
 
   let service: GetExperimentWorkspaceService;
 
@@ -46,7 +47,9 @@ describe('GetExperimentWorkspaceService', () => {
       driftService as never,
       listGenerationsService as never,
       manifestsService as never,
+      metricDirectionsService as never,
     );
+    metricDirectionsService.forExperiment.mockResolvedValue({});
   });
 
   it('assembles the same pieces the separate routes return, aligned by run and generation', async () => {
@@ -86,6 +89,7 @@ describe('GetExperimentWorkspaceService', () => {
     const workspace = await service.execute('experiment-1', 'user-1');
 
     expect(workspace.experiment).toEqual({ id: 'experiment-1' });
+    expect(workspace.metricDirections).toEqual({});
     expect(workspace.correlation).toEqual({ experimentId: 'experiment-1' });
     expect(workspace.trainingRuns.map((r) => r.run.id)).toEqual([
       'run-a',
@@ -132,7 +136,7 @@ describe('GetExperimentWorkspaceService', () => {
 
     await service.execute('experiment-1', 'user-1');
 
-    expect(healthService.forTrainingRuns).toHaveBeenCalledWith(runs);
+    expect(healthService.forTrainingRuns).toHaveBeenCalledWith(runs, undefined, {});
     expect(driftService.forTrainingRuns).toHaveBeenCalledWith(runs);
     expect(manifestsService.forGenerations).toHaveBeenCalledWith(generations);
     expect(listTrainingRunsService.execute).toHaveBeenCalledWith(
