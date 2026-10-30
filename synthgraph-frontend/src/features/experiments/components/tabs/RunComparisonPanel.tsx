@@ -16,7 +16,7 @@ import {
 import { SERIES_COLORS } from "@/shared/charts/series-colors";
 import { formatMetricValue } from "@/shared/lib/format";
 import { compareMetricKeys, directionLabel, metricDirection } from "@/shared/lib/metric-semantics";
-import { bestEvaluationValue, outcomeMetricKeys, preferredOutcomeKey } from "../../outcomes";
+import { describeEvaluationSummary, outcomeMetricKeys, preferredOutcomeKey, summarizeEvaluations } from "../../outcomes";
 import type { EnrichedTrainingRun } from "../../types/experiment-workspace";
 
 const EChart = dynamic(() => import("@/shared/charts/EChart").then((m) => m.EChart), {
@@ -237,8 +237,12 @@ function TrainingCurves({ runs }: { runs: EnrichedTrainingRun[] }) {
 
   const rows = live.map((s) => {
     const values = s.points.map(([, v]) => v);
-    const best = direction === "lower" ? Math.min(...values) : Math.max(...values);
-    return { ...s, last: values[values.length - 1], best, steps: s.points[s.points.length - 1][0] };
+    const highest = Math.max(...values);
+    const lowest = Math.min(...values);
+    // The extreme in the metric's good direction when it is known; with no
+    // known direction both ends are shown (see the extra column below).
+    const best = direction === "lower" ? lowest : highest;
+    return { ...s, last: values[values.length - 1], best, highest, lowest, steps: s.points[s.points.length - 1][0] };
   });
   const canBand = live.length >= 2;
 
@@ -294,9 +298,16 @@ function TrainingCurves({ runs }: { runs: EnrichedTrainingRun[] }) {
               <tr className="border-b border-research-border bg-research-panel">
                 <th className="px-3 py-2.5 text-left font-mono text-[11px] text-research-ink-muted">run</th>
                 <th className="px-3 py-2.5 text-left font-mono text-[11px] text-research-ink-muted">last</th>
-                <th className="px-3 py-2.5 text-left font-mono text-[11px] text-research-ink-muted">
-                  {direction === "lower" ? "lowest" : direction === "higher" ? "highest" : "max"}
-                </th>
+                {direction === "neutral" ? (
+                  <>
+                    <th className="px-3 py-2.5 text-left font-mono text-[11px] text-research-ink-muted">highest</th>
+                    <th className="px-3 py-2.5 text-left font-mono text-[11px] text-research-ink-muted">lowest</th>
+                  </>
+                ) : (
+                  <th className="px-3 py-2.5 text-left font-mono text-[11px] text-research-ink-muted">
+                    {direction === "lower" ? "lowest" : "highest"}
+                  </th>
+                )}
                 <th className="px-3 py-2.5 text-left font-mono text-[11px] text-research-ink-muted">last step</th>
               </tr>
             </thead>
@@ -312,9 +323,20 @@ function TrainingCurves({ runs }: { runs: EnrichedTrainingRun[] }) {
                   <td className="px-3 py-2.5 font-mono tabular-nums text-research-ink" title={String(row.last)}>
                     {formatMetricValue(row.last)}
                   </td>
-                  <td className="px-3 py-2.5 font-mono tabular-nums text-research-ink-secondary" title={String(row.best)}>
-                    {formatMetricValue(row.best)}
-                  </td>
+                  {direction === "neutral" ? (
+                    <>
+                      <td className="px-3 py-2.5 font-mono tabular-nums text-research-ink-secondary" title={String(row.highest)}>
+                        {formatMetricValue(row.highest)}
+                      </td>
+                      <td className="px-3 py-2.5 font-mono tabular-nums text-research-ink-secondary" title={String(row.lowest)}>
+                        {formatMetricValue(row.lowest)}
+                      </td>
+                    </>
+                  ) : (
+                    <td className="px-3 py-2.5 font-mono tabular-nums text-research-ink-secondary" title={String(row.best)}>
+                      {formatMetricValue(row.best)}
+                    </td>
+                  )}
                   <td className="px-3 py-2.5 font-mono tabular-nums text-research-ink-muted">{formatMetricValue(row.steps)}</td>
                 </tr>
               ))}
@@ -434,11 +456,11 @@ function EvaluationCheckpoints({ runs }: { runs: EnrichedTrainingRun[] }) {
       )}
       <div className="flex flex-wrap gap-x-6 gap-y-1 text-[12px] text-research-ink-muted">
         {runs.map((r, index) => {
-          const best = metricKey ? bestEvaluationValue(r, metricKey, direction) : null;
+          const summary = metricKey ? summarizeEvaluations(r, metricKey, direction) : null;
           return (
             <span key={r.run.id} className="inline-flex items-center gap-1.5">
               <span aria-hidden className="size-2 rounded-sm" style={{ backgroundColor: SERIES_COLORS[index % SERIES_COLORS.length] }} />
-              {r.run.name}: best {best === null ? "—" : formatMetricValue(best)}
+              {r.run.name}: {describeEvaluationSummary(summary, formatMetricValue)}
             </span>
           );
         })}

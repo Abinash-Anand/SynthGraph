@@ -43,3 +43,30 @@ export function bestEvaluationValue(
   if (values.length === 0) return null;
   return direction === "lower" ? Math.min(...values) : Math.max(...values);
 }
+
+/**
+ * What to say about one run's evaluations of a metric. A run only has a "best"
+ * checkpoint when the metric's direction is known; otherwise the honest summary
+ * is the range it covered, because the highest value is not the best one for a
+ * metric like a collision rate or a spread.
+ */
+export type EvaluationSummary = { kind: "best"; value: number } | { kind: "range"; highest: number; lowest: number };
+
+export function summarizeEvaluations(
+  run: WithEvaluations,
+  key: string,
+  direction: MetricDirection = metricDirection(key),
+): EvaluationSummary | null {
+  const values = numbersFor(run, key);
+  if (values.length === 0) return null;
+  if (direction === "higher") return { kind: "best", value: Math.max(...values) };
+  if (direction === "lower") return { kind: "best", value: Math.min(...values) };
+  return { kind: "range", highest: Math.max(...values), lowest: Math.min(...values) };
+}
+
+export function describeEvaluationSummary(summary: EvaluationSummary | null, format: (value: number) => string): string {
+  if (!summary) return "—";
+  if (summary.kind === "best") return `best ${format(summary.value)}`;
+  if (summary.highest === summary.lowest) return format(summary.highest);
+  return `highest ${format(summary.highest)} · lowest ${format(summary.lowest)}`;
+}
