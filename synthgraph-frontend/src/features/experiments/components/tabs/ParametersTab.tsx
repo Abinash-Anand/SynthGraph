@@ -3,6 +3,7 @@ import type { ParameterCorrelationReport } from "@/features/reports/types/report
 import { cn } from "@/lib/utils";
 import { formatMetricValue } from "@/shared/lib/format";
 import { classifyParameter, ROLE_LABEL } from "../../parameter-model";
+import { PARAMETER_ANALYSIS_BADGE, PARAMETER_ANALYSIS_INTRO, PARAMETER_ANALYSIS_TITLE } from "../../parameter-insights-copy";
 import type { EnrichedTrainingRun } from "../../types/experiment-workspace";
 import { ParameterInsights } from "./ParameterInsights";
 
@@ -152,11 +153,13 @@ export function ParametersTab({
           outcome, and how much a handful of runs can honestly say, is the
           research question this tab exists to answer. */}
       <div className="rounded-xl border border-research-accent-subtle/40 bg-research-accent-subtle/[0.04] p-5">
-        <h2 className="text-[15px] font-medium text-research-ink">What moved the outcome</h2>
-        <p className="mt-1 mb-4 max-w-[62ch] text-[13px] text-research-ink-muted">
-          How strongly each varying parameter goes with the result, and how much to trust that given how many runs
-          there are.
-        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="text-[15px] font-medium text-research-ink">{PARAMETER_ANALYSIS_TITLE}</h2>
+          <span className="rounded-full border border-research-border px-2 py-0.5 font-mono text-[10.5px] text-research-ink-muted">
+            {PARAMETER_ANALYSIS_BADGE}
+          </span>
+        </div>
+        <p className="mt-1 mb-4 max-w-[62ch] text-[13px] text-research-ink-muted">{PARAMETER_ANALYSIS_INTRO}</p>
         <ParameterInsights runs={runs} />
       </div>
 
