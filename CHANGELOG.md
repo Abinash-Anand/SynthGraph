@@ -45,6 +45,10 @@ This project does not yet have tagged releases - entries accumulate under
   have none, and it is never read from the evaluation name.
 
 ### Changed
+- The lineage graph draws a generation recorded as used by a training run as a solid edge, even when
+  the generation produced no dataset, and shows a generation from another experiment of the project as
+  its own node. A run that recorded its generations is no longer guessed to have used another one.
+  The dashed timing guesses for everything else are unchanged for now.
 - A dataset is now used within one project. The first generation, training run or evaluation
   that references a dataset scopes it to its project (`projectId` on dataset responses), and a
   reference from another project is rejected with 409 `cross_project_reference`. Reuse across

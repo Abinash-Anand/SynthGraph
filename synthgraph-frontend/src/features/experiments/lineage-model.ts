@@ -14,6 +14,11 @@ export type LineageNode = {
   layer: number;
   /** Something worth a glance: a failed generation/run, or capture that isn't complete. */
   tone?: LineageTone;
+  /**
+   * A generation recorded as used by a run here, but belonging to another experiment of
+   * the project: it is not loaded in this workspace, so it has no inspector.
+   */
+  external?: boolean;
 };
 
 export type LineageEdge = {
@@ -55,6 +60,8 @@ export type LineageRunInput = {
     startedAt: string | null;
     createdAt: string;
     datasets?: Array<{ id: string; version: string; uri?: string }>;
+    /** Generations this run was recorded as using (recorded, never inferred). */
+    generationReferences?: Array<{ generationId: string; generationName?: string; experimentId?: string }>;
   };
   /** `datasetVersionId` is the dataset version the evaluation was run against (required by the backend). */
   evaluations: Array<{ id: string; name: string | null; datasetVersionId?: string }>;
@@ -120,6 +127,8 @@ export function buildLineage(generations: LineageGenerationInput[], runs: Lineag
   const nodes = new Map<string, LineageNode>();
   const edges = new Map<string, LineageEdge>();
   const producedIds = new Set<string>();
+  // Runs that said which generations they used: a recorded statement beats a guess.
+  const runsWithRecordedGenerations = new Set<string>();
 
   const addEdge = (source: string, target: string, inferred = false) => {
     const id = `${source}->${target}`;
@@ -183,6 +192,26 @@ export function buildLineage(generations: LineageGenerationInput[], runs: Lineag
       layer: 3,
       tone: run.status === "failed" ? "bad" : capture === "partial" || capture === "unknown" ? "warn" : undefined,
     });
+
+    // A recorded link from a generation to this run. Solid like every recorded edge. It
+    // needs no dataset in between, which is what simulator-driven training lacks. A
+    // generation from another experiment of the project is not in this workspace, so it
+    // is drawn as a node of its own, by the name the link carries.
+    for (const reference of run.generationReferences ?? []) {
+      const referencedId = `generation:${reference.generationId}`;
+      if (!nodes.has(referencedId)) {
+        nodes.set(referencedId, {
+          id: referencedId,
+          kind: "generation",
+          label: reference.generationName ?? reference.generationId.slice(0, 8),
+          sublabel: "another experiment",
+          layer: 1,
+          external: true,
+        });
+      }
+      addEdge(referencedId, runId);
+      runsWithRecordedGenerations.add(run.id);
+    }
 
     for (const version of run.datasets ?? []) {
       const versionId = `dataset-version:${version.id}`;
@@ -290,6 +319,8 @@ export function buildLineage(generations: LineageGenerationInput[], runs: Lineag
     }
 
     for (const { run } of runs) {
+      // A run that recorded its generations is not also guessed to have used this one.
+      if (runsWithRecordedGenerations.has(run.id)) continue;
       const began = timeOf(run.startedAt, run.createdAt);
       if (available !== null && began !== null && began < available) continue;
       addEdge(genId, `training-run:${run.id}`, true);
@@ -349,7 +380,8 @@ export function countByKind(nodes: LineageNode[]): Partial<Record<LineageNodeKin
   return counts;
 }
 
-const SDK_HINT = "Record each generation's output with generation.dataset(...) to make them solid.";
+const SDK_HINT =
+  "Record each generation's output with generation.dataset(...), or tell a run which generation it used with training.use(generation), to make them solid.";
 
 /**
  * One sentence about why the graph has dashed lines, or null when it doesn't.
@@ -377,5 +409,5 @@ export function describeLinkGap(model: LineageModel, generationCount: number, ha
     unlinked === generationCount
       ? "No dataset links were recorded between these generations and the training runs."
       : `${unlinked} of ${generationCount} generations have no recorded link to a training run.`;
-  return `${lead} The dashed lines are a guess from timing within this experiment, not recorded provenance. Register each generation's outputs and each run's dataset versions in the SDK to make them solid.`;
+  return `${lead} The dashed lines are a guess from timing within this experiment, not recorded provenance. Register each generation's outputs and each run's dataset versions in the SDK, or tell a run which generation it used with training.use(generation), to make them solid.`;
 }

@@ -51,6 +51,8 @@ export type LineageGraphNode = {
   layer: number;
   /** Something worth a glance (failed, or capture incomplete) - shown as a dot. */
   tone?: "bad" | "warn";
+  /** Belongs to another experiment of the project: drawn with a dashed border, not selectable. */
+  external?: boolean;
 };
 
 export type LineageGraphEdge = {
@@ -234,6 +236,7 @@ function layoutNodes(
           sublabel: node.sublabel,
           kind: node.kind,
           tone: node.tone,
+          external: node.external === true,
           muted,
           selected: node.id === selectedId,
           isGroup: node.id.startsWith("group:"),
@@ -253,6 +256,7 @@ function LineageNodeRenderer({ data }: NodeProps) {
   const selected = data.selected as boolean;
   const isGroup = data.isGroup as boolean;
   const tone = data.tone as "bad" | "warn" | undefined;
+  const external = data.external as boolean;
   const colorVar = NODE_COLOR_VAR[kind];
 
   return (
@@ -277,7 +281,7 @@ function LineageNodeRenderer({ data }: NodeProps) {
       }}
       className={cn(
         "relative cursor-pointer rounded-lg border bg-research-surface px-3 py-2.5 transition-opacity duration-200",
-        isGroup && "border-dashed",
+        (isGroup || external) && "border-dashed",
         // 30% made the surrounding graph unreadable; this keeps it legible
         // but clearly secondary.
         muted ? "opacity-50" : "opacity-100",
@@ -493,6 +497,7 @@ export function LineageGraph({
   }
 
   const hasInferred = edges.some((edge) => edge.inferred);
+  const hasExternal = nodes.some((node) => node.external);
   const selectedNode = selectedId ? nodesById.get(selectedId) : undefined;
   const downstreamNodes = Array.from(fullReach.downstream)
     .map((id) => nodesById.get(id))
@@ -633,6 +638,12 @@ export function LineageGraph({
           </svg>
           recorded
         </span>
+        {hasExternal ? (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-4 rounded-sm border border-dashed border-research-ink-muted" aria-hidden />
+            generation in another experiment
+          </span>
+        ) : null}
         {hasInferred ? (
           <span className="inline-flex items-center gap-1.5">
             <svg width="22" height="6" aria-hidden>

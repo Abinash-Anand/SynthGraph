@@ -20,6 +20,18 @@ export type TrainingRunTrainer = {
 };
 
 /**
+ * A generation a training run was recorded as using. Recorded by whoever ran
+ * the training, never worked out from names or timestamps. A generation can be in
+ * another experiment of the same project, so its experiment and name are carried.
+ */
+export type GenerationReference = {
+  generationId: string;
+  generationName: string;
+  experimentId: string;
+  createdAt: string;
+};
+
+/**
  * Raw entity, camelCase. `datasets` is NOT a real column — the backend
  * populates it server-side (from TrainingRunDatasetReference rows) on
  * get/list/create responses. `captureStatus` is nullable and DISTINCT from
@@ -45,4 +57,9 @@ export type TrainingRun = {
   createdAt: string;
   updatedAt: string;
   datasets?: DatasetVersion[];
+  /**
+   * The generations this run was recorded as using. Empty (or absent, from a backend
+   * that predates it) means none was recorded, not that none was used.
+   */
+  generationReferences?: GenerationReference[];
 };

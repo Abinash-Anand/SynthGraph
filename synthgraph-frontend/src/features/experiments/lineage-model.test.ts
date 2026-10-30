@@ -307,3 +307,124 @@ describe("describeLinkGap", () => {
     assert.match(text, /datasets v1, v2 and 1 more/);
   });
 });
+
+describe("buildLineage - recorded generation-to-run links", () => {
+  const used = (generationId: string, name = `gen-${generationId}`, experimentId = "e1") => ({
+    generationId,
+    generationName: name,
+    experimentId,
+  });
+
+  it("draws a solid edge from a generation to the run that recorded using it, with no dataset between", () => {
+    const model = buildLineage([gen("g1")], [run("r1", { generationReferences: [used("g1")] })]);
+
+    const edge = model.edges.find((e) => e.source === "generation:g1" && e.target === "training-run:r1");
+    assert.ok(edge, "the recorded link is drawn");
+    assert.equal(edge.inferred, undefined);
+    assert.equal(model.inferredEdgeCount, 0);
+    assert.deepEqual(model.unlinkedGenerationIds, []);
+    assert.equal(describeLinkGap(model, 1, true), null);
+  });
+
+  it("does not add a second node for a generation that is already in this experiment", () => {
+    const model = buildLineage([gen("g1")], [run("r1", { generationReferences: [used("g1")] })]);
+
+    assert.equal(model.nodes.filter((n) => n.id === "generation:g1").length, 1);
+    assert.equal(model.nodes.find((n) => n.id === "generation:g1")?.external, undefined);
+  });
+
+  it("shows a generation from another experiment as a node of its own, by name", () => {
+    const model = buildLineage([], [run("r1", { generationReferences: [used("g9", "sim pass", "e2")] })]);
+
+    const node = model.nodes.find((n) => n.id === "generation:g9");
+    assert.deepEqual(node, {
+      id: "generation:g9",
+      kind: "generation",
+      label: "sim pass",
+      sublabel: "another experiment",
+      layer: 1,
+      external: true,
+    });
+    const edge = model.edges.find((e) => e.source === "generation:g9" && e.target === "training-run:r1");
+    assert.ok(edge);
+    assert.equal(edge.inferred, undefined);
+  });
+
+  it("falls back to a short id when the link carries no name", () => {
+    const model = buildLineage([], [run("r1", { generationReferences: [{ generationId: "abcdef12-3456" }] })]);
+
+    assert.equal(model.nodes.find((n) => n.external)?.label, "abcdef12");
+  });
+
+  it("shares one external node between runs that used the same generation", () => {
+    const model = buildLineage(
+      [],
+      [
+        run("r1", { generationReferences: [used("g9", "sim", "e2")] }),
+        run("r2", { generationReferences: [used("g9", "sim", "e2")] }),
+      ],
+    );
+
+    assert.equal(model.nodes.filter((n) => n.id === "generation:g9").length, 1);
+    assert.equal(model.edges.filter((e) => e.source === "generation:g9").length, 2);
+  });
+
+  it("does not count an external generation among this experiment's unlinked ones", () => {
+    const model = buildLineage([gen("g1")], [run("r1", { generationReferences: [used("g9", "sim", "e2")] })]);
+
+    assert.deepEqual(model.unlinkedGenerationIds, ["g1"]);
+  });
+
+  it("links a run to many generations, and a generation to many runs", () => {
+    const model = buildLineage(
+      [gen("g1"), gen("g2")],
+      [
+        run("r1", { generationReferences: [used("g1"), used("g2")] }),
+        run("r2", { generationReferences: [used("g1")] }),
+      ],
+    );
+
+    const recorded = model.edges.filter((e) => e.source.startsWith("generation:") && e.target.startsWith("training-run:"));
+    assert.equal(recorded.length, 3);
+    assert.ok(recorded.every((e) => !e.inferred));
+  });
+
+  it("walks from the generation to the run's results and back, as recorded", () => {
+    const model = buildLineage(
+      [gen("g1")],
+      [run("r1", { generationReferences: [used("g1")] }, [{ id: "e1", name: "eval" }])],
+    );
+
+    const down = reachOf("generation:g1", model);
+    assert.deepEqual(down.downstream.map((n) => n.id).sort(), ["evaluation:e1", "training-run:r1"]);
+    assert.equal(down.viaInferred, false);
+    assert.deepEqual(reachOf("training-run:r1", model).upstream.map((n) => n.id), ["generation:g1"]);
+  });
+
+  it("does not guess a generation onto a run that recorded which generations it used", () => {
+    // g2 has no recorded link. r1 recorded using g1 only, so g2 is not guessed onto it;
+    // r2 recorded nothing, so the timing guess still applies to it.
+    const model = buildLineage(
+      [gen("g1"), gen("g2")],
+      [run("r1", { generationReferences: [used("g1")] }), run("r2")],
+    );
+
+    const guessed = model.edges.filter((e) => e.inferred);
+    assert.ok(!guessed.some((e) => e.target === "training-run:r1"));
+    assert.ok(guessed.some((e) => e.source === "generation:g2" && e.target === "training-run:r2"));
+    assert.deepEqual(model.unlinkedGenerationIds, ["g2"]);
+  });
+
+  it("is unchanged for runs with no recorded generations", () => {
+    const withField = buildLineage([gen("g1")], [run("r1", { generationReferences: [] })]);
+    const without = buildLineage([gen("g1")], [run("r1")]);
+
+    assert.deepEqual(withField, without);
+  });
+
+  it("names the way to record a link in the gap note", () => {
+    const model = buildLineage([gen("g1")], [run("r1")]);
+
+    assert.match(describeLinkGap(model, 1, true) ?? "", /training\.use\(generation\)/);
+  });
+});
