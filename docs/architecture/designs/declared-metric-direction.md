@@ -1,6 +1,6 @@
 # Design: declared metric direction
 
-Status: **approved 2026-10-30. PR 1 (backend) and PR 2 (SDK and CLI) are implemented; PR 3 (frontend) is not.**
+Status: **approved 2026-10-30. PR 1 (backend), PR 2 (SDK and CLI) and PR 3 (frontend) are implemented.**
 Closes: registry entries ARCH-001 and, with ARCH-006's own work, the direction half of ARCH-006.
 
 An earlier draft of this document proposed prefix patterns and per-run storage. The owner's decisions replaced both; this is the approved contract.
@@ -46,7 +46,7 @@ Surfaced elsewhere, all additive:
 2. **PR 2, SDK and CLI:** `experiment.declare_metric_direction(s)`, an optional `metric_directions=` argument on `training()`, reading them back, explicit correction, `CONTRACT.md`, a minor version bump. Integrations do not declare automatically in this change.
 3. **PR 3, frontend:** read the declared directions and the backend's verdict, delete the name-based direction code, and stop treating an unknown direction as "higher" anywhere.
 
-Until PR 3 merges the frontend still guesses from names. After it, existing experiments show no direction until someone declares one, which is intended.
+PR 3 is implemented: the frontend no longer guesses from names. Existing experiments show no direction until someone declares one, which is intended.
 
 ## Intentional MVP limitations
 
