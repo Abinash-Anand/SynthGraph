@@ -6,6 +6,7 @@ import type { TrainingRunStatus } from "@/features/training-runs/types/training-
 import { cn } from "@/lib/utils";
 import { formatDateTime, formatDurationSeconds, formatMetricValue } from "@/shared/lib/format";
 import { compareMetricKeys, isOutcomeMetric } from "@/shared/lib/metric-semantics";
+import { computeAttentionEntries, describeEmptyAttention } from "../../attention-model";
 import type { EnrichedGeneration, EnrichedTrainingRun } from "../../types/experiment-workspace";
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
@@ -204,30 +205,6 @@ function ResultPanel({ trainingRuns }: { trainingRuns: EnrichedTrainingRun[] }) 
   );
 }
 
-type AttentionEntry = { runId: string; runName: string; reasons: string[] };
-
-// Deliberately limited to objective, domain-agnostic signals - never "this
-// run underperformed" (this app has no way to know whether higher or lower
-// is better for an arbitrary metric, same reasoning as the Result panel's
-// mean/range instead of "best"). Failed status, an explicitly reported
-// capture problem, and detected drift are all true regardless of what the
-// experiment is measuring - this is what turns the cockpit from "here are
-// some counts" into "here's what to look at next."
-function computeAttentionEntries(trainingRuns: EnrichedTrainingRun[]): AttentionEntry[] {
-  const entries: AttentionEntry[] = [];
-  for (const { run, drift } of trainingRuns) {
-    const reasons: string[] = [];
-    if (run.status === "failed") reasons.push("run failed");
-    if (run.captureStatus?.status === "partial") reasons.push("capture incomplete");
-    if (run.captureStatus?.status === "unknown") reasons.push("capture status unknown");
-    if (drift.drift.length > 0) {
-      reasons.push(`drift in ${drift.drift.length} field${drift.drift.length === 1 ? "" : "s"}`);
-    }
-    if (reasons.length > 0) entries.push({ runId: run.id, runName: run.name, reasons });
-  }
-  return entries;
-}
-
 function AttentionPanel({
   trainingRuns,
   onSelectRun,
@@ -246,11 +223,9 @@ function AttentionPanel({
           : "border-research-border bg-research-panel",
       )}
     >
-      <p className="mono-label text-research-ink-muted">Needs attention</p>
+      <p className="mono-label text-research-ink-muted">Flagged runs</p>
       {entries.length === 0 ? (
-        <p className="text-[13px] text-research-success">
-          Nothing needs attention - no failed runs, capture problems, or detected drift.
-        </p>
+        <p className="text-[13px] text-research-ink-secondary">{describeEmptyAttention()}</p>
       ) : (
         <div className="flex flex-col gap-1.5">
           {entries.map((entry) => (

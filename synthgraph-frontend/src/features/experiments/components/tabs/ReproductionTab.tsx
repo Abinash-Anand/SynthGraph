@@ -7,12 +7,12 @@ import { cn } from "@/lib/utils";
 import type { Experiment } from "@/features/experiments/types/experiment";
 import type { ClassifiedField } from "@/features/reproduction/types/reproduction-manifest";
 import { KeyValueList, type KeyValueRow } from "@/shared/ui/KeyValueList";
-import { buildProvenanceMarkdown, reportFilename } from "../../provenance-report";
+import { buildProvenanceJson, buildProvenanceMarkdown, reportFilename } from "../../provenance-report";
 import {
   assessReproducibility,
   compareByRisk,
+  GRADE_COUNT_PHRASE,
   GRADE_LABEL,
-  missingFields,
   type ReproAssessment,
   type ReproGrade,
   summarizeReproducibility,
@@ -34,7 +34,7 @@ function FieldGroup({ title, fields, tone }: { title: string; fields: Classified
 }
 
 const GRADE_TONE: Record<ReproGrade, string> = {
-  reproducible: "border-research-success/50 text-research-success",
+  complete: "border-research-success/50 text-research-success",
   mostly: "border-research-info/50 text-research-info",
   partial: "border-research-warning/50 text-research-warning",
   unknown: "border-research-border text-research-ink-muted",
@@ -50,7 +50,7 @@ function GradeChip({ assessment }: { assessment: ReproAssessment }) {
     >
       {GRADE_LABEL[assessment.grade]}
       {assessment.score !== null ? ` · ${Math.round(assessment.score * 100)}% recorded` : ""}
-      {assessment.grade !== "reproducible" && assessment.blockerTags.length > 0
+      {assessment.grade !== "complete" && assessment.blockerTags.length > 0
         ? ` · ${assessment.blockerTags.join(", ")}`
         : ""}
     </span>
@@ -117,11 +117,7 @@ export function ReproductionTab({
     missing: [],
     external: [],
   };
-  // Not the backend's raw list: it calls the code version missing even when the
-  // commit was recorded under the environment.
-  const missing = manifest
-    ? missingFields(manifest.classification, manifest.generation.reproducibility ?? generation.reproducibility)
-    : [];
+  const missing = manifest ? manifest.classification.missing : [];
 
   const reportInput = () => ({
     generatedAt: new Date().toISOString(),
@@ -154,10 +150,11 @@ export function ReproductionTab({
       <div className="flex flex-col gap-4 rounded-xl border border-research-border bg-research-panel p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h2 className="text-[15px] font-medium text-research-ink">Can this experiment be rebuilt?</h2>
+            <h2 className="text-[15px] font-medium text-research-ink">How completely was this experiment recorded?</h2>
             <p className="mt-1 max-w-[62ch] text-[13px] text-research-ink-muted">
-              Based on what was recorded for each generation: its seed, code version, environment and inputs. This
-              checks what was captured, not that the data or code still exist.
+              Counts which of the fields that matter for a rebuild were recorded for each generation: seed, code
+              version, environment and inputs. It does not check that the recorded values are correct, that the data or
+              code still exist, or that the result can be reproduced.
             </p>
           </div>
           <div className="flex gap-2">
@@ -173,11 +170,7 @@ export function ReproductionTab({
             <button
               type="button"
               onClick={() =>
-                download(
-                  reportFilename(experiment.name, "json"),
-                  JSON.stringify(reportInput(), null, 2),
-                  "application/json",
-                )
+                download(reportFilename(experiment.name, "json"), buildProvenanceJson(reportInput()), "application/json")
               }
               className="rounded-md border border-research-border bg-research-panel px-3 py-1.5 text-[12.5px] text-research-ink-muted transition-colors hover:border-research-accent-subtle hover:text-research-ink"
             >
@@ -187,14 +180,14 @@ export function ReproductionTab({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {(["reproducible", "mostly", "partial", "unknown"] as const).map((grade) => {
+          {(["complete", "mostly", "partial", "unknown"] as const).map((grade) => {
             const count = grade === "unknown" ? unknownCount : summary.byGrade[grade];
             return count > 0 ? (
               <span
                 key={grade}
                 className={cn("rounded-full border px-2.5 py-1 font-mono text-[11px]", GRADE_TONE[grade])}
               >
-                {count} {GRADE_LABEL[grade].toLowerCase()}
+                {count} {GRADE_COUNT_PHRASE[grade]}
               </span>
             ) : null;
           })}

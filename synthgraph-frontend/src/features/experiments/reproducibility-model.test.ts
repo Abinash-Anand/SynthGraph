@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  ASSESSMENT_METHOD,
+  ASSESSMENT_VERSION,
   assessReproducibility,
   type ClassificationLike,
   compareByRisk,
+  GRADE_COUNT_PHRASE,
+  GRADE_LABEL,
   summarizeReproducibility,
 } from "./reproducibility-model.ts";
 
@@ -17,9 +21,9 @@ const classification = (known: number, supplied = 0, external = 0, missing = 0):
 const clean = { seed: 1, code_version: "abc123", environment: { dirty: false } };
 
 describe("assessReproducibility", () => {
-  it("is reproducible when nearly everything is recorded and nothing blocks", () => {
+  it("is complete when nearly everything is recorded and nothing blocks", () => {
     const result = assessReproducibility(classification(9, 1, 0, 0), clean);
-    assert.equal(result.grade, "reproducible");
+    assert.equal(result.grade, "complete");
     assert.equal(result.score, 1);
     assert.deepEqual(result.blockers, []);
   });
@@ -38,10 +42,11 @@ describe("assessReproducibility", () => {
     assert.match(result.blockers[0], /uncommitted changes/);
   });
 
-  it("caps at mostly when the seed or commit is missing", () => {
+  it("caps at mostly when the seed or the code version is missing", () => {
+    const noCodeVersion: ClassificationLike = { ...classification(9), missing: ["Code version"] };
     assert.equal(assessReproducibility(classification(10), { code_version: "abc" }).grade, "mostly");
-    assert.equal(assessReproducibility(classification(10), { seed: 3 }).grade, "mostly");
-    const both = assessReproducibility(classification(10), {});
+    assert.equal(assessReproducibility(noCodeVersion, { seed: 3 }).grade, "mostly");
+    const both = assessReproducibility(noCodeVersion, {});
     assert.equal(both.blockers.length, 2);
   });
 
@@ -71,7 +76,7 @@ describe("summarizeReproducibility", () => {
       assessReproducibility(null, clean),
     ]);
     assert.equal(summary.total, 3);
-    assert.deepEqual(summary.byGrade, { reproducible: 1, mostly: 0, partial: 1, unknown: 1 });
+    assert.deepEqual(summary.byGrade, { complete: 1, mostly: 0, partial: 1, unknown: 1 });
     assert.equal(summary.averageScore, 0.75);
   });
   it("has no average with no scores", () => {
@@ -84,7 +89,7 @@ describe("compareByRisk", () => {
     const good = assessReproducibility(classification(10), clean);
     const weak = assessReproducibility(classification(3, 0, 0, 7), clean);
     const none = assessReproducibility(null, clean);
-    assert.deepEqual([good, weak, none].sort(compareByRisk).map((a) => a.grade), ["unknown", "partial", "reproducible"]);
+    assert.deepEqual([good, weak, none].sort(compareByRisk).map((a) => a.grade), ["unknown", "partial", "complete"]);
   });
 });
 
@@ -98,58 +103,109 @@ describe("blocker tags", () => {
   });
 });
 
-describe("code version recorded as a git commit", () => {
-  // The backend lists "Code version" as missing whenever `code_version` is
-  // unset, even though the SDK records the commit under environment.commit.
-  const backendView = (): ClassificationLike => ({
+describe("code version comes from the backend's classification", () => {
+  // A backend at classification version 2 counts the commit the SDK records
+  // under environment.commit as the code version: it lists it as known, not
+  // missing. This model only reads that classification.
+  const codeVersionKnown = (): ClassificationLike => ({
+    known: [...fields(7), { field: "Code version", value: "3f2a9c1d" }],
+    supplied: fields(2),
+    external: [],
+    missing: ["Configuration hash"],
+  });
+  const codeVersionMissing = (): ClassificationLike => ({
     known: fields(8),
     supplied: fields(2),
     external: [],
     missing: ["Code version", "Configuration hash"],
   });
-  const withCommit = { seed: 0, environment: { dirty: false, commit: "3f2a9c1d" } };
+  const clean = { seed: 0, environment: { dirty: false } };
 
-  it("does not call a recorded commit 'no code version'", () => {
-    const result = assessReproducibility(backendView(), withCommit);
-    assert.equal(result.blockers.length, 0);
+  it("does not call a code version the backend knows 'no code version'", () => {
+    const result = assessReproducibility(codeVersionKnown(), clean);
     assert.deepEqual(result.blockerTags, []);
+    assert.equal(result.counts.known, 8);
+    assert.match(result.notes.join(" "), /Not recorded: Configuration hash/);
   });
 
-  it("does not report the code version as not recorded, but still reports what really is missing", () => {
-    const result = assessReproducibility(backendView(), withCommit);
-    const note = result.notes.join(" ");
-    assert.doesNotMatch(note, /Code version/);
-    assert.match(note, /Not recorded: Configuration hash/);
-    assert.equal(result.counts.missing, 1);
-  });
-
-  it("scores a recorded commit as recorded", () => {
-    const withoutCommit = assessReproducibility(backendView(), { seed: 0, environment: { dirty: false } });
-    const result = assessReproducibility(backendView(), withCommit);
-    assert.ok((result.score ?? 0) > (withoutCommit.score ?? 1));
-    assert.equal(result.counts.known, 9);
-  });
-
-  it("still blocks when there is neither a code_version nor a commit", () => {
-    const result = assessReproducibility(backendView(), { seed: 0, environment: { dirty: false } });
+  it("blocks and counts a code version the backend lists as missing", () => {
+    const result = assessReproducibility(codeVersionMissing(), clean);
     assert.deepEqual(result.blockerTags, ["no code version"]);
+    assert.equal(result.counts.missing, 2);
+    assert.match(result.notes.join(" "), /Not recorded: Code version, Configuration hash/);
   });
 
-  it("keeps the uncommitted-code blocker even when the commit is known", () => {
-    const result = assessReproducibility(backendView(), { seed: 0, environment: { dirty: true, commit: "3f2a9c1d" } });
-    assert.deepEqual(result.blockerTags, ["uncommitted code"]);
-    assert.equal(result.grade, "partial");
-  });
-
-  it("ignores a blank commit", () => {
-    const result = assessReproducibility(backendView(), { seed: 0, environment: { commit: "  " } });
+  it("does not second-guess the backend from the environment", () => {
+    // Regression: this model used to delete "Code version" from the backend's
+    // missing list when environment.commit existed. The backend now owns that
+    // rule, so a commit in the environment changes nothing here.
+    const withCommit = { seed: 0, environment: { dirty: false, commit: "3f2a9c1d" } };
+    const result = assessReproducibility(codeVersionMissing(), withCommit);
     assert.deepEqual(result.blockerTags, ["no code version"]);
+    assert.equal(result.counts.known, 8);
+    assert.equal(result.counts.missing, 2);
   });
 
-  it("does not double-count when code_version itself is set", () => {
-    const supplied: ClassificationLike = { known: fields(9), supplied: [], external: [], missing: ["Configuration hash"] };
-    const result = assessReproducibility(supplied, { seed: 0, code_version: "abc", environment: { commit: "def" } });
-    assert.equal(result.counts.known, 9);
-    assert.equal(result.counts.missing, 1);
+  it("scores a code version the backend knows as recorded", () => {
+    const known = assessReproducibility(codeVersionKnown(), clean);
+    const missing = assessReproducibility(codeVersionMissing(), clean);
+    assert.ok((known.score ?? 0) > (missing.score ?? 1));
+  });
+
+  it("treats uncommitted code and a missing code version as separate blockers", () => {
+    const dirtyWithVersion = assessReproducibility(codeVersionKnown(), { seed: 0, environment: { dirty: true } });
+    assert.deepEqual(dirtyWithVersion.blockerTags, ["uncommitted code"]);
+    assert.equal(dirtyWithVersion.grade, "partial");
+
+    const cleanWithoutVersion = assessReproducibility(codeVersionMissing(), clean);
+    assert.deepEqual(cleanWithoutVersion.blockerTags, ["no code version"]);
+
+    const both = assessReproducibility(codeVersionMissing(), { seed: 0, environment: { dirty: true } });
+    assert.deepEqual(both.blockerTags, ["uncommitted code", "no code version"]);
+  });
+
+  it("scores the same as before for a generation whose commit was recorded", () => {
+    // Historical semantics preserved. Before, the backend listed "Code version"
+    // as missing (7 known, 2 supplied, 2 missing) and this model moved it to
+    // known: (7 + 1 + 2) / (7 + 1 + 2 + 1). The backend now lists it as known
+    // (8 known, 2 supplied, 1 missing), which is the same arithmetic.
+    const oldScore = (7 + 1 + 2) / (7 + 1 + 2 + 1);
+    const result = assessReproducibility(codeVersionKnown(), clean);
+    assert.equal(result.score, oldScore);
+    assert.equal(result.grade, "complete");
+  });
+});
+
+describe("grade names and assessment version", () => {
+  it("names the grades for what they measure, never for reproducibility", () => {
+    // Regression: the top grade was labelled "Reproducible", which claims more
+    // than a share of recorded fields can show.
+    const everything = [...Object.values(GRADE_LABEL), ...Object.values(GRADE_COUNT_PHRASE)].join(" ");
+    assert.doesNotMatch(everything, /reproduc/i);
+    assert.deepEqual(GRADE_LABEL, {
+      complete: "Well recorded",
+      mostly: "Some gaps",
+      partial: "Major gaps",
+      unknown: "Not assessed",
+    });
+  });
+
+  it("completes a count phrase", () => {
+    assert.equal(`16 ${GRADE_COUNT_PHRASE.partial}`, "16 with major gaps");
+    assert.equal(`3 ${GRADE_COUNT_PHRASE.complete}`, "3 well recorded");
+  });
+
+  it("states the version and the thresholds, and keeps the historical numbers", () => {
+    assert.equal(ASSESSMENT_VERSION, 2);
+    // Unchanged from version 1: scores and grades of existing generations stay put.
+    assert.deepEqual(ASSESSMENT_METHOD, { completeAt: 0.85, mostlyAt: 0.6, externalWeight: 0.5 });
+  });
+
+  it("grades exactly at the documented thresholds", () => {
+    // 85% recorded, nothing blocking, is complete; just under is not.
+    assert.equal(assessReproducibility(classification(17, 0, 0, 3), clean).grade, "complete");
+    assert.equal(assessReproducibility(classification(16, 0, 0, 4), clean).grade, "mostly");
+    assert.equal(assessReproducibility(classification(3, 0, 0, 2), clean).grade, "mostly");
+    assert.equal(assessReproducibility(classification(5, 0, 0, 4), clean).grade, "partial");
   });
 });

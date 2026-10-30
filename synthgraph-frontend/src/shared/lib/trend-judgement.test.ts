@@ -26,6 +26,17 @@ describe("judgeTrendFor", () => {
     assert.equal(judgeTrendFor("training/policy_loss", "increasing"), "bad");
     assert.equal(judgeTrendFor("cpu_percent", "increasing"), "neutral");
   });
+
+  it("does not call a rising or falling spread good or bad", () => {
+    assert.equal(judgeTrendFor("eval/episode_reward_std", "increasing"), "neutral");
+    assert.equal(judgeTrendFor("eval/episode_reward_std", "decreasing"), "neutral");
+    assert.equal(judgeTrendFor("value_loss_std", "increasing"), "neutral");
+  });
+
+  it("judges a rising collision rate as bad", () => {
+    assert.equal(judgeTrendFor("collision_rate", "increasing"), "bad");
+    assert.equal(judgeTrendFor("collision_rate", "decreasing"), "good");
+  });
 });
 
 describe("summarizeTrends", () => {

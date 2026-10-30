@@ -29,6 +29,18 @@ describe("buildBestRunsModel", () => {
     assert.equal(outcomes[0].best?.runId, "val_loss-min");
   });
 
+  it("picks the lowest collision rate and crowns nobody for a spread metric", () => {
+    const { outcomes } = buildBestRunsModel([
+      record("eval/collision_rate", 0.02, 0.08),
+      record("eval/episode_reward_std", 1.5, 9),
+    ]);
+    const collision = outcomes.find((row) => row.metricKey === "eval/collision_rate");
+    const spread = outcomes.find((row) => row.metricKey === "eval/episode_reward_std");
+    assert.equal(collision?.best?.value, 0.02);
+    assert.equal(spread?.best, null);
+    assert.equal(spread?.direction, "neutral");
+  });
+
   it("does not crown a best run for metrics without a direction", () => {
     const { outcomes } = buildBestRunsModel([record("epochs", 20, 20)]);
     assert.equal(outcomes[0].best, null);

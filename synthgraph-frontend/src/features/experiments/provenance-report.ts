@@ -3,6 +3,8 @@
 // on the page - no new backend call - and deterministic: `generatedAt` is
 // passed in rather than read from the clock.
 import {
+  ASSESSMENT_METHOD,
+  ASSESSMENT_VERSION,
   GRADE_LABEL,
   type ReproAssessment,
   summarizeReproducibility,
@@ -56,8 +58,9 @@ export function buildProvenanceMarkdown(input: ProvenanceInput): string {
   lines.push(`- Generations: ${generations.length}`);
   if (generations.length > 0) {
     lines.push(
-      `- Reproducibility: ${summary.byGrade.reproducible} reproducible, ${summary.byGrade.mostly} mostly, ` +
-        `${summary.byGrade.partial} partly, ${summary.byGrade.unknown} unknown (average ${percent(summary.averageScore)} of fields recorded)`,
+      `- Recording completeness (assessment version ${ASSESSMENT_VERSION}): ${summary.byGrade.complete} well recorded, ` +
+        `${summary.byGrade.mostly} with some gaps, ${summary.byGrade.partial} with major gaps, ` +
+        `${summary.byGrade.unknown} not assessed (average ${percent(summary.averageScore)} of fields recorded)`,
     );
   }
   lines.push(`- Training runs: ${runs.length}`);
@@ -69,7 +72,7 @@ export function buildProvenanceMarkdown(input: ProvenanceInput): string {
   if (generations.length === 0) {
     lines.push("None recorded.", "");
   } else {
-    lines.push("| Generation | Status | Generator | Inputs | Outputs | Reproducibility | Recorded |");
+    lines.push("| Generation | Status | Generator | Inputs | Outputs | Recording | Fields recorded |");
     lines.push("| --- | --- | --- | --- | --- | --- | --- |");
     for (const g of generations) {
       lines.push(
@@ -108,9 +111,20 @@ export function buildProvenanceMarkdown(input: ProvenanceInput): string {
 
   lines.push("## What this report is", "");
   lines.push(
-    "This lists what was *recorded*. It does not verify that referenced data still exists, that files match a " +
-      "checksum, or that rerunning the code would reproduce the result. \"Reproducible\" means the fields needed to " +
-      "attempt a rebuild were captured and nothing known blocks it.",
+    "This lists what was *recorded*. It does not verify that the recorded values are correct, that referenced data " +
+      "still exists, that files match a checksum, or that rerunning the code would reproduce the result. " +
+      "\"Fields recorded\" is the share of the fields the backend checks for a generation that were captured.",
+    "",
+  );
+  lines.push("## How the assessment was made", "");
+  lines.push(
+    `Assessment version ${ASSESSMENT_VERSION}. The share of fields recorded counts known and supplied fields in full ` +
+      `and external fields (data held outside SynthGraph) at ${ASSESSMENT_METHOD.externalWeight}. ` +
+      `At ${Math.round(ASSESSMENT_METHOD.completeAt * 100)}% or more, with nothing blocking, a generation is "well recorded"; ` +
+      `at ${Math.round(ASSESSMENT_METHOD.mostlyAt * 100)}% or more it has "some gaps"; below that, "major gaps". ` +
+      "Uncommitted code limits the grade to \"major gaps\", and a missing seed or code version limits it to \"some gaps\", " +
+      "whatever the share. Reports made before version 2 called these grades reproducible, mostly reproducible and " +
+      "partly reproducible; the scores and thresholds are unchanged.",
     "",
   );
   return lines.join("\n");
@@ -123,4 +137,21 @@ export function reportFilename(experimentName: string, extension: "md" | "json")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
   return `${slug || "experiment"}-provenance.${extension}`;
+}
+
+/**
+ * The same report as JSON, stating which assessment rules produced it. A
+ * consumer reading `assessment.grade` can then tell `complete` (version 2) from
+ * the older `reproducible`.
+ */
+export function buildProvenanceJson(input: ProvenanceInput): string {
+  return JSON.stringify(
+    {
+      assessmentVersion: ASSESSMENT_VERSION,
+      assessmentMethod: ASSESSMENT_METHOD,
+      ...input,
+    },
+    null,
+    2,
+  );
 }

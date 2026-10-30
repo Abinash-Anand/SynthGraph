@@ -4,6 +4,13 @@
 // efficiency leaderboard must not rank runs by how long they took as if it
 // were a score. These are heuristics, so callers should present the result
 // as inferred, never as a fact the user configured.
+//
+// TEMPORARY. Guessing meaning from a name is a stop-gap for the lack of an
+// explicit, declared metric direction (registry entry ARCH-001, in
+// docs/architecture/architecture-violation-registry.md). Extend the lists below
+// only to fix a wrong or missing guess for a common metric; the fix for the
+// class of problem is declared direction metadata, after which this file's
+// inference should be removed, not grown.
 
 export type MetricDirection = "higher" | "lower" | "neutral";
 export type MetricKind = "outcome" | "time" | "system" | "throughput" | "other";
@@ -11,15 +18,24 @@ export type MetricKind = "outcome" | "time" | "system" | "throughput" | "other";
 // Segments are matched against the key split on non-alphanumerics, so
 // "eval/episode_reward/feet_clearance" is checked word by word and
 // "training_loss" matches "loss" without "glossary" matching it.
+// Singular and plural are listed explicitly (not stemmed): "collision_rate" and
+// "num_collisions" are both common, and a stemmer would also reach words like
+// "maps" or "scores_dir" that were never meant.
 const LOWER_BETTER = new Set([
-  "loss", "error", "err", "mse", "mae", "rmse", "perplexity", "ppl", "wer", "cer",
-  "regret", "distance", "dist", "latency", "kl", "cost", "violations", "collisions",
-  "failures", "penalty",
+  "loss", "losses", "error", "errors", "err", "mse", "mae", "rmse", "perplexity", "ppl", "wer", "cer",
+  "regret", "distance", "dist", "latency", "kl", "cost", "penalty", "penalties",
+  "violation", "violations", "collision", "collisions", "failure", "failures", "fall", "falls",
+  "crash", "crashes",
 ]);
 const HIGHER_BETTER = new Set([
-  "reward", "return", "acc", "accuracy", "map", "map50", "map75", "precision", "recall",
-  "f1", "auc", "iou", "dice", "score", "success", "bleu", "rouge", "ndcg", "r2",
+  "reward", "rewards", "return", "returns", "acc", "accuracy", "map", "map50", "map75", "precision",
+  "recall", "f1", "auc", "iou", "dice", "score", "scores", "success", "bleu", "rouge", "ndcg", "r2",
 ]);
+// How widely a metric varies (across episodes, seeds or a batch), not how good
+// it is: a rising "reward_std" is not good news and a rising "loss_std" is not
+// bad news. Whatever the rest of the name says, these have no direction of
+// their own to infer.
+const SPREAD = new Set(["std", "stddev", "stdev", "var", "variance", "sigma", "stderr", "spread"]);
 const TIME = new Set(["elapsed", "seconds", "walltime", "duration", "time", "runtime", "epoch_time"]);
 const SYSTEM = new Set(["cpu", "memory", "mem", "gpu", "ram", "disk", "vram", "utilization"]);
 const THROUGHPUT = new Set(["sps", "fps", "throughput", "samples", "steps_per_sec"]);
@@ -49,6 +65,7 @@ export function metricKind(key: string): MetricKind {
 export function metricDirection(key: string): MetricDirection {
   if (metricKind(key) !== "outcome") return "neutral";
   const parts = words(key);
+  if (hasAny(parts, SPREAD)) return "neutral";
   const lower = hasAny(parts, LOWER_BETTER);
   const higher = hasAny(parts, HIGHER_BETTER);
   // Both ("reward_loss"?) is ambiguous - say so rather than guess.

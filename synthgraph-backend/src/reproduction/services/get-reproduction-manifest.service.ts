@@ -14,6 +14,17 @@ import { REPRODUCTION_REPOSITORY } from '../repositories/reproduction.repository
 
 export type ClassifiedField = { field: string; value: string };
 
+/**
+ * Which rules `classification` was built with. Absent (read it as 1) on
+ * manifests from before this field existed.
+ *
+ * 1 - the code version was known only from `reproducibility.code_version`.
+ * 2 - it is also known from the commit the SDK records automatically as
+ *     `reproducibility.environment.commit`, so a recorded commit is no longer
+ *     listed as a missing code version.
+ */
+export const CLASSIFICATION_VERSION = 2;
+
 export type ReproductionClassification = {
   known: ClassifiedField[];
   supplied: ClassifiedField[];
@@ -28,6 +39,20 @@ export type ReproductionClassification = {
 // than reimplementing the same classification a third time. Additive
 // field on an existing response - the CLI/SDK's Pydantic models only read
 // the keys they know about, so this doesn't break either.
+
+// The SDK records the git commit automatically as `environment.commit`, and
+// only fills the separate `code_version` when the caller passes one. A commit
+// is the code version, so it must not be classified as missing. Only the
+// presence of a commit matters here: whether the working tree was dirty is a
+// different fact (it stays an ordinary environment field) and says nothing
+// about whether a version was recorded.
+function recordedCommit(
+  environment: Record<string, unknown> | undefined,
+): string | null {
+  const commit = environment?.commit;
+  return typeof commit === 'string' && commit.trim() !== '' ? commit : null;
+}
+
 function classify(
   generation: Pick<Generation, 'generator' | 'reproducibility'>,
   datasetReferences: Array<{ datasetVersionId: string; role: string }>,
@@ -45,8 +70,11 @@ function classify(
     missing.push('Seed');
   }
 
+  const commit = recordedCommit(reproducibility.environment);
   if (reproducibility.code_version) {
     known.push({ field: 'Code version', value: reproducibility.code_version });
+  } else if (commit !== null) {
+    known.push({ field: 'Code version', value: commit });
   } else {
     missing.push('Code version');
   }
@@ -84,6 +112,9 @@ export function buildReproductionManifest(
 ) {
   return {
     schemaVersion: '1.0',
+
+    // Additive: which rules `classification` used (see CLASSIFICATION_VERSION).
+    classificationVersion: CLASSIFICATION_VERSION,
 
     classification: classify(generation, mappedReferences),
 
