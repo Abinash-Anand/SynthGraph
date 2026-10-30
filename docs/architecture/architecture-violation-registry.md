@@ -24,7 +24,7 @@ Only one of these is written down in the repository: `docs/frontendarchitecture.
 | ID | Title | Severity | Status |
 | --- | --- | --- | --- |
 | ARCH-001 | Metric optimisation direction is guessed from names in the frontend | Critical (see note) | partially remediated |
-| ARCH-002 | Parameter-analysis conclusions are computed in the frontend | High | confirmed - decision needed |
+| ARCH-002 | Parameter-analysis conclusions are computed in the frontend | High | decided: exploratory; labelled |
 | ARCH-003 | Reproducibility scoring and grading live in the frontend | Critical (see note) | partially remediated |
 | ARCH-004 | The frontend infers lineage edges from timing | **High** | confirmed |
 | ARCH-005 | Domain-assessment rules (attention flags, report analytics) live in the frontend | Low-Medium | confirmed (split from the original entry; wording corrected) |
@@ -33,6 +33,15 @@ Only one of these is written down in the repository: `docs/frontendarchitecture.
 | INV-001 | Backend health-trend quality (5-step window, 1% threshold) | - | investigating |
 
 Severity note for ARCH-001 and ARCH-003: the verification review rated both High rather than Critical, because their user-facing signals are labelled as inferred or partial. The registry keeps the severity first recorded until the owner decides.
+
+## 2a. Owner decisions (2026-10-30)
+
+| Question | Decision | Consequence |
+| --- | --- | --- |
+| Where is a metric's optimisation direction declared? (ARCH-001, ARCH-006) | An optional field supplied when the metric is logged, SDK to API. Unknown stays neutral. | New optional field in the SDK, API and database; the frontend then reads it and the name-based inference is removed. |
+| What happens to guessed lineage edges? (ARCH-004) | Remove them, and add the recorded link first. | A recorded generation-to-run relationship is added before any edge is removed, so existing graphs are not left disconnected without a replacement. |
+| Is the Parameters analysis official or exploratory? (ARCH-002) | Exploratory. | Stays in the frontend, labelled as exploratory. |
+| Should Overview flag runs that never reported capture? (ARCH-005) | Yes, as the Capture Completeness report does. | Done: Overview and the report now agree. |
 
 ## 3. Violation records
 
@@ -46,7 +55,7 @@ Severity note for ARCH-001 and ARCH-003: the verification review rated both High
   - `collision_rate`, `failure_rate`, `fall_rate` and `violation_rate` got no direction, because the keyword lists held only the plural `collisions`/`failures` and no `violation` or `fall`.
 - **Mitigations already present:** an ambiguous name (both a higher and a lower word) stays neutral; the tooltip says the direction is inferred.
 - **Expected behaviour:** direction is declared explicitly (minimise, maximise, neutral, unknown) and the assessment is produced from that declaration.
-- **Remediation direction:** an explicit, optional direction field. Where it is declared (SDK, API, or per experiment) is an open owner decision.
+- **Remediation direction:** an explicit, optional direction field. **Decided 2026-10-30:** it is supplied when the metric is logged (SDK to API), optional, and unknown stays neutral; the name-based inference is removed once the field is read. Not started.
 - **Remediated so far (temporary compatibility only, 2026-10-30):** the singular and plural forms of collision, failure, violation, fall and crash are now recognised, and spread metrics (`std`, `stddev`, `stdev`, `var`, `variance`, `sigma`, `stderr`, `spread`) have no direction. The file now states that its inference is temporary. **Still open:** every guess is still made in the frontend, there is still no declared direction, and metrics outside the lists still have none. This changes the direction parameter analysis receives for those metrics; the analysis code itself was not touched.
 - **Acceptance criteria:** no keyword-based direction inference in the frontend; unknown direction never produces an improvement verdict; backend tests cover all four directions; data without a direction is handled safely.
 - **Potential user impact:** a researcher stops or keeps a run, or reads a comparison, on a wrong colour. Likelihood medium; consequence moderate (wasted compute, misread runs); no data is corrupted.
@@ -59,6 +68,7 @@ Severity note for ARCH-001 and ARCH-003: the verification review rated both High
 - **Guardrails present:** it refuses to rank below 5 runs, grades reliability (8 or more runs for "ok"), calls results association not cause, and treats seed-only variation as noise.
 - **Open question (blocks classification):** is this an authoritative SynthGraph insight or an exploratory view? The outcome metric is chosen in the UI, and the screen leads with "What moved the outcome", which argues each way.
 - **Remediation direction:** decide first. If authoritative, move the methodology to a backend service with a documented, versioned method; if exploratory, label it as such and keep it in the frontend.
+- **Decided 2026-10-30: exploratory.** The section is now headed "What moved the outcome" with an "Exploratory" badge and an introduction that says it is an exploratory view, not an official SynthGraph result, that it is worked out in the browser for the outcome metric the viewer picks, and that it shows association, not cause. A test guards the framing. The analysis itself is unchanged. If it is ever promoted to an official insight, it needs a documented, versioned backend method first.
 - **Potential user impact:** a hyperparameter is chosen from a weak association across 5-8 runs. Likelihood low-medium.
 - **Observed user impact:** none recorded.
 
@@ -88,7 +98,7 @@ Severity note for ARCH-001 and ARCH-003: the verification review rated both High
 - **Actual behaviour:** when a generation has no recorded link, the frontend draws a dashed edge to any dataset that runs recorded but no generation claims (or, failing that, to every run that began after the generation finished), based on timestamps. It does not choose between candidates: every plausible generation gets an edge.
 - **Mitigations present, and why High rather than Critical:** the edges are dashed, the graph states how many generations have no recorded link, a legend explains them, and the blast-radius panel says "Includes inferred links (dashed), not recorded provenance".
 - **Root cause:** the data model records generation-to-dataset and run-to-dataset links but **no generation-to-run link**, so most existing data has gaps (in the Phase 1 experiment, 15 of 16 generations had no recorded link). Removing the inferred edges would leave those graphs largely disconnected.
-- **Decision needed:** either remove inferred edges, or amend the rule to allow clearly labelled guesses while a recorded relationship is added.
+- **Decided 2026-10-30:** remove the inferred edges, and add the recorded generation-to-run link first. Nothing on screen changes until the recorded link exists, so existing graphs are not left disconnected without a replacement. Not started.
 - **Potential user impact:** after a bad dataset is found, a researcher asks which models it affected and receives partly guessed answers. Likelihood medium.
 - **Observed user impact:** none recorded.
 
@@ -98,9 +108,9 @@ Split from the original entry. Only the items below are domain decisions; the ac
 
 - **Overview "Needs attention":** `OverviewTab.tsx` defines what flags a run - failed status, partial or unknown capture, or any drift. These checks are objective and the screen is built to avoid judging performance, but the rule set is defined in the frontend. The empty state reads "Nothing needs attention", which reads as broader than the three checks.
 - **Reports:** `features/reports/efficiency-model.ts` computes the Pareto frontier and value per hour; `capture-model.ts` applies a 50% "majority" rule to decide when a missing integration is worth flagging. Best Runs picks a winner from the backend's max and min using the ARCH-001 direction.
-- **Consistency check (corrected 2026-10-30):** an earlier version of this entry said Overview and the Capture Completeness page agree. They do not, for runs that never reported capture. Such a run has `captureStatus: null`; the Capture Completeness report counts it as "unknown" and so as needing attention (the backend buckets null as unknown), while the Overview rule flags only an explicit `"unknown"` and so does not flag it. Overview also adds failed runs and drift on purpose. The behaviour was left as it is, and is now stated in the Overview wording and covered by a test that documents it.
-- **Remediation direction:** decide per rule whether it is a domain decision (move to the backend) or a view-specific aggregation (keep). Decide also whether a run that never reported capture should be flagged on Overview, as the report treats it.
-- **Remediated so far (wording only, 2026-10-30):** the empty state no longer says "Nothing needs attention". It lists the checks actually run (failed runs, capture reported as partial or unknown, drift from earlier completed runs), says that metric behaviour and runs that never reported capture are not checked, and is generated from the same list as the rules. The panel heading is "Flagged runs". The rules themselves are unchanged and still live in the frontend.
+- **Consistency (corrected 2026-10-30, resolved the same day):** Overview and the Capture Completeness page disagreed for runs that never reported capture. Such a run has `captureStatus: null`; the report counts it as "unknown" (the backend buckets null as unknown) while the Overview rule flagged only an explicit `"unknown"`. Decided to flag them: Overview now flags a run with a null `captureStatus` as "capture not reported", and a test checks that the runs flagged for capture are exactly the runs the report counts as partial or unknown. Overview still adds failed runs and drift on purpose. A run that is still running and has not reported capture is flagged too, as the report counts it; until a run reports capture its status is unknown.
+- **Remediation direction:** decide per rule whether it is a domain decision (move to the backend) or a view-specific aggregation (keep).
+- **Remediated so far (wording only, 2026-10-30):** the empty state no longer says "Nothing needs attention". It lists the checks actually run (failed runs, capture reported as partial or unknown, capture never reported, drift from earlier completed runs), says that metric behaviour is not checked, and is generated from the same list as the rules. The panel heading is "Flagged runs". The rules themselves are unchanged and still live in the frontend.
 - **Potential user impact:** a run that diverged still shows "Nothing needs attention", because divergence is not one of the checks. Likelihood medium; consequence low-moderate (false reassurance).
 - **Observed user impact:** none recorded.
 
@@ -178,3 +188,4 @@ The backend's trend is a straight-line fit over the last 5 steps with a 1% "flat
 | 2026-10-30 | Backend recognises `environment.commit` (`c90db29`) and the frontend override is removed (`60bd2ee`). | ARCH-003: the code-version contradiction is gone; classification version 2 introduced; scores unchanged. |
 | 2026-10-30 | Grades renamed and the assessment versioned (`a73fb49`). | ARCH-003 partially remediated; assessment version 2 (same scoring, new names, code version from the backend). |
 | 2026-10-30 | Attention wording (`8cf3793`). | ARCH-005: wording describes the checks performed; the Overview versus Capture Completeness difference for never-reported capture recorded; behaviour unchanged. |
+| 2026-10-30 | Owner decisions recorded (section 2a); Overview flags never-reported capture; the Parameters analysis is labelled exploratory. | ARCH-005 consistency resolved; ARCH-002 decided and labelled. |
