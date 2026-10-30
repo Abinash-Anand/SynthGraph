@@ -113,6 +113,17 @@ describe('GetReproductionManifestService', () => {
           { field: 'output', value: 'dataset-version-2' },
         ],
       },
+      assessment: {
+        method: { version: 2, completeAt: 0.85, mostlyAt: 0.6, externalWeight: 0.5 },
+        grade: 'complete',
+        score: 0.875,
+        counts: { known: 5, supplied: 1, external: 2, missing: 0 },
+        blockers: [],
+        blockerTags: [],
+        notes: [
+          '2 inputs live outside SynthGraph and may have changed since: input, output.',
+        ],
+      },
       generation: {
         id: generation.id,
         experimentId: generation.experimentId,

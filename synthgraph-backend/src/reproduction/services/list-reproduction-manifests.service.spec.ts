@@ -92,7 +92,15 @@ describe('ListReproductionManifestsService', () => {
     const [manifest] = await service.execute('experiment-1', 'user-1', 100, 0);
 
     expect(Object.keys(manifest).sort()).toEqual(
-      ['classification', 'classificationVersion', 'datasetReferences', 'generation', 'normalized', 'schemaVersion'],
+      [
+        'assessment',
+        'classification',
+        'classificationVersion',
+        'datasetReferences',
+        'generation',
+        'normalized',
+        'schemaVersion',
+      ],
     );
     expect(manifest.classification.missing).toEqual(['Configuration hash']);
   });
