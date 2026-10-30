@@ -1,8 +1,9 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
+import { pushSearchParams } from "@/shared/lib/shallow-url";
 
 export type TabItem = { id: string; label: string };
 
@@ -11,6 +12,10 @@ export type TabItem = { id: string; label: string };
  * architecture doc's "URL/shareable state -> URL parameters" rule, and
  * means a tab within Experiment Detail (Runs, Lineage, Metrics, ...) is
  * itself a shareable/bookmarkable link, not just the page as a whole.
+ *
+ * Switching is a shallow URL update, not a Next navigation: the page that
+ * renders the tabs has already loaded everything every tab shows, and a
+ * navigation would re-run its server fetches just to repaint the same data.
  */
 export function Tabs({
   tabs,
@@ -21,7 +26,6 @@ export function Tabs({
   paramName?: string;
   className?: string;
 }) {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const activeId = searchParams.get(paramName) ?? tabs[0]?.id;
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -30,9 +34,9 @@ export function Tabs({
     (id: string) => {
       const next = new URLSearchParams(searchParams.toString());
       next.set(paramName, id);
-      router.push(`?${next.toString()}`, { scroll: false });
+      pushSearchParams(next);
     },
-    [router, searchParams, paramName],
+    [searchParams, paramName],
   );
 
   const handleKeyDown = (event: React.KeyboardEvent, index: number) => {

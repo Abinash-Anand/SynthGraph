@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import { z } from "zod";
+import { AuthenticationError, AuthorizationError } from "@/shared/http/errors";
 import { SESSION_COOKIE_NAME } from "../constants";
 import type { User } from "../types/user";
 import { getMeByApiKey } from "./auth-api";
@@ -69,9 +70,10 @@ export async function readSessionCookie(): Promise<SessionCookie | null> {
  * where it's actually needed.
  *
  * A malformed cookie or a key the backend no longer accepts both resolve
- * to `null` (logged-out), never a thrown error — callers redirect through
+ * to `null` (logged-out), never a thrown error - callers redirect through
  * `/api/auth/clear-session` rather than calling `redirect()` directly here,
  * since only Route Handlers/Server Actions/middleware can mutate cookies.
+ * Any other failure (rate limit, outage) is thrown, not mistaken for logged-out.
  */
 export const getSession = cache(async (): Promise<Session | null> => {
   const cookie = await readSessionCookie();
@@ -80,8 +82,13 @@ export const getSession = cache(async (): Promise<Session | null> => {
   try {
     const user = await getMeByApiKey(cookie.apiKey);
     return { user, apiKeyId: cookie.apiKeyId, apiKey: cookie.apiKey };
-  } catch {
-    return null;
+  } catch (error) {
+    // Only a key the backend actually rejected means "logged out". Any other
+    // failure (a rate limit, a restart, a network blip) says nothing about the
+    // key, and treating it as logged-out sent a valid user through
+    // clear-session - deleting their cookie and bouncing them to /login.
+    if (error instanceof AuthenticationError || error instanceof AuthorizationError) return null;
+    throw error;
   }
 });
 

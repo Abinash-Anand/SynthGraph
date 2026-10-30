@@ -4,4 +4,8 @@ export interface ReproductionRepository {
   findDatasetReferences(
     generationId: string,
   ): Promise<GenerationDatasetReference[]>;
+
+  findDatasetReferencesForGenerations(
+    generationIds: string[],
+  ): Promise<GenerationDatasetReference[]>;
 }

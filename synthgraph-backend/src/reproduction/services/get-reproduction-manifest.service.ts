@@ -74,6 +74,52 @@ function classify(
   return { known, supplied, missing, external };
 }
 
+export type DatasetReferenceSummary = { datasetVersionId: string; role: string };
+
+// Shared with ListReproductionManifestsService so a manifest is the same
+// document however it is fetched.
+export function buildReproductionManifest(
+  generation: Generation,
+  mappedReferences: DatasetReferenceSummary[],
+) {
+  return {
+    schemaVersion: '1.0',
+
+    classification: classify(generation, mappedReferences),
+
+    generation: {
+      id: generation.id,
+
+      experimentId: generation.experimentId,
+
+      name: generation.name,
+
+      description: generation.description,
+
+      generator: generation.generator,
+
+      parameters: generation.parameters,
+
+      reproducibility: generation.reproducibility,
+
+      status: generation.status,
+
+      inputs: generation.inputs,
+
+      outputs: generation.outputs,
+    },
+
+    // Additive - the `generation` field above is untouched (its own
+    // nested shape, camelCase but missing timestamps, is what existing
+    // consumers already read). `normalized` is the same complete,
+    // consistently-named shape every other Generation-returning response
+    // now carries (see generation.response.ts).
+    normalized: toNormalizedGeneration(generation),
+
+    datasetReferences: mappedReferences,
+  };
+}
+
 @Injectable()
 export class GetReproductionManifestService {
   constructor(
@@ -110,49 +156,6 @@ export class GetReproductionManifestService {
       role: reference.role,
     }));
 
-    return {
-      schemaVersion: '1.0',
-
-      classification: classify(generation, mappedReferences),
-
-      generation: {
-        id: generation.id,
-
-        experimentId:
-          generation.experimentId,
-
-        name: generation.name,
-
-        description:
-          generation.description,
-
-        generator:
-          generation.generator,
-
-        parameters:
-          generation.parameters,
-
-        reproducibility:
-          generation.reproducibility,
-
-        status:
-          generation.status,
-
-        inputs:
-          generation.inputs,
-
-        outputs:
-          generation.outputs,
-      },
-
-      // Additive - the `generation` field above is untouched (its own
-      // nested shape, camelCase but missing timestamps, is what existing
-      // consumers already read). `normalized` is the same complete,
-      // consistently-named shape every other Generation-returning response
-      // now carries (see generation.response.ts).
-      normalized: toNormalizedGeneration(generation),
-
-      datasetReferences: mappedReferences,
-    };
+    return buildReproductionManifest(generation, mappedReferences);
   }
 }

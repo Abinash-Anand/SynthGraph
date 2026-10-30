@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useState, useTransition, type FormEvent } from "react";
 import {
   updateExperimentSchema,
   type UpdateExperimentFieldErrors,
@@ -79,6 +79,8 @@ export function ExperimentHeader({
   const [errors, setErrors] = useState<UpdateExperimentFieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  // Tabs switch without refetching, so reloading what the SDK has recorded since is explicit.
+  const [refreshing, startRefresh] = useTransition();
 
   const completed = trainingRuns.filter((r) => r.run.status === "completed").length;
   const canCompare = activeTab === "runs" ? trainingRuns.length >= 2 : generations.length >= 2;
@@ -319,6 +321,14 @@ export function ExperimentHeader({
             {completed}/{pluralize(trainingRuns.length, "run")} completed
           </span>
           <span>Created {formatDateTime(experiment.createdAt)}</span>
+          <button
+            type="button"
+            disabled={refreshing}
+            onClick={() => startRefresh(() => router.refresh())}
+            className="underline decoration-research-border underline-offset-4 transition-colors hover:text-research-ink hover:decoration-research-ink-muted disabled:opacity-50"
+          >
+            {refreshing ? "Refreshing…" : "Refresh data"}
+          </button>
         </div>
       )}
 

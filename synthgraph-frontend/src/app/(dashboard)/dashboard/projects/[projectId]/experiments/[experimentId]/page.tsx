@@ -6,8 +6,8 @@ import { isSeen } from "@/features/onboarding/onboarding-rules";
 import { readOnboardingSeen } from "@/features/onboarding/server/onboarding-state";
 import { WORKSPACE_TOUR } from "@/features/onboarding/tours/workspace-tour";
 import { getExperimentForProject } from "@/features/experiments/server/experiments-api";
-import { listGenerations } from "@/features/generations/server/generations-api";
-import { getReproductionManifest } from "@/features/reproduction/server/reproduction-api";
+import { loadEnrichedGenerations } from "@/features/experiments/server/enriched-generations";
+import { stopwatch } from "@/features/experiments/server/workspace-payload";
 import {
   getParameterCorrelationReport,
   getTrainingRunDrift,
@@ -47,6 +47,7 @@ export default async function ExperimentDetailPage({ params }: { params: Promise
   // Nothing below depends on anything else's result, so it all goes out at
   // once: two network round trips in total instead of one per call. Any
   // NotFoundError (experiment missing or not the user's) still becomes a 404.
+  const elapsedMs = stopwatch();
   let data;
   try {
     data = await Promise.all([
@@ -65,20 +66,20 @@ export default async function ExperimentDetailPage({ params }: { params: Promise
           }),
         ),
       ),
-      listGenerations(session.apiKey, experimentId).then((generations) =>
-        Promise.all(
-          generations.map(async (generation) => ({
-            generation,
-            manifest: await getReproductionManifest(session.apiKey, generation.id).catch(() => null),
-          })),
-        ),
-      ),
+      loadEnrichedGenerations(session.apiKey, experimentId),
     ]);
   } catch (error) {
     if (error instanceof NotFoundError) notFound();
     throw error;
   }
   const [experiment, correlationReport, enrichedTrainingRuns, enrichedGenerations] = data;
+  console.info("experiment_workspace.loaded", {
+    experimentId,
+    ms: elapsedMs(),
+    generations: enrichedGenerations.length,
+    trainingRuns: enrichedTrainingRuns.length,
+    manifestFailures: enrichedGenerations.filter((g) => g.manifestError).length,
+  });
 
   // Only worth touring once there is something to tour - an experiment with
   // no generations or runs yet has an empty canvas for every step to point at.

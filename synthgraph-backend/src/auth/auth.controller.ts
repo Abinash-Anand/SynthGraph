@@ -8,6 +8,8 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 
+import { ipTracker } from '../common/throttling/throttle-trackers.js';
+
 import { LoginDto } from './dto/login.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { ApiKeyGuard } from './guards/api-key.guard.js';
@@ -21,14 +23,16 @@ export class AuthController {
 
   // Tighter than the global default (ThrottlerModule.forRoot in app.module.ts)
   // - these are the account-creation/credential-guessing surface, not
-  // ordinary API traffic.
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  // ordinary API traffic. Counted per IP, not per bearer credential: a
+  // guesser could otherwise dodge the limit by sending a new fake credential
+  // each time.
+  @Throttle({ default: { limit: 10, ttl: 60_000, getTracker: ipTracker } })
   @Post('register')
   register(@Body() input: RegisterDto) {
     return this.authService.register(input);
   }
 
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Throttle({ default: { limit: 10, ttl: 60_000, getTracker: ipTracker } })
   @Post('login')
   login(@Body() input: LoginDto) {
     return this.authService.login(input);
