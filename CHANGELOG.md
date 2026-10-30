@@ -45,6 +45,10 @@ This project does not yet have tagged releases - entries accumulate under
   have none, and it is never read from the evaluation name.
 
 ### Changed
+- The lineage graph no longer guesses links from timing. Every edge is a recorded relationship; a
+  generation with no recorded link is shown without a line. Link existing runs with
+  `synthgraph training-runs link-generation` or `training.use(generation)`. The dashed edges, the
+  "inferred from timing" legend entry and the "includes inferred links" note are gone.
 - The lineage graph draws a generation recorded as used by a training run as a solid edge, even when
   the generation produced no dataset, and shows a generation from another experiment of the project as
   its own node. A run that recorded its generations is no longer guessed to have used another one.
