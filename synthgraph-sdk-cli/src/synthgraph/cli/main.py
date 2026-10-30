@@ -22,6 +22,7 @@ from .commands import (
     experiments,
     generations,
     manifest,
+    metrics,
     projects,
     training_runs,
 )
@@ -50,6 +51,7 @@ app.add_typer(auth.app, name="auth")
 app.add_typer(projects.app, name="projects")
 app.add_typer(experiments.app, name="experiments")
 app.add_typer(generations.app, name="generations")
+app.add_typer(metrics.app, name="metrics")
 app.add_typer(training_runs.app, name="training-runs")
 app.add_typer(evaluations.app, name="evaluations")
 app.add_typer(assets.app, name="assets")

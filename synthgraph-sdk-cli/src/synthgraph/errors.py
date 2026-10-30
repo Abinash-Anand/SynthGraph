@@ -20,6 +20,7 @@ __all__ = [
     "SynthGraphConflictError",
     "SynthGraphError",
     "SynthGraphHTTPError",
+    "SynthGraphMetricDirectionConflictError",
     "SynthGraphNotFoundError",
     "SynthGraphRateLimitError",
     "SynthGraphServerError",
@@ -108,6 +109,30 @@ class SynthGraphNotFoundError(SynthGraphHTTPError):
 
 class SynthGraphConflictError(SynthGraphHTTPError):
     """409 - the request conflicts with current backend state."""
+
+
+class SynthGraphMetricDirectionConflictError(SynthGraphConflictError):
+    """409 - a different direction is already declared for a metric.
+
+    Nothing was changed. ``conflicts`` lists each clash as
+    ``{"metric_key", "declared", "requested"}``. To change a declared direction
+    on purpose, correct it explicitly with a note.
+    """
+
+    def __init__(
+        self,
+        status_code: int,
+        message: str,
+        *,
+        conflicts: list[dict[str, str]],
+        operation: str | None = None,
+        path: str | None = None,
+        details: Any = None,
+    ) -> None:
+        super().__init__(
+            status_code, message, operation=operation, path=path, details=details
+        )
+        self.conflicts = conflicts
 
 
 class SynthGraphRateLimitError(SynthGraphHTTPError):
