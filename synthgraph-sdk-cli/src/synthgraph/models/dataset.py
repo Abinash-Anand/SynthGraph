@@ -37,6 +37,9 @@ class Dataset(SynthGraphModel):
     id: str = Field(min_length=1)
     name: str | None = None
     description: str | None = None
+    #: The project this dataset is used within; ``None`` until something in a
+    #: project first references it (datasets from before that rule have none).
+    project_id: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     versions: list[DatasetVersion] = Field(default_factory=list)
     created_at: datetime | None = None

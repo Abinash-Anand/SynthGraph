@@ -15,6 +15,7 @@ from .errors import SynthGraphValidationError
 from .http import SynthGraphHTTPClient
 from .models import Dataset, DatasetVersion
 from .routes import Routes
+from .scope import cross_project_error, project_of_generation
 from .serialization import compact, require_identifier, require_mapping, require_text
 
 #: Aliases so annotations inside the class body are not shadowed by
@@ -115,6 +116,7 @@ class DatasetsAPI:
             if size is None:
                 size = digest.size
 
+        reusing_dataset = dataset_id is not None
         if dataset_id is not None:
             dataset_id = require_identifier(dataset_id, field="dataset_id")
         else:
@@ -139,6 +141,11 @@ class DatasetsAPI:
             }
         )
 
+        if reusing_dataset:
+            # After local validation (invalid input still sends nothing) and before
+            # the first write, so a rejected attach leaves no new version behind.
+            self._assert_same_project(dataset_id, generation_id)
+
         version_data = self._http.post(
             Routes.dataset_versions(dataset_id),
             json=version_payload,
@@ -153,6 +160,25 @@ class DatasetsAPI:
         )
 
         return dataset_version
+
+    def _assert_same_project(self, dataset_id: str, generation_id: str) -> None:
+        """Refuse, before creating anything, to attach a dataset of another project.
+
+        Creating a version and then having the attach rejected would leave a
+        dataset version attached to nothing, and versions cannot be removed. A
+        dataset with no recorded project is not checked here (the backend decides).
+        """
+        dataset = Dataset.model_validate(
+            self._http.get(Routes.dataset(dataset_id), operation="datasets.get_dataset")
+        )
+        if dataset.project_id is None:
+            return
+        if project_of_generation(self._http, generation_id) != dataset.project_id:
+            raise cross_project_error(
+                "This dataset belongs to a different project. A dataset can only be "
+                "used within one project. Nothing was created.",
+                dataset_id=dataset_id,
+            )
 
 
 def _default_version() -> str:

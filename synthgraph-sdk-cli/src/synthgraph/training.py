@@ -11,7 +11,13 @@ from typing import Any
 from .environment import auto_capture
 from .errors import SynthGraphValidationError
 from .http import SynthGraphHTTPClient
-from .models import DatasetVersion, TrainingRun, TrainingRunMetric
+from .models import (
+    DatasetVersion,
+    GenerationReference,
+    GenerationRun,
+    TrainingRun,
+    TrainingRunMetric,
+)
 from .routes import Routes
 from .serialization import (
     compact,
@@ -22,12 +28,14 @@ from .serialization import (
 )
 
 DatasetInput = str | DatasetVersion | dict[str, Any]
+GenerationInput = str | GenerationRun
 
 #: Aliases so annotations inside the class body are not shadowed by
 #: ``TrainingRunsAPI.list``.
 TrainingRunList = list[TrainingRun]
 DatasetInputs = list[DatasetInput]
 TrainingRunMetricList = list[TrainingRunMetric]
+GenerationReferenceList = list[GenerationReference]
 
 
 class TrainingRunsAPI:
@@ -205,6 +213,42 @@ class TrainingRunsAPI:
         # datasetVersionId, role), not a TrainingRun -- same gap create()
         # already works around by re-fetching after attaching datasets.
         return self.get(training_run_id)
+
+    def add_generation(
+        self,
+        *,
+        training_run_id: str,
+        generation: GenerationInput,
+    ) -> GenerationReference:
+        """Record that a training run used a generation.
+
+        The generation can be in another experiment, but must be in the run's
+        own project (otherwise :class:`SynthGraphCrossProjectReferenceError`).
+        A link is exact and cannot be changed or removed afterwards. Recording
+        the same one twice is a plain :class:`SynthGraphConflictError`.
+        """
+        training_run_id = require_identifier(training_run_id, field="training_run_id")
+        generation_id = require_identifier(
+            generation.id if isinstance(generation, GenerationRun) else generation,
+            field="generation",
+        )
+
+        data = self._http.post(
+            Routes.training_run_generations(training_run_id),
+            json={"generationId": generation_id},
+            operation="training_runs.add_generation",
+        )
+        return GenerationReference.model_validate(data)
+
+    def generations(self, *, training_run_id: str) -> GenerationReferenceList:
+        """The generations a training run was recorded as using, oldest first."""
+        training_run_id = require_identifier(training_run_id, field="training_run_id")
+
+        data = self._http.get_list(
+            Routes.training_run_generations(training_run_id),
+            operation="training_runs.generations",
+        )
+        return [GenerationReference.model_validate(item) for item in data]
 
     def start(self, training_run_id: str) -> TrainingRun:
         """Mark a training run as running."""

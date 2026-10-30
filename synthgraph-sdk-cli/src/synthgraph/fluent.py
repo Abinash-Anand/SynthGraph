@@ -31,13 +31,19 @@ from types import TracebackType
 from typing import TYPE_CHECKING, Any, Self
 
 from .environment import ResourceMonitor
-from .errors import SynthGraphError, SynthGraphValidationError
+from .errors import (
+    SynthGraphConflictError,
+    SynthGraphCrossProjectReferenceError,
+    SynthGraphError,
+    SynthGraphValidationError,
+)
 from .integration_session import IntegrationSession
 from .models import (
     AssetVersion,
     DatasetVersion,
     EvaluationResult,
     Experiment,
+    GenerationReference,
     GenerationRun,
     GenerationStatus,
     Generator,
@@ -46,6 +52,7 @@ from .models import (
     TrainingRun,
     TrainingRunMetric,
 )
+from .scope import cross_project_error
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle only matters to type checkers
     from .client import SynthGraphClient
@@ -164,7 +171,16 @@ class ExperimentHandle(_Handle):
         :meth:`declare_metric_directions`). It is declared *before* the run is
         created, so a declaration that conflicts with an earlier one raises
         :class:`SynthGraphMetricDirectionConflictError` and no run is recorded.
+
+        ``generations=[generation, ...]`` records that this run used those
+        generations (CONTRACT.md 2.43). Each is a ``GenerationHandle``, a
+        ``GenerationRun`` or a generation id, and may come from another
+        experiment of the *same project*. A generation of another project raises
+        :class:`SynthGraphCrossProjectReferenceError` before the run is created.
+        This is separate from ``datasets=``/``dataset=``: those record the data
+        the run was trained on.
         """
+        generations = kwargs.pop("generations", None)
         metric_directions = kwargs.pop("metric_directions", None)
         kwargs["name"] = kwargs.get("name") or _default_training_name(kwargs.get("model"))
 
@@ -178,6 +194,19 @@ class ExperimentHandle(_Handle):
                 )
             datasets = [dataset]
 
+        # Looked at before anything is declared or created, so a generation of
+        # another project leaves nothing behind.
+        generation_ids = (
+            _generation_ids_in_project(
+                self._client,
+                self.experiment.project_id,
+                generations,
+                known_projects={self.experiment.id: self.experiment.project_id},
+            )
+            if generations is not None
+            else []
+        )
+
         if metric_directions is not None:
             self.declare_metric_directions(metric_directions)
 
@@ -186,7 +215,12 @@ class ExperimentHandle(_Handle):
             datasets=_unwrap_datasets(datasets),
             **kwargs,
         )
-        return TrainingHandle(self._client, training_run)
+        handle = TrainingHandle(self._client, training_run)
+        if generation_ids:
+            for generation_id in generation_ids:
+                handle._record_generation(generation_id)
+            handle.refresh()
+        return handle
 
     def declare_metric_direction(self, metric_key: str, direction: str) -> dict[str, str]:
         """Declare whether a bigger or smaller value of one metric is better.
@@ -513,28 +547,96 @@ class TrainingHandle(_Handle):
         return self
 
     def use(self, *sources: Any) -> TrainingHandle:
-        """Link this training run to the data it was trained on.
+        """Link this training run to what it used.
 
         Each source is a ``DatasetVersion``, a dataset-version id, or a
-        ``GenerationHandle`` (which stands for every dataset that generation
-        produced). Anything already attached is skipped, so calling this twice
-        - or passing a dataset that ``training(datasets=...)`` already
-        attached - never makes a duplicate link.
+        ``GenerationHandle``. A generation is recorded as a generation this run
+        used (CONTRACT.md 2.43), and every dataset it produced in this process
+        is attached as well. A generation that produced no dataset is fine: the
+        link to the generation itself is what is recorded (simulator-driven
+        training has no dataset to link through). Anything already linked is
+        skipped, so calling this twice never makes a duplicate.
 
-        This is the link the dashboard's lineage graph is built from::
+        A generation of another project raises
+        :class:`SynthGraphCrossProjectReferenceError` before anything is linked.
+
+        These are the links the dashboard's lineage graph is built from::
 
             training = experiment.training(model="yolo", framework="pytorch")
             training.use(generation)
         """
+        generation_handles = [source for source in sources if isinstance(source, GenerationHandle)]
+        other_sources = [source for source in sources if not isinstance(source, GenerationHandle)]
+
+        if generation_handles:
+            project_id = self._project_id()
+            generation_ids = _generation_ids_in_project(
+                self._client, project_id, generation_handles, known_projects={}
+            )
+        else:
+            generation_ids = []
+
+        produced = [
+            version for handle in generation_handles for version in handle.produced_datasets
+        ]
+        datasets = _unwrap_datasets([*produced, *other_sources]) or []
+
+        for generation_id in generation_ids:
+            self._record_generation(generation_id)
+
         attached = {version.id for version in self.training_run.datasets}
-        for dataset in _unwrap_datasets(list(sources)) or []:
+        for dataset in datasets:
             dataset_id = _dataset_id(dataset)
             if dataset_id is not None and dataset_id in attached:
                 continue
             self.add_dataset(dataset)
             if dataset_id is not None:
                 attached.add(dataset_id)
+        if generation_ids:
+            self.refresh()
         return self
+
+    def link_generation(self, generation: Any) -> TrainingHandle:
+        """Record that this training run used a generation (CONTRACT.md 2.43).
+
+        ``generation`` is a ``GenerationHandle``, a ``GenerationRun`` or a
+        generation id. Idempotent. Unlike :meth:`use` this attaches no dataset.
+        """
+        generation_ids = _generation_ids_in_project(
+            self._client, self._project_id(), [generation], known_projects={}
+        )
+        for generation_id in generation_ids:
+            self._record_generation(generation_id)
+        return self.refresh()
+
+    def generations(self) -> list[GenerationReference]:
+        """The generations this training run was recorded as using, oldest first."""
+        return self._client.training_runs.generations(training_run_id=self.id)
+
+    def _project_id(self) -> str:
+        experiment_id = self.training_run.experiment_id
+        if experiment_id is None:
+            raise SynthGraphValidationError(
+                "this training run has no experiment id, so its project is not known",
+                field="training_run",
+            )
+        return self._client.experiments.get(experiment_id).project_id
+
+    def _record_generation(self, generation_id: str) -> None:
+        """Record one link; one that already exists is left as it is."""
+        if any(
+            ref.generation_id == generation_id for ref in self.training_run.generation_references
+        ):
+            return
+        try:
+            self._client.training_runs.add_generation(
+                training_run_id=self.id, generation=generation_id
+            )
+        except SynthGraphCrossProjectReferenceError:
+            raise
+        except SynthGraphConflictError:
+            # The only other 409 on this route is "already recorded".
+            return
 
     def refresh(self) -> TrainingHandle:
         """Re-read this training run from the backend."""
@@ -637,6 +739,59 @@ def _default_training_name(model: Any) -> str:
     if isinstance(model, str) and model.strip():
         return model.strip()
     return "training_run"
+
+
+def _generation_ids_in_project(
+    client: SynthGraphClient,
+    project_id: str,
+    generations: Any,
+    *,
+    known_projects: dict[str, str],
+) -> list[str]:
+    """Generation ids from handles, models or ids, all checked to be in ``project_id``.
+
+    A generation may sit in any experiment of the project, so the project of its
+    experiment is looked up once per experiment. A generation of another project
+    raises before anything is created or linked. Duplicates are dropped.
+    """
+    items = list(generations) if isinstance(generations, (list, tuple)) else [generations]
+    projects = dict(known_projects)
+
+    # Every item is checked for what it is before any lookup is made.
+    resolved: list[tuple[str, str | None]] = []
+    for item in items:
+        if isinstance(item, GenerationHandle):
+            resolved.append((item.id, item.generation.experiment_id))
+        elif isinstance(item, GenerationRun):
+            resolved.append((item.id, item.experiment_id))
+        elif isinstance(item, str) and item.strip():
+            resolved.append((item, None))
+        else:
+            raise SynthGraphValidationError(
+                f"a generation must be a GenerationHandle, a GenerationRun or an id, got {item!r}",
+                field="generations",
+            )
+
+    ids: list[str] = []
+    for generation_id, known_experiment_id in resolved:
+        if generation_id in ids:
+            continue
+
+        experiment_id = (
+            known_experiment_id
+            if known_experiment_id is not None
+            else client.generations.get(generation_id).experiment_id
+        )
+        if experiment_id not in projects:
+            projects[experiment_id] = client.experiments.get(experiment_id).project_id
+        if projects[experiment_id] != project_id:
+            raise cross_project_error(
+                "This generation belongs to a different project from the training run. "
+                "A run can only use generations from its own project. Nothing was created.",
+                generation_id=generation_id,
+            )
+        ids.append(generation_id)
+    return ids
 
 
 def _unwrap_datasets(datasets: Any) -> list[Any] | None:

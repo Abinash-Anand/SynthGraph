@@ -6,6 +6,7 @@ from typing import Any
 
 import typer
 
+from ...errors import SynthGraphConflictError, SynthGraphCrossProjectReferenceError
 from ..context import CLIContext
 from ..interactive import resolve_experiment, resolve_training_run
 
@@ -129,6 +130,10 @@ def get_training_run(
                     "Datasets",
                     [dataset.model_dump(mode="json") for dataset in run.datasets],
                 ),
+                (
+                    "Generations used",
+                    [ref.model_dump(mode="json") for ref in run.generation_references],
+                ),
                 ("Started", run.started_at),
                 ("Completed", run.completed_at),
                 ("Created", run.created_at),
@@ -175,5 +180,97 @@ def list_training_run_metrics(
             rows,
             [("STEP", "step"), ("METRICS", "metrics"), ("CREATED", "created_at")],
             empty="No metrics recorded.",
+        ),
+    )
+
+
+_GENERATION_COLUMNS = [
+    ("GENERATION", "generation_id"),
+    ("NAME", "generation_name"),
+    ("EXPERIMENT", "experiment_id"),
+    ("RECORDED", "created_at"),
+]
+
+
+@app.command("generations")
+def list_training_run_generations(
+    ctx: typer.Context,
+    training_run_id: str = typer.Argument(..., help="Training run ID."),
+    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a table."),
+) -> None:
+    """List the generations a training run was recorded as using.
+
+    An empty list means none was recorded, not that none was used.
+
+    Example:
+
+        synthgraph training-runs generations <training-run-id>
+    """
+    cli: CLIContext = ctx.obj
+    out = cli.output(json_output)
+
+    references = cli.client().training_runs.generations(training_run_id=training_run_id)
+    rows = [reference.to_dict() for reference in references]
+
+    out.emit(
+        rows,
+        lambda: out.table(
+            rows, _GENERATION_COLUMNS, empty="No generations recorded for this training run."
+        ),
+    )
+
+
+@app.command("link-generation")
+def link_generation(
+    ctx: typer.Context,
+    training_run_id: str = typer.Argument(..., help="Training run ID."),
+    generation_id: str = typer.Argument(..., help="Generation ID."),
+    json_output: bool = typer.Option(False, "--json", help="Print JSON instead of a field list."),
+) -> None:
+    """Record that a training run used a generation.
+
+    The generation may be in another experiment, but must be in the run's own
+    project. A link is exact and cannot be changed or removed afterwards.
+    Linking the same pair again changes nothing. Use this to link runs that
+    already exist; nothing links them automatically.
+
+    Example:
+
+        synthgraph training-runs link-generation <training-run-id> <generation-id>
+    """
+    cli: CLIContext = ctx.obj
+    out = cli.output(json_output)
+
+    try:
+        reference = cli.client().training_runs.add_generation(
+            training_run_id=training_run_id, generation=generation_id
+        )
+    except SynthGraphCrossProjectReferenceError:
+        raise
+    except SynthGraphConflictError:
+        # The only other 409 on this route is "already recorded".
+        existing = [
+            ref
+            for ref in cli.client().training_runs.generations(training_run_id=training_run_id)
+            if ref.generation_id == generation_id
+        ]
+        if not existing:
+            raise
+        out.emit(
+            existing[0].to_dict(),
+            lambda: out.note("Already linked; nothing changed."),
+        )
+        return
+
+    out.emit(
+        reference.to_dict(),
+        lambda: out.fields(
+            [
+                ("Training run", reference.training_run_id),
+                ("Generation", reference.generation_id),
+                ("Name", reference.generation_name),
+                ("Experiment", reference.experiment_id),
+                ("Recorded", reference.created_at),
+            ]
         ),
     )
