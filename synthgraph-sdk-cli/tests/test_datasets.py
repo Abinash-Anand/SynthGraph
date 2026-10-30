@@ -73,6 +73,9 @@ def test_explicit_version_is_sent_as_given(client, backend):
 
 
 def test_dataset_id_reuses_an_existing_dataset_and_skips_creating_one(client, backend):
+    # Reusing a dataset first reads it, to refuse another project's dataset before
+    # a version is created (an unscoped dataset, project_id absent, is not checked).
+    backend.route("GET", "/datasets/d1", httpx.Response(200, json={"id": "d1", "name": "rain"}))
     backend.route(
         "POST", "/datasets/d1/versions", httpx.Response(201, json=DATASET_VERSION)
     )
@@ -86,6 +89,7 @@ def test_dataset_id_reuses_an_existing_dataset_and_skips_creating_one(client, ba
     )
 
     assert [(r.method, r.path) for r in backend.requests] == [
+        ("GET", "/datasets/d1"),
         ("POST", "/datasets/d1/versions"),
         ("POST", "/generations/g1/datasets"),
     ]

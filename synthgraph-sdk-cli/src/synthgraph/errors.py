@@ -18,6 +18,7 @@ __all__ = [
     "SynthGraphAuthorizationError",
     "SynthGraphConfigurationError",
     "SynthGraphConflictError",
+    "SynthGraphCrossProjectReferenceError",
     "SynthGraphError",
     "SynthGraphHTTPError",
     "SynthGraphMetricDirectionConflictError",
@@ -111,6 +112,18 @@ class SynthGraphConflictError(SynthGraphHTTPError):
     """409 - the request conflicts with current backend state."""
 
 
+class SynthGraphCrossProjectReferenceError(SynthGraphConflictError):
+    """409 - a dataset or generation from another project cannot be used here.
+
+    A dataset belongs to one project and a training run can only use
+    generations of its own project; reuse across experiments of the *same*
+    project is fine. Nothing was recorded. When the SDK can see the mismatch
+    before sending anything it raises this itself (``details["detected_by"]``
+    is then ``"sdk"``), so a rejected attach leaves no new dataset version or
+    run behind.
+    """
+
+
 class SynthGraphMetricDirectionConflictError(SynthGraphConflictError):
     """409 - a different direction is already declared for a metric.
 
@@ -199,6 +212,15 @@ def error_for_status(
         5xx     -> SynthGraphServerError
         other   -> SynthGraphHTTPError
     """
+    if (
+        status_code == 409
+        and isinstance(details, dict)
+        and details.get("code") == "cross_project_reference"
+    ):
+        return SynthGraphCrossProjectReferenceError(
+            status_code, message, operation=operation, path=path, details=details
+        )
+
     if status_code in _VALIDATION_STATUSES:
         return SynthGraphValidationError(
             message,

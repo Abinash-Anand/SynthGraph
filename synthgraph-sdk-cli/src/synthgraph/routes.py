@@ -129,6 +129,10 @@ class Routes:
         return f"/training-runs/{encode_id(training_run_id)}/datasets"
 
     @staticmethod
+    def training_run_generations(training_run_id: str) -> str:
+        return f"/training-runs/{encode_id(training_run_id)}/generations"
+
+    @staticmethod
     def training_run_evaluations(training_run_id: str) -> str:
         return f"/training-runs/{encode_id(training_run_id)}/evaluations"
 

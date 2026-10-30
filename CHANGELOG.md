@@ -29,6 +29,12 @@ This project does not yet have tagged releases - entries accumulate under
 - A consistent, additive `normalized` shape on every Generation-returning
   response
 - `CONTRIBUTING.md`, `SECURITY.md`, issue/PR templates
+- SDK/CLI 0.6.0: `training.use(generation)`, `training.link_generation(generation)` and
+  `experiment.training(..., generations=[...])` record that a run used a generation, and
+  `synthgraph training-runs link-generation` does it for existing runs. A generation of
+  another project, or reusing a dataset of another project, is refused before anything
+  is created (`SynthGraphCrossProjectReferenceError`). `use(generation)` no longer
+  fails for a generation that produced no dataset.
 - `POST /training-runs/:id/generations` records that a training run used a generation (same project
   required, other experiments allowed) and `GET` lists them; training runs now include
   `generationReferences`. Existing runs have none until one is recorded.

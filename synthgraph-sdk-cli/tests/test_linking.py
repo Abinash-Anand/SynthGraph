@@ -50,6 +50,12 @@ def experiment(client, backend):
     )
     backend.route("POST", "/training-runs/t1/datasets", httpx.Response(201, json={}))
     backend.route(
+        "POST",
+        "/training-runs/t1/generations",
+        httpx.Response(201, json={"generationId": "g1", "trainingRunId": "t1"}),
+    )
+    backend.route("GET", "/experiments/e1", httpx.Response(200, json=experiment_payload()))
+    backend.route(
         "GET",
         "/training-runs/t1",
         httpx.Response(200, json=training_run_payload(datasets=[dataset_version_payload()])),

@@ -11,7 +11,7 @@ from .metric_directions import Direction, ExperimentMetricDirections
 from .project import Project
 from .reference import AssetReference, DataReference, DatasetReference
 from .reproduction import ReproductionManifest
-from .training import TrainingRun, TrainingRunMetric
+from .training import GenerationReference, TrainingRun, TrainingRunMetric
 from .user import User
 
 __all__ = [
@@ -27,6 +27,7 @@ __all__ = [
     "EvaluationResult",
     "Experiment",
     "ExperimentMetricDirections",
+    "GenerationReference",
     "GenerationRun",
     "GenerationStatus",
     "Generator",

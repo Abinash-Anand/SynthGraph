@@ -163,3 +163,116 @@ def test_metrics_with_no_points_says_so(run_cli, backend):
 
     assert result.exit_code == ExitCode.SUCCESS
     assert "No metrics recorded." in result.stdout
+
+
+# -- recorded generation links (ARCH-004) ------------------------------------
+
+_LINK = {
+    "trainingRunId": "t1",
+    "generationId": "g1",
+    "generationName": "rain_pass",
+    "experimentId": "e1",
+    "createdAt": "2026-01-01T00:00:00Z",
+}
+
+
+def test_link_generation_records_the_link(run_cli, backend):
+    backend.route("POST", "/training-runs/t1/generations", httpx.Response(201, json=_LINK))
+
+    result = run_cli("training-runs", "link-generation", "t1", "g1")
+
+    assert result.exit_code == ExitCode.SUCCESS
+    assert backend.last().body == {"generationId": "g1"}
+    assert "rain_pass" in result.stdout
+
+
+def test_link_generation_renders_json(run_cli, backend):
+    backend.route("POST", "/training-runs/t1/generations", httpx.Response(201, json=_LINK))
+
+    result = run_cli("training-runs", "link-generation", "t1", "g1", "--json")
+
+    assert json.loads(result.stdout)["generation_id"] == "g1"
+
+
+def test_linking_the_same_pair_again_says_so_and_succeeds(run_cli, backend):
+    backend.route(
+        "POST",
+        "/training-runs/t1/generations",
+        httpx.Response(
+            409,
+            json={"statusCode": 409, "message": "Training run generation reference already exists"},
+        ),
+    )
+    backend.route("GET", "/training-runs/t1/generations", httpx.Response(200, json=[_LINK]))
+
+    result = run_cli("training-runs", "link-generation", "t1", "g1")
+
+    assert result.exit_code == ExitCode.SUCCESS
+    assert "Already linked" in result.output
+
+
+def test_a_generation_of_another_project_is_a_validation_exit_with_the_reason(run_cli, backend):
+    backend.route(
+        "POST",
+        "/training-runs/t1/generations",
+        httpx.Response(
+            409,
+            json={
+                "statusCode": 409,
+                "code": "cross_project_reference",
+                "message": "This generation belongs to a different project from the training run.",
+            },
+        ),
+    )
+
+    result = run_cli("training-runs", "link-generation", "t1", "g9")
+
+    assert result.exit_code == ExitCode.VALIDATION
+    assert "different project" in result.output
+
+
+def test_link_generation_needs_both_ids(run_cli, backend):
+    assert run_cli("training-runs", "link-generation", "t1").exit_code == ExitCode.USAGE
+    assert backend.requests == []
+
+
+def test_generations_lists_the_links(run_cli, backend):
+    backend.route(
+        "GET",
+        "/training-runs/t1/generations",
+        httpx.Response(
+            200, json=[_LINK, {**_LINK, "generationId": "g2", "generationName": "second"}]
+        ),
+    )
+
+    result = run_cli("training-runs", "generations", "t1")
+
+    assert result.exit_code == ExitCode.SUCCESS
+    assert "rain_pass" in result.stdout and "second" in result.stdout
+
+
+def test_generations_says_when_none_are_recorded(run_cli, backend):
+    backend.route("GET", "/training-runs/t1/generations", httpx.Response(200, json=[]))
+
+    result = run_cli("training-runs", "generations", "t1")
+
+    assert "No generations recorded" in result.stdout
+
+
+def test_get_shows_the_generations_a_run_used(run_cli, backend):
+    backend.route(
+        "GET",
+        "/training-runs/t1",
+        httpx.Response(
+            200,
+            json=training_run_payload(
+                generationReferences=[
+                    {"generationId": "g1", "generationName": "rain_pass", "experimentId": "e1"}
+                ]
+            ),
+        ),
+    )
+
+    result = run_cli("training-runs", "get", "t1", "--json")
+
+    assert json.loads(result.stdout)["generation_references"][0]["generation_name"] == "rain_pass"

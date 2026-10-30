@@ -19,6 +19,21 @@ from .base import SynthGraphModel
 from .dataset import DatasetVersion
 
 
+class GenerationReference(SynthGraphModel):
+    """A generation a training run was recorded as using.
+
+    Recorded by whoever ran the training; never worked out from names or
+    timestamps. A generation can come from another experiment of the same
+    project, so its experiment and name are carried here.
+    """
+
+    generation_id: str = Field(min_length=1)
+    generation_name: str | None = None
+    experiment_id: str | None = None
+    training_run_id: str | None = None
+    created_at: datetime | None = None
+
+
 class TrainingRun(SynthGraphModel):
     """A model training execution recorded against an experiment."""
 
@@ -66,6 +81,10 @@ class TrainingRun(SynthGraphModel):
     capture_status: dict[str, Any] | None = None
 
     datasets: list[DatasetVersion] = Field(default_factory=list)
+
+    #: Generations this run was recorded as using. Empty means none was
+    #: recorded, not that none was used (and an older backend sends none).
+    generation_references: list[GenerationReference] = Field(default_factory=list)
 
     status: str | None = None
     started_at: datetime | None = None

@@ -1,6 +1,6 @@
 # Design: recorded lineage, and removing the guessed edges
 
-Status: **approved 2026-10-30 (owner decisions in the registry, section 2a). PRs 1 and 2 of 5 are implemented; the rest are not.**
+Status: **approved 2026-10-30 (owner decisions in the registry, section 2a). PRs 1, 2 and 3 of 5 are implemented; the rest are not.**
 Closes: registry entry ARCH-004.
 
 ## Problem
@@ -33,7 +33,7 @@ Closes: registry entry ARCH-004.
    - `POST /training-runs/:id/generations` with `{ generationId }` returns 201 with `{ trainingRunId, generationId, generationName, experimentId, createdAt }`; 404 when the run or the generation is not the caller's; 409 for a duplicate (settled by the primary key, so two identical simultaneous requests give one 201 and one 409); 409 `cross_project_reference` when the generation is in another project. `GET` lists them oldest first, paginated.
    - `generationReferences: [{ generationId, generationName, experimentId, createdAt }]` on the run, on the experiment's run list and on the workspace; an empty list means none was recorded. No existing field changes.
    - A generation in another experiment of the same project is allowed. No route updates or deletes a link.
-3. **SDK and CLI.** `training.use(generation)` records the direct link and still attaches the produced datasets; `experiment.training(..., generations=[...])`; `training.generations()`; `synthgraph training-runs link-generation`.
+3. **SDK and CLI 0.6.0. Implemented.** `training.use(generation)` records the link to the generation and still attaches the datasets it produced (a generation that produced none is now fine); `experiment.training(..., generations=[...])`; `training.link_generation()`; `training.generations()`; `synthgraph training-runs link-generation` and `generations`. A generation or dataset of another project is refused by the SDK before anything is created where it can see the mismatch (so a rejected attach leaves no dataset version or run behind), and by the backend otherwise. `datasets=[generation]` stays a statement about data and does not record the link. Contract: `CONTRACT.md` 2.43.
 4. **Frontend draws recorded links.** Generation-to-run edges appear solid. A generation from another experiment of the project is an external node showing its name. The guessed edges are still shown and still labelled.
 5. **Remove the inference.** Delete the timestamp edges, `inferredEdgeCount`, the legend and the "includes inferred links" note. An unlinked generation is shown as unlinked with no edge. Ships only after 4 is verified and the owner agrees to the visible cost below.
 
@@ -43,7 +43,7 @@ Closes: registry entry ARCH-004.
 - **Scope is per dataset, not per version**: every version of a dataset belongs to the dataset's project.
 - A scoped dataset's project cannot be changed through the API.
 - The claim and the reference are two statements, not one transaction. If recording the reference fails after the claim (for example a database error), the dataset stays scoped to that project.
-- The SDK creates a dataset version before attaching it. If the attach is rejected (cross-project), the new version stays unattached. PR 3 is the place to check first.
+- The SDK now reads a reused dataset before creating a version, so a cross-project attach is refused first. A dataset with no recorded project cannot be checked by the SDK, so a backend refusal there (the dataset is already used by exactly one other project) can still leave an unattached new version.
 - No backfill: existing runs are linked only explicitly, through the CLI (PR 3). The dataset-based edges the graph already draws are recorded and unchanged.
 
 ## Visible cost of step 5

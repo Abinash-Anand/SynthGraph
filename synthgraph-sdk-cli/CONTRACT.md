@@ -2,7 +2,7 @@
 
 Status of the wire contract between this client and the SynthGraph backend.
 
-**Package version:** 0.5.0 — not 1.0. Sections 3 and 4 must be closed before a
+**Package version:** 0.6.0 — not 1.0. Sections 3 and 4 must be closed before a
 1.0 release.
 
 This file exists because the handoff specification (§66) requires one
@@ -46,6 +46,8 @@ test.
 | Training run lifecycle | `.start()` `.complete()` `.fail()` | — | PATCH | `/training-runs/{trainingRunId}` |
 | Report training run capture status | `sg.training_runs.update_capture_status()` | — | PATCH | `/training-runs/{trainingRunId}/capture-status` |
 | Attach dataset to training run | `sg.training_runs.add_dataset()` | — | POST | `/training-runs/{trainingRunId}/datasets` |
+| Record a generation a training run used (see 2.43) | `sg.training_runs.add_generation()` / `training.use(generation)` / `training.link_generation()` / `experiment.training(generations=)` | `training-runs link-generation` | POST | `/training-runs/{trainingRunId}/generations` |
+| List the generations a training run used | `sg.training_runs.generations()` / `training.generations()` | `training-runs generations` | GET | `/training-runs/{trainingRunId}/generations` |
 | Create evaluation (optional `checkpoint_step`, see 2.42) | `sg.evaluations.create()` / `training.evaluation()` | — | POST | `/training-runs/{trainingRunId}/evaluations` |
 | Get evaluation | `sg.evaluations.get(id)` | `evaluations get` | GET | `/evaluation-results/{evaluationResultId}` |
 | List evaluations | `sg.evaluations.list()` / `training.evaluations()` | `evaluations list` | GET | `/training-runs/{trainingRunId}/evaluations` |
@@ -1347,3 +1349,77 @@ rejected with no request sent, a step in the name ignored, the CLI output), and
 the opt-in `tests/integration/test_live_checkpoint_step.py` against a real
 backend, including a bad value sent straight over HTTP. Backend:
 `test/checkpoint-step.e2e-spec.ts`.
+
+
+### 2.43 Recorded generation links, and datasets that belong to one project
+
+**The finding.** The lineage graph guessed which generation a training run used
+from timestamps, because the model had no generation-to-run link. For
+simulator-driven training the generations produce no dataset, so there was also
+nothing to link *through*. The approved decisions (ARCH-004) are an explicit
+recorded link, datasets that are reused within one project and never across
+projects, and no inference. The backend half is `training_run_generation_refs`
+and `datasets.project_id`; this entry is the SDK and CLI half.
+
+**What changed (additive, except where noted):**
+
+* `sg.training_runs.add_generation(training_run_id=, generation=)` and
+  `.generations(training_run_id=)`; `TrainingRun.generation_references`
+  (`GenerationReference`: `generation_id`, `generation_name`, `experiment_id`,
+  `created_at`). An older backend sends none, which reads as none recorded.
+* `training.use(generation)` now **records the link to the generation itself** and
+  still attaches the datasets it produced in this process. **Behaviour change:** a
+  generation that produced no dataset used to be an error ("silently linking
+  nothing"); it is now fine, because the link to the generation is what is
+  recorded.
+* `training.link_generation(generation)`, `training.generations()`, and
+  `experiment.training(..., generations=[...])`. A generation is a
+  `GenerationHandle`, a `GenerationRun` or an id, and may live in another
+  experiment of the same project.
+* `datasets=[generation]` / `dataset=generation` are unchanged: they stay a
+  statement about *data* and do not record the generation link.
+* CLI: `synthgraph training-runs link-generation RUN GENERATION` (linking the same
+  pair again says so and succeeds) and `training-runs generations RUN`;
+  `training-runs get` shows "Generations used".
+* `SynthGraphCrossProjectReferenceError` (a `SynthGraphConflictError`) for the
+  backend's 409 `cross_project_reference`. CLI exit code 6. `Dataset.project_id`
+  is read back (`None` until something in a project first references it).
+
+**Decisions and why:**
+
+* **Look before creating.** The SDK compares projects itself where that is cheap,
+  *before* anything is written, so a rejected attach leaves nothing behind. A
+  generation of another project raises before `training(generations=...)` creates
+  the run, declares metric directions, or links anything, and before `use()` links
+  anything. Reusing a dataset that already has a project
+  (`datasets.create(dataset_id=...)`) is checked after local validation and before
+  the first write, so a refused attach no longer leaves an unattached dataset
+  version (versions cannot be removed). Such an error has
+  `details["detected_by"] == "sdk"`.
+* **The backend stays the authority.** A dataset with no recorded project is not
+  checked by the SDK, and the backend's own 409 is mapped to the same error class
+  (no `detected_by`). The SDK check is developer experience, not a boundary.
+* **Reusing a dataset costs extra reads.** `datasets.create(dataset_id=...)` now
+  reads the dataset first (and the generation's experiment when the dataset has a
+  project). Creating a new dataset needs no extra request.
+* **Idempotent, exact, never inferred.** Recording a link that already exists is
+  skipped (`use`, `link_generation`, `training(generations=)`) or reported as
+  already linked (CLI). Nothing links a run to anything automatically and nothing
+  is read from names or timestamps; an existing run has no link until one is
+  recorded.
+* **A run can exist without its link if the backend refuses late.** `training(
+  generations=...)` creates the run and then records the links. The SDK catches a
+  cross-project generation first, so this only happens if the backend refuses
+  something the SDK could not see (a race, or a project changed in between); the
+  error is raised and the run remains.
+
+**Not done:** removing or correcting a link (the backend has no route, by
+decision), linking across projects, generation-to-generation lineage, and any
+automatic linking from the framework integrations.
+
+**Verification.** `tests/test_generation_links.py` (models, the API, `use`,
+`link_generation`, `training(generations=)`, the pre-checks and the dataset reuse
+checks, including that nothing is created when they refuse), `tests/cli/
+test_training_runs.py`, and the opt-in `tests/integration/
+test_live_generation_links.py` against a real backend, including a bypass of the
+SDK to prove the backend refuses too.
