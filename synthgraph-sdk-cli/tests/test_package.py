@@ -12,7 +12,7 @@ import synthgraph
 
 
 def test_version_is_exposed():
-    assert synthgraph.__version__ == "0.4.0"
+    assert synthgraph.__version__ == "0.5.0"
 
 
 def test_public_surface_is_importable():

@@ -89,3 +89,36 @@ def test_get_renders_json(run_cli, backend):
 
 def test_get_requires_an_evaluation_id(run_cli):
     assert run_cli("evaluations", "get").exit_code == ExitCode.USAGE
+
+
+def test_list_shows_the_checkpoint_step_and_a_dash_when_not_recorded(run_cli, backend):
+    backend.route(
+        "GET",
+        "/training-runs/t1/evaluations",
+        httpx.Response(
+            200,
+            json=[
+                evaluation_payload(id="ev1", name="with", checkpointStep=20160),
+                evaluation_payload(id="ev2", name="go1-eval-step9000"),
+            ],
+        ),
+    )
+
+    result = run_cli("evaluations", "list", "--training-run", "t1", "--json")
+
+    rows = {row["name"]: row for row in json.loads(result.stdout)}
+    assert rows["with"]["checkpoint_step"] == 20160
+    # A step in the name is only a name: it is not reported as a checkpoint.
+    assert rows["go1-eval-step9000"]["checkpoint_step"] is None
+
+
+def test_get_shows_the_checkpoint_step(run_cli, backend):
+    backend.route(
+        "GET",
+        "/evaluation-results/ev1",
+        httpx.Response(200, json=evaluation_payload(checkpointStep=750)),
+    )
+
+    result = run_cli("evaluations", "get", "ev1", "--json")
+
+    assert json.loads(result.stdout)["checkpoint_step"] == 750

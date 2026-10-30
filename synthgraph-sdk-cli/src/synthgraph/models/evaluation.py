@@ -22,6 +22,9 @@ class EvaluationResult(SynthGraphModel):
     #: The exact dataset version the model was evaluated against.
     dataset_version_id: str | None = None
     name: str | None = None
+    #: The training step the evaluation was taken at, as the caller recorded it.
+    #: ``None`` means none was recorded; it is never read from the name.
+    checkpoint_step: int | None = None
     metrics: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime | None = None

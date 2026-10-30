@@ -8,10 +8,36 @@ from __future__ import annotations
 
 from typing import Any
 
+from .errors import SynthGraphValidationError
 from .http import SynthGraphHTTPClient
 from .models import EvaluationResult
 from .routes import Routes
 from .serialization import compact, require_identifier, require_mapping
+
+#: The backend stores the step as a 32-bit integer.
+MAX_CHECKPOINT_STEP = 2_147_483_647
+
+
+def validate_checkpoint_step(value: Any) -> int | None:
+    """A checkpoint step is a whole number of training steps, 0 or more.
+
+    ``None`` is allowed and means "not recorded". Nothing is coerced: a float,
+    a numeric string or a bool is rejected rather than rounded or reinterpreted.
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise SynthGraphValidationError(
+            f"checkpoint_step must be an integer, got {value!r}",
+            field="checkpoint_step",
+        )
+    if not 0 <= value <= MAX_CHECKPOINT_STEP:
+        raise SynthGraphValidationError(
+            f"checkpoint_step must be between 0 and {MAX_CHECKPOINT_STEP}, got {value}",
+            field="checkpoint_step",
+        )
+    return value
+
 
 #: Alias so the return annotation is not shadowed by ``EvaluationsAPI.list``.
 EvaluationResultList = list[EvaluationResult]
@@ -31,12 +57,17 @@ class EvaluationsAPI:
         dataset_version_id: str,
         name: str | None = None,
         metadata: dict[str, Any] | None = None,
+        checkpoint_step: int | None = None,
     ) -> EvaluationResult:
         """Record an evaluation of a training run.
 
         ``dataset_version_id`` names the exact dataset version the model was
         evaluated against, which is what makes the number comparable later.
         The backend requires it.
+
+        ``checkpoint_step`` is the training step this evaluation was taken at.
+        It is optional and exact: leave it out when you do not know it, and it
+        is recorded as not known (it is never worked out from ``name``).
         """
         training_run_id = require_identifier(training_run_id, field="training_run_id")
 
@@ -50,6 +81,7 @@ class EvaluationsAPI:
                 "metadata": (
                     require_mapping(metadata, field="metadata") if metadata is not None else None
                 ),
+                "checkpointStep": validate_checkpoint_step(checkpoint_step),
             }
         )
 

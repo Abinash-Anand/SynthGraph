@@ -15,6 +15,7 @@ app = typer.Typer(
 _COLUMNS = [
     ("ID", "id"),
     ("NAME", "name"),
+    ("STEP", "checkpoint_step"),
     ("METRICS", "metrics"),
     ("CREATED", "created_at"),
 ]
@@ -47,6 +48,7 @@ def list_evaluations(
         {
             "id": evaluation.id,
             "name": evaluation.name,
+            "checkpoint_step": evaluation.checkpoint_step,
             "metrics": evaluation.metrics,
             "created_at": evaluation.created_at,
         }
@@ -89,6 +91,7 @@ def get_evaluation(
                 ("Training run", evaluation.training_run_id),
                 ("Dataset version", evaluation.dataset_version_id),
                 ("Name", evaluation.name),
+                ("Checkpoint step", evaluation.checkpoint_step),
                 ("Metrics", evaluation.metrics),
                 ("Created", evaluation.created_at),
                 ("Updated", evaluation.updated_at),
