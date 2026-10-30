@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useMemo, useState, useTransition } from "react";
 import { CodeBlock } from "@/components/ui/CodeBlock";
 import { cn } from "@/lib/utils";
 import type { Experiment } from "@/features/experiments/types/experiment";
@@ -56,6 +57,11 @@ function GradeChip({ assessment }: { assessment: ReproAssessment }) {
   );
 }
 
+const MANIFEST_ERROR_LABEL = {
+  rate_limited: "Rate limited",
+  failed: "Couldn’t load",
+} as const;
+
 function download(filename: string, content: string, type: string) {
   const url = URL.createObjectURL(new Blob([content], { type }));
   const anchor = document.createElement("a");
@@ -88,6 +94,13 @@ export function ReproductionTab({
     [generations],
   );
   const summary = useMemo(() => summarizeReproducibility(assessed.map((a) => a.assessment)), [assessed]);
+  // A manifest that failed to load is not a generation we know nothing about -
+  // it is a request to repeat - so it is counted and shown apart from "unknown".
+  const failedCount = generations.filter((g) => g.manifestError).length;
+  const unknownCount = summary.byGrade.unknown - failedCount;
+
+  const router = useRouter();
+  const [retrying, startRetry] = useTransition();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showRaw, setShowRaw] = useState(false);
@@ -174,16 +187,22 @@ export function ReproductionTab({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {(["reproducible", "mostly", "partial", "unknown"] as const).map((grade) =>
-            summary.byGrade[grade] > 0 ? (
+          {(["reproducible", "mostly", "partial", "unknown"] as const).map((grade) => {
+            const count = grade === "unknown" ? unknownCount : summary.byGrade[grade];
+            return count > 0 ? (
               <span
                 key={grade}
                 className={cn("rounded-full border px-2.5 py-1 font-mono text-[11px]", GRADE_TONE[grade])}
               >
-                {summary.byGrade[grade]} {GRADE_LABEL[grade].toLowerCase()}
+                {count} {GRADE_LABEL[grade].toLowerCase()}
               </span>
-            ) : null,
-          )}
+            ) : null;
+          })}
+          {failedCount > 0 ? (
+            <span className="rounded-full border border-research-error/50 px-2.5 py-1 font-mono text-[11px] text-research-error">
+              {failedCount} couldn&rsquo;t be loaded
+            </span>
+          ) : null}
           {summary.averageScore !== null ? (
             <span className="rounded-full border border-research-border px-2.5 py-1 font-mono text-[11px] text-research-ink-muted">
               {Math.round(summary.averageScore * 100)}% of fields recorded on average
@@ -191,6 +210,26 @@ export function ReproductionTab({
           ) : null}
         </div>
       </div>
+
+      {failedCount > 0 ? (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-research-error/40 bg-research-error/[0.06] p-3"
+        >
+          <p className="text-[13px] text-research-ink-secondary">
+            {failedCount} of {generations.length} reproduction manifests couldn&rsquo;t be loaded, so those
+            generations are not assessed. This is a loading problem, not a finding about the generations.
+          </p>
+          <button
+            type="button"
+            disabled={retrying}
+            onClick={() => startRetry(() => router.refresh())}
+            className="rounded-md border border-research-border bg-research-panel px-3 py-1.5 text-[12.5px] text-research-ink transition-colors hover:border-research-accent-subtle disabled:opacity-50"
+          >
+            {retrying ? "Retrying…" : "Retry"}
+          </button>
+        </div>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
         <div className="flex flex-col gap-2">
@@ -212,7 +251,13 @@ export function ReproductionTab({
                     )}
                   >
                     <span className="w-full truncate text-[13px] text-research-ink">{enriched.generation.name}</span>
-                    <GradeChip assessment={assessment} />
+                    {enriched.manifestError ? (
+                      <span className="rounded-xl border border-research-error/50 px-2.5 py-1 font-mono text-[10.5px] leading-snug text-research-error">
+                        {MANIFEST_ERROR_LABEL[enriched.manifestError]}
+                      </span>
+                    ) : (
+                      <GradeChip assessment={assessment} />
+                    )}
                   </button>
                 </li>
               );
@@ -223,12 +268,14 @@ export function ReproductionTab({
         <div className="flex min-w-0 flex-col gap-5">
           <div className="flex flex-wrap items-center gap-3">
             <h3 className="text-[15px] font-medium text-research-ink">{generation.name}</h3>
-            <GradeChip assessment={active.assessment} />
+            {active.enriched.manifestError ? null : <GradeChip assessment={active.assessment} />}
           </div>
 
           {!manifest ? (
             <p className="text-[13.5px] text-research-error">
-              Unavailable — this generation&rsquo;s reproduction manifest could not be loaded.
+              {active.enriched.manifestError === "rate_limited"
+                ? "Rate limited — this generation’s reproduction manifest wasn’t loaded. Use Retry above."
+                : "Unavailable — this generation’s reproduction manifest could not be loaded."}
             </p>
           ) : (
             <div className="flex flex-col gap-5 rounded-xl border border-research-border bg-research-panel p-5">

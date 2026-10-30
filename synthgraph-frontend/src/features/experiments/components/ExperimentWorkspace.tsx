@@ -7,6 +7,7 @@ import type { Experiment } from "@/features/experiments/types/experiment";
 import type { ParameterCorrelationReport } from "@/features/reports/types/report";
 import { WorkspaceTourAutoStart } from "@/features/onboarding/components/WorkspaceTourAutoStart";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { pushSearchParams } from "@/shared/lib/shallow-url";
 import { ResearchWorkspace } from "@/shared/layout/ResearchWorkspace";
 import { Tabs } from "@/shared/ui/Tabs";
 import type { EnrichedGeneration, EnrichedTrainingRun, SelectedEntity } from "../types/experiment-workspace";
@@ -73,18 +74,18 @@ export function ExperimentWorkspace({
       const serialized = serializeSelectedEntity(entity);
       if (serialized) next.set("entity", serialized);
       else next.delete("entity");
-      router.push(`?${next.toString()}`, { scroll: false });
+      pushSearchParams(next);
     },
-    [router, searchParams],
+    [searchParams],
   );
 
   const setTab = useCallback(
     (tab: string) => {
       const next = new URLSearchParams(searchParams.toString());
       next.set("tab", tab);
-      router.push(`?${next.toString()}`, { scroll: false });
+      pushSearchParams(next);
     },
-    [router, searchParams],
+    [searchParams],
   );
 
   const selectedRun = selected?.type === "run" ? trainingRuns.find((r) => r.run.id === selected.id) : undefined;
@@ -221,13 +222,15 @@ export function ExperimentWorkspace({
       </div>
       <ResearchWorkspace
         canvas={
-          <AnimatePresence mode="wait" initial={false}>
+          // The outgoing tab is dropped at once and only the incoming one
+          // fades in: waiting out an exit animation first put a fixed
+          // ~200 ms between every click and the new content.
+          <AnimatePresence initial={false}>
             <motion.div
               key={activeTab}
               initial={reducedMotion ? false : { opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={reducedMotion ? undefined : { opacity: 0, y: -4 }}
-              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: 0.12, ease: [0.22, 1, 0.36, 1] }}
             >
               {canvas}
             </motion.div>
@@ -235,13 +238,12 @@ export function ExperimentWorkspace({
         }
         inspector={
           inspector ? (
-            <AnimatePresence mode="wait" initial={false}>
+            <AnimatePresence initial={false}>
               <motion.div
                 key={serializeSelectedEntity(selected) ?? "none"}
                 initial={reducedMotion ? false : { opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={reducedMotion ? undefined : { opacity: 0, y: -4 }}
-                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                transition={{ duration: 0.12, ease: [0.22, 1, 0.36, 1] }}
               >
                 {inspector}
               </motion.div>

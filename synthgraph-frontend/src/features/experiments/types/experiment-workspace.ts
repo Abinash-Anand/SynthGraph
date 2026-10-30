@@ -27,6 +27,12 @@ export type EnrichedTrainingRun = {
 export type EnrichedGeneration = {
   generation: Generation;
   manifest: ReproductionManifest | null;
+  /**
+   * Set only when the manifest could not be fetched - distinguishes "the
+   * backend has no manifest to give" from "we asked and the request failed"
+   * (typically a rate limit), which a retry can fix.
+   */
+  manifestError?: "rate_limited" | "failed";
 };
 
 /**

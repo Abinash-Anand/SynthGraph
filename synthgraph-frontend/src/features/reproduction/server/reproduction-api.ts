@@ -8,3 +8,12 @@ export const getReproductionManifest = cache(
     return backendFetch(`/generations/${generationId}/reproduction-manifest`, { token: apiKey });
   },
 );
+
+/**
+ * Every generation's manifest for an experiment in one request (same order
+ * and pagination as `listGenerations`) - the per-generation route above costs
+ * a request, and a rate-limit token, each.
+ */
+export function listReproductionManifests(apiKey: string, experimentId: string): Promise<ReproductionManifest[]> {
+  return backendFetch(`/experiments/${experimentId}/reproduction-manifests`, { token: apiKey });
+}

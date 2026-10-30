@@ -6,6 +6,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { AssetsModule } from './assets/assets.module.js';
 import { AuthModule } from './auth/auth.module.js';
+import { bearerTracker, ipTracker } from './common/throttling/throttle-trackers.js';
 import { ComparisonsModule } from './comparisons/comparisons.module.js';
 import configuration from './config/configuration.js';
 import { DatasetsModule } from './datasets/datasets.module.js';
@@ -29,14 +30,25 @@ import { ApiKeysModule } from './api-keys/api-keys.module.js';
       load: [configuration],
     }),
 
-    // Per-IP, in-memory (single-instance) rate limiting - the global default
-    // covers every route; AuthController overrides this per-route (tighter
-    // limit on login/register, its own brute-force/spam surface).
+    // In-memory (single-instance) rate limiting, two layers:
+    // - `default` counts per caller (bearer credential, else IP) - the dashboard
+    //   reaches this API from one frontend server, so an IP bucket alone made
+    //   every user share one 120/min allowance. AuthController overrides it
+    //   per-route (tighter limit, pinned to the IP) for login/register.
+    // - `ip` is a high per-IP ceiling so a bogus-credential flood can't dodge
+    //   limiting by minting a new bucket per request.
     ThrottlerModule.forRoot([
       {
         name: 'default',
         ttl: 60_000,
         limit: 120,
+        getTracker: bearerTracker,
+      },
+      {
+        name: 'ip',
+        ttl: 60_000,
+        limit: 3_000,
+        getTracker: ipTracker,
       },
     ]),
 

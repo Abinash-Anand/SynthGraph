@@ -12,6 +12,19 @@ type BackendFetchOptions = {
   token?: string;
 };
 
+// A burst of parallel reads (a workspace page makes dozens) can trip the
+// backend's rate limit by a few requests. Waiting out a short `Retry-After`
+// turns that into a slightly slower page instead of a missing section; a long
+// one means the caller is genuinely over budget, so it is surfaced, not slept on.
+const MAX_RATE_LIMIT_RETRIES = 2;
+const MAX_RETRY_WAIT_MS = 2_000;
+
+function retryDelayMs(response: Response, attempt: number): number | null {
+  const header = Number(response.headers.get("retry-after"));
+  const waitMs = Number.isFinite(header) && header > 0 ? header * 1000 : 250 * 2 ** attempt;
+  return waitMs <= MAX_RETRY_WAIT_MS ? waitMs : null;
+}
+
 /**
  * The one place that knows how to talk to synthgraph-backend. Every
  * feature's `server/*-api.ts` wraps this instead of calling `fetch`
@@ -25,14 +38,25 @@ export async function backendFetch<T>(path: string, options: BackendFetchOptions
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const response = await fetch(`${SYNTHGRAPH_API_URL}${path}`, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-    // Every call here is user-scoped (auth or api-key gated); never let
-    // Next's fetch cache serve one user's response to another's render.
-    cache: "no-store",
-  });
+  const send = () =>
+    fetch(`${SYNTHGRAPH_API_URL}${path}`, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      // Every call here is user-scoped (auth or api-key gated); never let
+      // Next's fetch cache serve one user's response to another's render.
+      cache: "no-store",
+    });
+
+  let response = await send();
+  // Reads only: a rejected request was never executed, but replaying a write
+  // is not something to do on the caller's behalf.
+  for (let attempt = 0; method === "GET" && response.status === 429 && attempt < MAX_RATE_LIMIT_RETRIES; attempt++) {
+    const waitMs = retryDelayMs(response, attempt);
+    if (waitMs === null) break;
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+    response = await send();
+  }
 
   if (response.status === 204) {
     return undefined as T;

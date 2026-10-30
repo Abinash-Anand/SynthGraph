@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 
 import { GenerationDatasetReference } from '../../database/entities/generation-dataset-reference.entity.js';
 
@@ -21,6 +21,21 @@ export class TypeOrmReproductionRepository
     return this.datasetReferenceRepository.find({
       where: {
         generationId,
+      },
+      order: {
+        role: 'ASC',
+      },
+    });
+  }
+
+  async findDatasetReferencesForGenerations(
+    generationIds: string[],
+  ): Promise<GenerationDatasetReference[]> {
+    if (generationIds.length === 0) return [];
+
+    return this.datasetReferenceRepository.find({
+      where: {
+        generationId: In(generationIds),
       },
       order: {
         role: 'ASC',
