@@ -97,6 +97,7 @@ describe('GetReproductionManifestService', () => {
 
     expect(result).toEqual({
       schemaVersion: '1.0',
+      classificationVersion: 2,
       classification: {
         known: [
           { field: 'Generator', value: 'blender' },

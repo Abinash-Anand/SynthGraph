@@ -291,6 +291,48 @@ describe('M7 Reproduction manifest (e2e)', () => {
     await app.close();
   });
 
+  it('knows the code version from the commit the SDK records in the environment', async () => {
+    const withCommit = await generationRepository.save(
+      generationRepository.create({
+        experimentId: experimentA.id,
+        name: 'Commit Only Generation',
+        description: null,
+        generator: { name: 'blender', version: '4.2.0' },
+        parameters: {},
+        reproducibility: {
+          seed: 1,
+          environment: { commit: 'a1b2c3d', dirty: true, os: 'Linux' },
+        },
+        inputs: [],
+        outputs: [],
+        status: GenerationStatus.Completed,
+        startedAt: new Date(),
+        completedAt: new Date(),
+        metadata: {},
+      }),
+    );
+
+    try {
+      const { body } = await request(app.getHttpServer())
+        .get(`/generations/${withCommit.id}/reproduction-manifest`)
+        .set('Authorization', `Bearer ${apiKeyA}`)
+        .expect(200);
+
+      expect(body.classification.known).toContainEqual({
+        field: 'Code version',
+        value: 'a1b2c3d',
+      });
+      expect(body.classification.missing).not.toContain('Code version');
+      // A dirty working tree is a separate, ordinary environment field.
+      expect(body.classification.supplied).toContainEqual({
+        field: 'dirty',
+        value: 'true',
+      });
+    } finally {
+      await generationRepository.delete(withCommit.id);
+    }
+  });
+
   it('requires authentication', async () => {
     await request(app.getHttpServer())
       .get(
@@ -309,6 +351,7 @@ describe('M7 Reproduction manifest (e2e)', () => {
 
     expect(response.body).toMatchObject({
       schemaVersion: '1.0',
+      classificationVersion: 2,
       generation: {
         id: generationA.id,
         experimentId: experimentA.id,
