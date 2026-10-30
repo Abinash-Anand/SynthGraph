@@ -1,0 +1,23 @@
+{
+  "capturedOn": "2026-10-30",
+  "environment": "https://synthgraph.dev (production, after deploy of e9076bc: session check and workspace request started together), built-in browser pane, signed-in user, Phase 1 experiment (3 runs, 16 generations)",
+  "method": "Same as after-prod-2: server render = fetch of the page URL with the RSC header; hard navigation = Navigation Timing after a fresh load.",
+  "serverRenderMs": {
+    "first7": [2175, 1153, 837, 868, 817, 866, 772],
+    "next16": [1273, 893, 807, 891, 960, 801, 958, 1005, 799, 887, 1697, 757, 749, 804, 775, 1368],
+    "median_of_16": 889,
+    "min": 749,
+    "previousDeploy": { "runs": [1073, 931, 843, 834, 871], "median": 871 },
+    "reading": "No measurable change: both medians are inside each other's run-to-run spread (about 750 to 1000 ms warm, with occasional 1.2 to 2.2 s outliers)."
+  },
+  "hardNavigationDomContentLoadedMs": { "runs": [1068, 1215, 1062], "median": 1068, "previousDeploy": { "runs": [1994, 1604, 1117], "median": 1604 }, "reading": "In the lower part of the previous range; the previous set included a cold first load, so this is not shown to be an improvement." },
+  "refreshDataMs": { "now": 1439, "previousDeploy": 1257, "reading": "Within noise." },
+  "tabClicks": { "uiChangedMs": [21, 8, 17, 16, 13, 11, 8, 19], "median": 16, "dataRequestsPerClick": 0 },
+  "burst30Clicks": { "dataRequests": 0, "unknown": 0, "unavailable": 0, "reproduction": "16 partly reproducible", "signedIn": true },
+  "title": "The page title is correct (it now comes from the shared workspace request).",
+  "notVerified": [
+    "Server-Timing / experiment_workspace.loaded log lines are in the hosting provider's logs, not visible from the browser.",
+    "No-session and invalid-key redirects were not tested on production (that would mean signing the account out or altering its cookie).",
+    "That the deploy is live is inferred from the user's word, not observed."
+  ]
+}
