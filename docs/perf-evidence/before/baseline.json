@@ -1,0 +1,24 @@
+{
+  "capturedOn": "2026-10-30",
+  "environment": "https://synthgraph.dev (production), built-in browser pane 1086x571, signed-in test user, Phase 1 experiment (3 runs, 16 generations)",
+  "method": "window.__bench: click tab, poll until aria-selected + ?tab= URL match, 3.5 s gap, read Resource Timing entries for _rsc/api requests",
+  "clicks": [
+    { "tab": "Runs", "uiMs": 2229, "ttfbMs": 227, "wireKB": 25, "decodedKB": 390 },
+    { "tab": "Lineage", "uiMs": 2111, "ttfbMs": 535, "wireKB": 25, "decodedKB": 390 },
+    { "tab": "Metrics", "uiMs": 1869, "ttfbMs": 181, "wireKB": 25, "decodedKB": 390 },
+    { "tab": "Lineage (revisit)", "uiMs": 1917, "ttfbMs": 195, "wireKB": 25, "decodedKB": 390 },
+    { "tab": "Parameters", "uiMs": 2601, "ttfbMs": 184, "wireKB": 25, "decodedKB": 390 },
+    { "tab": "Reproduction", "uiMs": 1926, "ttfbMs": 180, "wireKB": 25, "decodedKB": 390 },
+    { "tab": "Overview", "uiMs": 1587, "ttfbMs": 190, "wireKB": 25, "decodedKB": 327 },
+    { "tab": "Lineage (revisit)", "uiMs": 1387, "ttfbMs": 191, "wireKB": 25, "decodedKB": 256 }
+  ],
+  "summary": { "minMs": 1387, "maxMs": 2601, "medianMs": 1922, "requestsPerClick": 1 },
+  "rscProbeAfterBurst": { "decodedKB": 268, "domainRandomizeMentions": 90, "normalizedMirrors": 16, "serverTiming": null },
+  "observedFailure": "Reproduction tab right after the click burst: 16 generations 'Unknown', 'Unavailable - this generation's reproduction manifest could not be loaded' (rate limit swallowed by .catch(() => null))",
+  "screenshots": [
+    "01-lineage-tab-loaded.jpg",
+    "02-click-metrics-tab-not-switched.jpg",
+    "03-metrics-3s-later.jpg",
+    "04-reproduction-manifests-unavailable.jpg"
+  ]
+}
