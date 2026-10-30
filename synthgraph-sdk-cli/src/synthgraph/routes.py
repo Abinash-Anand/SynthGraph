@@ -53,6 +53,10 @@ class Routes:
         return f"/experiments/{encode_id(experiment_id)}"
 
     @staticmethod
+    def experiment_metric_directions(experiment_id: str) -> str:
+        return f"/experiments/{encode_id(experiment_id)}/metric-directions"
+
+    @staticmethod
     def experiment_generations(experiment_id: str) -> str:
         return f"/experiments/{encode_id(experiment_id)}/generations"
 

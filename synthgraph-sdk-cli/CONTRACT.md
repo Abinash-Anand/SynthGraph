@@ -2,7 +2,7 @@
 
 Status of the wire contract between this client and the SynthGraph backend.
 
-**Package version:** 0.3.1 — not 1.0. Sections 3 and 4 must be closed before a
+**Package version:** 0.4.0 — not 1.0. Sections 3 and 4 must be closed before a
 1.0 release.
 
 This file exists because the handoff specification (§66) requires one
@@ -58,6 +58,9 @@ test.
 | List assets | `sg.assets.list()` | `assets list` | GET | `/assets` |
 | Get asset version | `sg.assets.get_version(id)` | `assets get-version` | GET | `/asset-versions/{assetVersionId}` |
 | List asset versions | `sg.assets.list_versions(id)` | `assets versions` | GET | `/assets/{assetId}/versions` |
+| Get declared metric directions | `sg.metric_directions.get(id)` / `experiment.metric_directions()` | `metrics list` | GET | `/experiments/{experimentId}/metric-directions` |
+| Declare metric directions | `sg.metric_directions.declare()` / `experiment.declare_metric_directions()` / `experiment.training(metric_directions=)` | `metrics set-direction` | POST | `/experiments/{experimentId}/metric-directions` |
+| Correct a metric direction | `sg.metric_directions.correct()` / `experiment.correct_metric_direction()` | `metrics correct-direction` | PUT | `/experiments/{experimentId}/metric-directions` |
 
 Error mapping is deterministic for all of them:
 
@@ -1221,3 +1224,75 @@ than this entry.
 missing-path errors, no request sent on failure) and `tests/test_linking.py`
 (expansion, dedupe, idempotent `use()`, error before create). The idempotence
 tests were confirmed to fail when the skip-if-attached guard is removed.
+
+
+### 2.41 Declared metric direction - the SDK states what a metric means, nothing is inferred
+
+**The finding.** Whether a bigger or smaller value of a metric is better was
+guessed from its name in the frontend. A name is not a declaration, and a wrong
+guess ranks a run as best when it is worst. The approved decision (ARCH-001) is
+that the person who logs a metric declares its direction, the backend stores it
+per experiment, and nothing infers it. The backend half is
+`experiment_metric_directions` (see
+`docs/architecture/designs/declared-metric-direction.md`); this entry is the SDK
+and CLI half.
+
+**What changed (additive; no existing call changes behaviour):**
+
+* `sg.metric_directions.get(experiment_id)` -> `ExperimentMetricDirections`
+  (`GET /experiments/{experimentId}/metric-directions`). A metric nobody
+  declared is absent from `directions`; absence means unknown.
+* `sg.metric_directions.declare(experiment_id, {key: direction})`
+  (`POST` same route). All or nothing. Declaring the same direction again is a
+  no-op.
+* `sg.metric_directions.correct(experiment_id, key, direction, note=...)`
+  (`PUT` same route, body `{metricKey, direction, correctionNote}`). The
+  explicit way to change a declared direction; a note is required and the
+  backend only corrects a metric that was declared before.
+* `experiment.declare_metric_direction(s)()`, `.metric_directions()`,
+  `.correct_metric_direction()` on `ExperimentHandle`, and an optional
+  `experiment.training(..., metric_directions={...})`.
+* CLI: `synthgraph metrics list`, `metrics set-direction`,
+  `metrics correct-direction --note`.
+* `SynthGraphMetricDirectionConflictError`, a subclass of
+  `SynthGraphConflictError`, raised for the backend's 409
+  `metric_direction_conflict`. `.conflicts` lists
+  `{"metric_key", "declared", "requested"}` for each clash. CLI exit code 6, as
+  for every 409.
+* `SynthGraphHTTPClient.put()`, the one HTTP verb the client was missing.
+
+**Decisions and why:**
+
+* **Strict values, no aliases.** A direction is exactly `maximize`, `minimize`
+  or `neutral`. `"max"`, `"higher"` and `"MAXIMIZE"` are rejected before any
+  request. A declaration is metadata about meaning, so it is stated, not
+  interpreted.
+* **Keys are exact.** A metric key is sent as given (1 to 200 characters, not
+  trimmed). `loss*` is a metric literally named `loss*`, not a pattern, and
+  `loss` is not treated differently from any other name.
+* **Conflicts are errors, never overwrites.** The SDK does not retry, merge or
+  fall back to the other value; the researcher either fixes the declaration or
+  calls `correct()` on purpose.
+* **Declare before the run is created.** `experiment.training(...,
+  metric_directions=...)` declares first. A conflicting or invalid declaration
+  therefore raises with no training run recorded, rather than leaving a run
+  whose metrics have no agreed meaning. The directions belong to the experiment
+  and are not sent in the run's payload.
+* **Local validation is developer experience.** It mirrors the backend's limits
+  (100 metrics per call, 200-character keys, 1000-character note) so mistakes
+  fail fast with the same wording; the backend remains the authority.
+* **No automatic declaration.** The framework integrations do not declare
+  directions. They would have to guess from a metric's name, which is the
+  behaviour this entry removes. A researcher who wants capture-time
+  declaration passes `metric_directions=` explicitly.
+
+**Not done:** correction history (the backend keeps the latest note only),
+per-run or pattern-based declarations, and declaring through the integrations.
+
+**Verification.** `tests/test_metric_directions.py` (wire shapes for GET, POST
+and PUT, exact-value and key validation with no request sent, the conflict
+error and its `.conflicts`, an unrelated 409 staying a plain conflict, 404s,
+declare-before-create ordering and no run created on conflict) and
+`tests/cli/test_metrics.py`. An opt-in live test
+(`tests/integration/test_live_metric_directions.py`) exercises the same flows
+against a real backend.

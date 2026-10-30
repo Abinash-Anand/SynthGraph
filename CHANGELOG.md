@@ -9,6 +9,14 @@ This project does not yet have tagged releases - entries accumulate under
 ## [Unreleased]
 
 ### Added
+- SDK/CLI 0.4.0: declare a metric's direction (`maximize`, `minimize`,
+  `neutral`) per experiment with `experiment.declare_metric_directions()`,
+  `experiment.training(metric_directions=...)` or `synthgraph metrics
+  set-direction`; read it back with `metrics list`; correct it on purpose with
+  `correct-direction --note`. A conflicting declaration raises
+  `SynthGraphMetricDirectionConflictError` and changes nothing. Nothing is
+  inferred from a metric's name and the integrations do not declare
+  automatically.
 - MIT license
 - CI (GitHub Actions): backend lint/build/unit/e2e and frontend
   lint/typecheck/build on every PR

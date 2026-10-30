@@ -157,6 +157,17 @@ class SynthGraphHTTPClient:
         response = self._request("PATCH", path, json=json, operation=operation)
         return self._handle_response(response, operation=operation, path=path)
 
+    def put(
+        self,
+        path: str,
+        *,
+        json: dict[str, Any] | None = None,
+        operation: str | None = None,
+    ) -> dict[str, Any]:
+        """Send a PUT request, optionally with a JSON body."""
+        response = self._request("PUT", path, json=json, operation=operation)
+        return self._handle_response(response, operation=operation, path=path)
+
     def close(self) -> None:
         """Close the underlying HTTP client."""
         self._client.close()

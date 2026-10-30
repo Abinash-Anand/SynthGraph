@@ -17,6 +17,7 @@ from .experiments import ExperimentsAPI
 from .fluent import ExperimentHandle, ProjectHandle
 from .generations import GenerationsAPI
 from .http import SynthGraphHTTPClient
+from .metric_directions import MetricDirectionsAPI
 from .models import ComparisonResult, User
 from .projects import ProjectsAPI
 from .reproduction import ReproductionAPI
@@ -63,6 +64,7 @@ class SynthGraphClient:
         self.auth = AuthAPI(self._http)
         self.projects = ProjectsAPI(self._http)
         self.experiments = ExperimentsAPI(self._http)
+        self.metric_directions = MetricDirectionsAPI(self._http)
         self.generations = GenerationsAPI(self._http)
         self.datasets = DatasetsAPI(self._http)
         self.assets = AssetsAPI(self._http)

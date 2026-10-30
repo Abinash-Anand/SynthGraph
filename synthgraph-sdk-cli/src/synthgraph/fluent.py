@@ -158,7 +158,14 @@ class ExperimentHandle(_Handle):
         requires ``name``, and ``client.training_runs.create()`` used
         directly still does, but the fluent shortcut no longer needs to be
         told twice what the run is training).
+
+        ``metric_directions={"loss": "minimize", "accuracy": "maximize"}``
+        declares what each metric means for this experiment (see
+        :meth:`declare_metric_directions`). It is declared *before* the run is
+        created, so a declaration that conflicts with an earlier one raises
+        :class:`SynthGraphMetricDirectionConflictError` and no run is recorded.
         """
+        metric_directions = kwargs.pop("metric_directions", None)
         kwargs["name"] = kwargs.get("name") or _default_training_name(kwargs.get("model"))
 
         datasets = kwargs.pop("datasets", None)
@@ -171,12 +178,49 @@ class ExperimentHandle(_Handle):
                 )
             datasets = [dataset]
 
+        if metric_directions is not None:
+            self.declare_metric_directions(metric_directions)
+
         training_run = self._client.training_runs.create(
             experiment_id=self.id,
             datasets=_unwrap_datasets(datasets),
             **kwargs,
         )
         return TrainingHandle(self._client, training_run)
+
+    def declare_metric_direction(self, metric_key: str, direction: str) -> dict[str, str]:
+        """Declare whether a bigger or smaller value of one metric is better.
+
+        ``direction`` is ``"maximize"``, ``"minimize"`` or ``"neutral"``. It is
+        used exactly as given and never inferred from the metric's name; a
+        metric that is never declared has no direction. Returns every direction
+        declared so far in this experiment.
+        """
+        return self.declare_metric_directions({metric_key: direction})
+
+    def declare_metric_directions(self, directions: dict[str, str]) -> dict[str, str]:
+        """Declare directions for several metrics at once, all or nothing.
+
+        Repeating a declaration changes nothing. A *different* direction than
+        the one already declared raises
+        :class:`SynthGraphMetricDirectionConflictError` and declares none of
+        them; change one on purpose with :meth:`correct_metric_direction`.
+        """
+        return dict(self._client.metric_directions.declare(self.id, directions).directions)
+
+    def metric_directions(self) -> dict[str, str]:
+        """The directions declared so far in this experiment."""
+        return dict(self._client.metric_directions.get(self.id).directions)
+
+    def correct_metric_direction(
+        self, metric_key: str, direction: str, *, note: str
+    ) -> dict[str, str]:
+        """Explicitly correct a direction declared earlier, with a reason."""
+        return dict(
+            self._client.metric_directions.correct(
+                self.id, metric_key, direction, note=note
+            ).directions
+        )
 
     def training_runs(self, *, capture_status: str | None = None) -> list[TrainingRun]:
         """List the training runs recorded for this experiment.

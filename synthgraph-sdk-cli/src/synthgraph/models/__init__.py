@@ -7,6 +7,7 @@ from .dataset import Dataset, DatasetVersion
 from .evaluation import EvaluationResult
 from .experiment import Experiment
 from .generation import GenerationRun, GenerationStatus, Generator, Reproducibility
+from .metric_directions import Direction, ExperimentMetricDirections
 from .project import Project
 from .reference import AssetReference, DataReference, DatasetReference
 from .reproduction import ReproductionManifest
@@ -22,8 +23,10 @@ __all__ = [
     "Dataset",
     "DatasetReference",
     "DatasetVersion",
+    "Direction",
     "EvaluationResult",
     "Experiment",
+    "ExperimentMetricDirections",
     "GenerationRun",
     "GenerationStatus",
     "Generator",
