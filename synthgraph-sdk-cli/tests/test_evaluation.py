@@ -82,3 +82,100 @@ def test_get_evaluation(client, backend):
         "GET", "/evaluation-results/ev1", httpx.Response(200, json=EVALUATION)
     )
     assert client.evaluations.get("ev1").id == "ev1"
+
+
+# -- checkpoint step (ARCH-006) ---------------------------------------------
+
+
+def test_checkpoint_step_is_sent_when_given(client, backend):
+    backend.route(
+        "POST",
+        "/training-runs/t1/evaluations",
+        httpx.Response(201, json={**EVALUATION, "checkpointStep": 20160}),
+    )
+
+    result = client.evaluations.create(
+        training_run_id="t1",
+        metrics={"mAP": 0.7},
+        dataset_version_id="dv9",
+        checkpoint_step=20160,
+    )
+
+    assert backend.last().body == {
+        "metrics": {"mAP": 0.7},
+        "datasetVersionId": "dv9",
+        "checkpointStep": 20160,
+    }
+    assert result.checkpoint_step == 20160
+
+
+def test_checkpoint_step_is_left_out_when_not_given(client, backend):
+    backend.route("POST", "/training-runs/t1/evaluations", httpx.Response(201, json=EVALUATION))
+
+    result = client.evaluations.create(
+        training_run_id="t1", metrics={"mAP": 0.7}, dataset_version_id="dv9"
+    )
+
+    assert "checkpointStep" not in backend.last().body
+    assert result.checkpoint_step is None
+
+
+def test_zero_is_a_real_checkpoint_step(client, backend):
+    backend.route("POST", "/training-runs/t1/evaluations", httpx.Response(201, json=EVALUATION))
+
+    client.evaluations.create(
+        training_run_id="t1", metrics={"mAP": 0.7}, dataset_version_id="dv9", checkpoint_step=0
+    )
+
+    assert backend.last().body["checkpointStep"] == 0
+
+
+def test_the_name_never_becomes_a_checkpoint_step(client, backend):
+    backend.route("POST", "/training-runs/t1/evaluations", httpx.Response(201, json=EVALUATION))
+
+    client.evaluations.create(
+        training_run_id="t1",
+        metrics={"mAP": 0.7},
+        dataset_version_id="dv9",
+        name="go1-eval-run3-step20160",
+    )
+
+    assert "checkpointStep" not in backend.last().body
+
+
+@pytest.mark.parametrize("bad", [-1, 1.5, "10", True, False, [1], 2_147_483_648])
+def test_an_invalid_checkpoint_step_is_rejected_before_sending(client, backend, bad):
+    with pytest.raises(SynthGraphValidationError, match="checkpoint_step"):
+        client.evaluations.create(
+            training_run_id="t1",
+            metrics={"mAP": 0.7},
+            dataset_version_id="dv9",
+            checkpoint_step=bad,
+        )
+
+    assert backend.requests == []
+
+
+def test_the_largest_32_bit_step_is_allowed(client, backend):
+    backend.route("POST", "/training-runs/t1/evaluations", httpx.Response(201, json=EVALUATION))
+
+    client.evaluations.create(
+        training_run_id="t1",
+        metrics={"mAP": 0.7},
+        dataset_version_id="dv9",
+        checkpoint_step=2_147_483_647,
+    )
+
+    assert backend.last().body["checkpointStep"] == 2_147_483_647
+
+
+def test_an_evaluation_without_a_step_reads_as_not_recorded(client, backend):
+    backend.route("GET", "/evaluation-results/ev1", httpx.Response(200, json=EVALUATION))
+    backend.route(
+        "GET",
+        "/evaluation-results/ev2",
+        httpx.Response(200, json={**EVALUATION, "id": "ev2", "checkpointStep": None}),
+    )
+
+    assert client.evaluations.get("ev1").checkpoint_step is None
+    assert client.evaluations.get("ev2").checkpoint_step is None

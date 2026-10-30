@@ -2,7 +2,7 @@
 
 Status of the wire contract between this client and the SynthGraph backend.
 
-**Package version:** 0.4.0 — not 1.0. Sections 3 and 4 must be closed before a
+**Package version:** 0.5.0 — not 1.0. Sections 3 and 4 must be closed before a
 1.0 release.
 
 This file exists because the handoff specification (§66) requires one
@@ -46,7 +46,7 @@ test.
 | Training run lifecycle | `.start()` `.complete()` `.fail()` | — | PATCH | `/training-runs/{trainingRunId}` |
 | Report training run capture status | `sg.training_runs.update_capture_status()` | — | PATCH | `/training-runs/{trainingRunId}/capture-status` |
 | Attach dataset to training run | `sg.training_runs.add_dataset()` | — | POST | `/training-runs/{trainingRunId}/datasets` |
-| Create evaluation | `sg.evaluations.create()` / `training.evaluation()` | — | POST | `/training-runs/{trainingRunId}/evaluations` |
+| Create evaluation (optional `checkpoint_step`, see 2.42) | `sg.evaluations.create()` / `training.evaluation()` | — | POST | `/training-runs/{trainingRunId}/evaluations` |
 | Get evaluation | `sg.evaluations.get(id)` | `evaluations get` | GET | `/evaluation-results/{evaluationResultId}` |
 | List evaluations | `sg.evaluations.list()` / `training.evaluations()` | `evaluations list` | GET | `/training-runs/{trainingRunId}/evaluations` |
 | Log training metric | `sg.training_runs.log_metric()` / `training.log_metric()` | — | POST | `/training-runs/{trainingRunId}/metrics` |
@@ -1296,3 +1296,54 @@ declare-before-create ordering and no run created on conflict) and
 `tests/cli/test_metrics.py`. An opt-in live test
 (`tests/integration/test_live_metric_directions.py`) exercises the same flows
 against a real backend.
+
+
+### 2.42 Evaluation checkpoint step - recorded by the caller, never read from the name
+
+**The finding.** The dashboard placed an evaluation on a training-step axis by
+pulling a number out of its name (`step[-_ ]?(\d+)`), because neither the
+backend nor the SDK had a checkpoint field. A name is not a measurement: a
+different naming convention silently lost the step, and an evaluation with no
+match was drawn at its list position on the same axis as real steps. The
+approved decision (ARCH-006) is that the step is recorded explicitly and a
+missing one stays unknown. This entry is the backend and SDK half; the frontend
+stops parsing names in a separate change.
+
+**What changed (additive; no existing call changes behaviour):**
+
+* The backend stores `evaluation_results.checkpoint_step` (nullable integer,
+  0 to 2147483647, enforced by the API and by a database check) and returns it
+  as `checkpointStep` on create, get, list and the workspace. Existing rows are
+  `null`; there is no backfill.
+* `sg.evaluations.create(..., checkpoint_step=N)` and
+  `training.evaluation(..., checkpoint_step=N)`. `EvaluationResult.checkpoint_step`
+  is `None` when none was recorded.
+* `synthgraph evaluations list` shows a STEP column and `evaluations get` a
+  "Checkpoint step" field. (There is no CLI command that creates an evaluation.)
+
+**Decisions and why:**
+
+* **A typed column, not a reserved metadata key.** Free-form `metadata` already
+  carries whatever researchers put in it; a reserved key would collide with it
+  and could not be validated or queried. `metadata` is never read for a step.
+* **Exact integers only.** A float, a numeric string or a bool is rejected by the
+  SDK before any request and by the backend with a 400, rather than rounded or
+  reinterpreted. `0` is a real step.
+* **Omitted means unknown.** The SDK sends nothing and the backend stores
+  `null`. The `name` is not consulted, so `go1-eval-run3-step20160` without a
+  `checkpoint_step` has no step.
+* **32-bit, like `training_run_metrics.step`.** A step beyond about 2.1 billion
+  cannot be recorded; both columns share the limit.
+* **No automatic capture.** The framework integrations do not create
+  evaluations, so none records a step on their own.
+
+**Not done:** an explicit correction for evaluations recorded before this
+existed (evaluations are immutable and this change adds no update route), epoch
+or unit metadata, and any distinction between a global and a per-run step.
+
+**Verification.** `tests/test_evaluation.py`, `tests/test_fluent.py` and
+`tests/cli/test_evaluations.py` (wire shape, omitted field, zero, bad values
+rejected with no request sent, a step in the name ignored, the CLI output), and
+the opt-in `tests/integration/test_live_checkpoint_step.py` against a real
+backend, including a bad value sent straight over HTTP. Backend:
+`test/checkpoint-step.e2e-spec.ts`.

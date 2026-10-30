@@ -42,6 +42,13 @@ export class EvaluationResult {
   @Column({ type: 'varchar', nullable: true })
   name: string | null;
 
+  /**
+   * The training step this evaluation was taken at, as recorded by whoever ran
+   * it. NULL means none was recorded; it is never derived from the name.
+   */
+  @Column({ type: 'integer', name: 'checkpoint_step', nullable: true })
+  checkpointStep: number | null;
+
   @Column({ type: 'jsonb' })
   metrics: Record<string, unknown>;
 

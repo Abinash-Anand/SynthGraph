@@ -29,6 +29,11 @@ This project does not yet have tagged releases - entries accumulate under
 - A consistent, additive `normalized` shape on every Generation-returning
   response
 - `CONTRIBUTING.md`, `SECURITY.md`, issue/PR templates
+- Evaluation results record an optional `checkpointStep` (the training step the
+  evaluation was taken at): `POST /training-runs/:id/evaluations` accepts it, and it
+  is returned everywhere an evaluation is. SDK/CLI 0.5.0:
+  `training.evaluation(..., checkpoint_step=N)`. Evaluations recorded before this
+  have none, and it is never read from the evaluation name.
 
 ### Changed
 - The dashboard no longer guesses which direction of a metric is better from its

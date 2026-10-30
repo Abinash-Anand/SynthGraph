@@ -527,3 +527,25 @@ def test_training_context_manager_does_not_change_status(experiment, backend):
 
     assert training.training_run.status == "pending"
     assert not any(r.method == "PATCH" for r in backend.requests)
+
+
+def test_training_evaluation_passes_the_checkpoint_step(experiment, backend):
+    backend.route(
+        "POST",
+        "/experiments/e1/training-runs",
+        httpx.Response(201, json={"id": "t1", "status": "pending"}),
+    )
+    backend.route(
+        "POST",
+        "/training-runs/t1/evaluations",
+        httpx.Response(201, json={"id": "ev1", "metrics": {"mAP": 0.7}, "checkpointStep": 500}),
+    )
+
+    training = experiment.training(model="yolo")
+    evaluation = training.evaluation(
+        metrics={"mAP": 0.7}, dataset_version_id="dv1", name="eval", checkpoint_step=500
+    )
+
+    request = backend.last()
+    assert request.body["checkpointStep"] == 500
+    assert evaluation.result.checkpoint_step == 500

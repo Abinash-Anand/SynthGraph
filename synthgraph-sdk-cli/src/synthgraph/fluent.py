@@ -446,6 +446,7 @@ class TrainingHandle(_Handle):
         dataset_version_id: str | DatasetVersion,
         name: str | None = None,
         metadata: dict[str, Any] | None = None,
+        checkpoint_step: int | None = None,
     ) -> EvaluationHandle:
         """Record an evaluation of this training run.
 
@@ -453,6 +454,9 @@ class TrainingHandle(_Handle):
         evaluated against; the backend requires it (CONTRACT.md 2.15). A
         ``DatasetVersion`` (what ``generation.dataset(...)`` returns) is
         accepted in place of its id.
+
+        ``checkpoint_step`` is the training step the evaluation was taken at
+        (CONTRACT.md 2.42). Optional; never read from ``name``.
         """
         if isinstance(dataset_version_id, DatasetVersion):
             dataset_version_id = dataset_version_id.id
@@ -462,6 +466,7 @@ class TrainingHandle(_Handle):
             dataset_version_id=dataset_version_id,
             name=name,
             metadata=metadata,
+            checkpoint_step=checkpoint_step,
         )
         return EvaluationHandle(self._client, result)
 
