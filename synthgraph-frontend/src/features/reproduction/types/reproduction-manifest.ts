@@ -26,6 +26,25 @@ export type ReproductionClassification = {
   external: ClassifiedField[];
 };
 
+/**
+ * How completely a generation was recorded, as the backend assesses it. The
+ * frontend shows this; it does not compute it. `method` states the rules and
+ * thresholds that produced it. Absent on responses from a backend that predates
+ * assessments.
+ */
+export type ReproductionAssessment = {
+  method: { version: number; completeAt: number; mostlyAt: number; externalWeight: number };
+  grade: "complete" | "mostly" | "partial" | "unknown";
+  /** 0..1 share of fields recorded, or null when there is nothing to count. */
+  score: number | null;
+  counts: { known: number; supplied: number; external: number; missing: number };
+  /** Things that stand in the way of an exact rebuild whatever the score. */
+  blockers: string[];
+  /** Short labels for `blockers`, in the same order. */
+  blockerTags: string[];
+  notes: string[];
+};
+
 export type ReproductionManifest = {
   schemaVersion: string;
   /**
@@ -35,6 +54,7 @@ export type ReproductionManifest = {
    */
   classificationVersion?: number;
   classification: ReproductionClassification;
+  assessment?: ReproductionAssessment;
   generation: {
     id: string;
     experimentId: string;

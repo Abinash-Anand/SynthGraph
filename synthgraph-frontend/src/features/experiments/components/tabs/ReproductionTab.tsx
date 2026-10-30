@@ -8,8 +8,10 @@ import type { Experiment } from "@/features/experiments/types/experiment";
 import type { ClassifiedField } from "@/features/reproduction/types/reproduction-manifest";
 import { KeyValueList, type KeyValueRow } from "@/shared/ui/KeyValueList";
 import { buildProvenanceJson, buildProvenanceMarkdown, reportFilename } from "../../provenance-report";
+import { withManifestParameters } from "../../slim-generation";
 import {
-  assessReproducibility,
+  assessmentFor,
+  assessmentMethodOf,
   compareByRisk,
   GRADE_COUNT_PHRASE,
   GRADE_LABEL,
@@ -85,10 +87,7 @@ export function ReproductionTab({
       generations
         .map((enriched) => ({
           enriched,
-          assessment: assessReproducibility(
-            enriched.manifest?.classification,
-            enriched.manifest?.generation.reproducibility ?? enriched.generation.reproducibility,
-          ),
+          assessment: assessmentFor(enriched.manifest),
         }))
         .sort((a, b) => compareByRisk(a.assessment, b.assessment)),
     [generations],
@@ -122,6 +121,7 @@ export function ReproductionTab({
   const reportInput = () => ({
     generatedAt: new Date().toISOString(),
     experiment: { id: experiment.id, name: experiment.name, description: experiment.description },
+    assessmentMethod: assessmentMethodOf(assessed.map((a) => a.assessment)),
     generations: assessed.map(({ enriched, assessment }) => ({
       id: enriched.generation.id,
       name: enriched.generation.name,
@@ -310,7 +310,7 @@ export function ReproductionTab({
                 </button>
                 {showRaw ? (
                   <div className="mt-2">
-                    <CodeBlock language="json" code={JSON.stringify(manifest, null, 2)} />
+                    <CodeBlock language="json" code={JSON.stringify(withManifestParameters(active.enriched), null, 2)} />
                   </div>
                 ) : null}
               </div>

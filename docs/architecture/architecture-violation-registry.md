@@ -2,11 +2,13 @@
 
 Purpose: a traceable record of places where the implementation departs from SynthGraph's architecture, what each costs the people using it, and what has been done about it. Every entry was checked against the repository, not just reported.
 
-- **Verified against:** `main` at commit `6d6916b`, 2026-10-30. Remediation entries were verified on the branch that carries commits `0b3becc` to `8cf3793`: 208 frontend tests, 39 backend unit tests, 244 end-to-end tests against a local database, a production build, `tsc` and lint.
+- **Verified against:** `main` at commit `6d6916b`, 2026-10-30. Remediation entries were verified on the branches that carry commits `0b3becc` to `2ce34dd`: frontend tests, backend unit tests, 244 end-to-end tests against a local database, a production build, `tsc` and lint, and a render of the Reproduction tab against a real backend.
 - **Method:** reading the code, running the real functions on sample inputs, and comparing screens with the documentation. No user research was done.
 - **Status vocabulary:** `confirmed`, `confirmed - decision needed`, `downgraded`, `rejected`, `investigating`, `partially remediated`, `remediated`.
 
 ## 1. Principles the entries are assessed against
+
+The full statement, including what the frontend may calculate, is in [architecture-principles.md](architecture-principles.md).
 
 | Principle | Expected behaviour |
 | --- | --- |
@@ -25,7 +27,7 @@ Only one of these is written down in the repository: `docs/frontendarchitecture.
 | --- | --- | --- | --- |
 | ARCH-001 | Metric optimisation direction is guessed from names in the frontend | Critical (see note) | partially remediated |
 | ARCH-002 | Parameter-analysis conclusions are computed in the frontend | High | decided: exploratory; labelled |
-| ARCH-003 | Reproducibility scoring and grading live in the frontend | Critical (see note) | partially remediated |
+| ARCH-003 | Reproducibility scoring and grading live in the frontend | Critical (see note) | remediated (pending deployment) |
 | ARCH-004 | The frontend infers lineage edges from timing | **High** | confirmed |
 | ARCH-005 | Domain-assessment rules (attention flags, report analytics) live in the frontend | Low-Medium | confirmed (split from the original entry; wording corrected) |
 | ARCH-006 | Evaluation comparison semantics are inferred in the frontend | Medium | partially remediated |
@@ -85,7 +87,10 @@ Severity note for ARCH-001 and ARCH-003: the verification review rated both High
 - **Remediated so far (2026-10-30):**
   - The backend now classifies a non-blank `environment.commit` as a known "Code version" (`classificationVersion: 2`, additive), and the frontend override is removed. Commit presence (backend classification) and a dirty working tree (`environment.dirty`) are separate conditions with separate blockers. Scores for existing generations are unchanged.
   - The grades are renamed for what they measure (Well recorded, Some gaps, Major gaps, Not assessed; key `complete` replaces `reproducible`) and the assessment is versioned (`ASSESSMENT_VERSION` 2, thresholds exposed as `ASSESSMENT_METHOD`, stated in the Markdown report and carried in the JSON download).
-  - **Still open:** the score, the thresholds and the blockers (including reading `environment.dirty`) are still computed in the frontend; the seed rule is still checked in two places; the report is still built in the browser.
+  - **Scoring moved to the backend (2026-10-30, second step):** `assessReproducibility` in `synthgraph-backend/src/reproduction/assessment/` computes the score, grade, blockers, short tags and notes, and returns them as an additive `assessment` (with the `method` that produced it) on every reproduction manifest, including the batch and workspace routes. The method is the scoring the frontend used (version 2), so existing results are unchanged. The seed and the code version are each decided once, from the classification, and a dirty working tree is read from the environment and blocks on its own. The frontend shows the assessment and computes nothing: against a backend that returns none it shows "Not assessed" with the reason, and a test guards that the frontend exports no scoring function.
+  - **Acceptance criteria:** no frontend scoring formula (met); no frontend override of a classification (met); backend returns score, status, blockers and explanations (met); commit presence and dirty tree separate (met); backend tests for known, supplied, external and missing fields (met).
+  - **Checked against a real backend and database:** the Reproduction tab shows the same numbers as production showed when the frontend computed them (82% on average, 79% for the first generation, "uncommitted code, no code version"). **Pending:** deployment, backend first. Until the backend is deployed the tab reads "Not assessed".
+  - **Left in the frontend, on purpose:** the grade names, the counts and ordering for the summary, and the downloadable report, which is assembled in the browser but states the method the backend returned. A report assembled by the backend would be a separate change.
   - **Deploy order:** backend first. A frontend that reads the classification as is shows a recorded commit as "no code version" against a backend that has not been updated.
 - **Potential user impact:** a researcher cites a completeness score as reproducibility evidence, or two clients disagree. Likelihood medium; consequence moderate to high for a provenance product.
 - **Observed user impact:** none recorded.
@@ -139,7 +144,7 @@ Split from the original entry. Only the items below are domain decisions; the ac
 - **Why it is currently unreachable:**
   - The backend validation (`generations/dto/generation-request.dto.ts`, the `reproducibility.seed` check) rejects any seed that is present but not a safe integer, so a null seed returns 400.
   - The SDK serialises with `exclude_none=True` (`sdk/src/synthgraph/generations.py`), so it never sends a null.
-- **Residual risk:** a row written outside the API (manual SQL, an old import) could hold a null seed, where the two layers would disagree. Low; recorded so the check can be aligned when the assessment moves to the backend.
+- **Residual risk (reduced 2026-10-30):** the assessment now reads the seed from the backend classification only, so the two layers can no longer disagree. A row written outside the API (manual SQL, an old import) that held a null seed would be classified as recorded, which is arguably wrong; low, and now a single place to fix.
 
 ## 5. Acceptable presentation behaviour (not violations)
 
@@ -173,7 +178,7 @@ The backend's trend is a straight-line fit over the last 5 steps with a 1% "flat
 
 ## 8. Remediation order
 
-1. ARCH-003 - backend defines the assessment (needs no new data).
+1. ARCH-003 - backend defines the assessment (needs no new data). **Done, pending deployment.**
 2. ARCH-001 and ARCH-006 together - explicit direction and checkpoint step (needs an owner decision on where they are declared).
 3. ARCH-004 - needs an owner decision, then a recorded generation-to-run relationship.
 4. ARCH-002 and ARCH-005 - after the exploratory-versus-authoritative decision.
@@ -188,4 +193,5 @@ The backend's trend is a straight-line fit over the last 5 steps with a 1% "flat
 | 2026-10-30 | Backend recognises `environment.commit` (`c90db29`) and the frontend override is removed (`60bd2ee`). | ARCH-003: the code-version contradiction is gone; classification version 2 introduced; scores unchanged. |
 | 2026-10-30 | Grades renamed and the assessment versioned (`a73fb49`). | ARCH-003 partially remediated; assessment version 2 (same scoring, new names, code version from the backend). |
 | 2026-10-30 | Attention wording (`8cf3793`). | ARCH-005: wording describes the checks performed; the Overview versus Capture Completeness difference for never-reported capture recorded; behaviour unchanged. |
+| 2026-10-30 | Backend assessment (`9dd2cd5`) and the frontend showing it (`2ce34dd`). | ARCH-003 remediated, pending deployment; scoring, thresholds and blockers live in the backend, the frontend computes none. |
 | 2026-10-30 | Owner decisions recorded (section 2a); Overview flags never-reported capture; the Parameters analysis is labelled exploratory. | ARCH-005 consistency resolved; ARCH-002 decided and labelled. |
