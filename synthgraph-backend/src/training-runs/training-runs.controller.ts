@@ -17,6 +17,7 @@ import { TrainingRunStatus } from '../database/entities/training-run.entity.js';
 
 import { CreateTrainingRunDto } from './dto/create-training-run.dto.js';
 import { CreateTrainingRunDatasetReferenceDto } from './dto/create-training-run-dataset-reference.dto.js';
+import { CreateTrainingRunGenerationReferenceDto } from './dto/create-training-run-generation-reference.dto.js';
 import { ListTrainingRunsQueryDto } from './dto/list-training-runs-query.dto.js';
 import { UpdateTrainingRunCaptureStatusDto } from './dto/update-training-run-capture-status.dto.js';
 import { UpdateTrainingRunStatusDto } from './dto/update-training-run-status.dto.js';
@@ -27,6 +28,8 @@ import { ListTrainingRunsService } from './services/list-training-runs.service.j
 import { UpdateTrainingRunCaptureStatusService } from './services/update-training-run-capture-status.service.js';
 import { UpdateTrainingRunStatusService } from './services/update-training-run-status.service.js';
 import { CreateTrainingRunDatasetReferenceService } from './services/create-training-run-dataset-reference.service.js';
+import { TrainingRunGenerationReferencesService } from './services/training-run-generation-references.service.js';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto.js';
 
 @Controller()
 @UseGuards(ApiKeyGuard)
@@ -38,6 +41,7 @@ export class TrainingRunsController {
     private readonly updateTrainingRunStatusService: UpdateTrainingRunStatusService,
     private readonly updateTrainingRunCaptureStatusService: UpdateTrainingRunCaptureStatusService,
     private readonly createTrainingRunDatasetReferenceService: CreateTrainingRunDatasetReferenceService,
+    private readonly generationReferencesService: TrainingRunGenerationReferencesService,
   ) {}
 
   @Post('experiments/:experimentId/training-runs')
@@ -133,6 +137,35 @@ export class TrainingRunsController {
         datasetVersionId: body.datasetVersionId,
         role: body.role,
       },
+    );
+  }
+
+  @Post('training-runs/:trainingRunId/generations')
+  async createTrainingRunGenerationReference(
+    @Param('trainingRunId', new ParseUUIDPipe({ version: '4' }))
+    trainingRunId: string,
+    @Body() body: CreateTrainingRunGenerationReferenceDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.generationReferencesService.create(
+      trainingRunId,
+      request.user.id,
+      body.generationId,
+    );
+  }
+
+  @Get('training-runs/:trainingRunId/generations')
+  async listTrainingRunGenerationReferences(
+    @Param('trainingRunId', new ParseUUIDPipe({ version: '4' }))
+    trainingRunId: string,
+    @Query() query: PaginationQueryDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.generationReferencesService.list(
+      trainingRunId,
+      request.user.id,
+      query.limit,
+      query.offset,
     );
   }
 }

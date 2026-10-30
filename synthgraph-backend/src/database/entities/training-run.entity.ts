@@ -12,6 +12,7 @@ import type { Relation } from 'typeorm';
 
 import { DatasetVersion } from './dataset-version.entity.js';
 import { Experiment } from './experiment.entity.js';
+import { TrainingRunGenerationReferenceView } from '../../training-runs/training-run-generation-reference-view.js';
 
 export enum TrainingRunStatus {
   Pending = 'pending',
@@ -119,4 +120,9 @@ export class TrainingRun {
   // empty) attached-dataset-version list; optional only because TypeScript
   // requires a type for the field before any service has run.
   datasets?: DatasetVersion[];
+
+  // Not a column either: the generations this run was recorded as using, filled
+  // by the same read paths. An empty list means none was recorded (it does not
+  // mean none was used).
+  generationReferences?: TrainingRunGenerationReferenceView[];
 }
