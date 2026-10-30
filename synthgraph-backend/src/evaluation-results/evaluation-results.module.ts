@@ -75,5 +75,6 @@ import { ListEvaluationResultsService } from './services/list-evaluation-results
     GetEvaluationResultService,
     ListEvaluationResultsService,
   ],
+  exports: [ListEvaluationResultsService],
 })
 export class EvaluationResultsModule {}

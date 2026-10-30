@@ -58,6 +58,13 @@ export type TrainingRunHealthReport = {
   metrics: TrainingRunHealthMetric[];
 };
 
+/** Every run of one experiment's health, in the same order as the run list. */
+export type ExperimentTrainingRunHealthReport = {
+  experimentId: string;
+  windowSize: number;
+  runs: TrainingRunHealthReport[];
+};
+
 export type TrainingRunSearchField = "parameters" | "metrics";
 export type TrainingRunSearchOperator = "gt" | "gte" | "lt" | "lte" | "eq";
 
@@ -98,6 +105,12 @@ export type TrainingRunDriftReport = {
   trainingRunId: string;
   baselineRunCount: number;
   drift: TrainingRunDriftEntry[];
+};
+
+/** Every run of one experiment's drift, in the same order as the run list. */
+export type ExperimentTrainingRunDriftReport = {
+  experimentId: string;
+  runs: TrainingRunDriftReport[];
 };
 
 export type DatasetImpactMetric = {

@@ -1,0 +1,41 @@
+{
+  "capturedOn": "2026-10-30",
+  "what": "Workspace page load, real backend + real Postgres + production Next build, with a proxy adding 75 ms each way (about 150 ms round trip) between them. 'current production' hides the routes added in this branch (404), which is what today's deployed backend does.",
+  "data": "Seeded like the production Phase 1 experiment: 16 generations (2.6 KB source each), 3 runs x 57 metric rows x 60 keys, 9 evaluations.",
+  "caveat": "A local database answers in milliseconds, so this shows the effect of round trips and call counts, not production milliseconds. The production re-measure after deploy is the real number.",
+  "modes": [
+    {
+      "mode": "current production (batch manifests only; 404 probes for the new routes)",
+      "pageLoadMs": [709, 648, 660, 665],
+      "backendCalls": 18,
+      "extra404Probes": 3,
+      "sequentialHops": 3
+    },
+    {
+      "mode": "step 1: batched health and drift",
+      "pageLoadMs": [636, 649, 639, 634],
+      "backendCalls": 14,
+      "extra404Probes": 1,
+      "sequentialHops": 3
+    },
+    {
+      "mode": "steps 1 + 2: workspace endpoint",
+      "pageLoadMs": [402, 387, 372, 375],
+      "backendCalls": 3,
+      "note": "session check, the workspace request, and the page-title lookup (runs in parallel)",
+      "sequentialHops": 2,
+      "serverTimingExample": "experiment;dur=0.9, generations_list;dur=3.3, correlation;dur=3.8, runs_list;dur=5.3, health;dur=3.3, drift;dur=3.4, manifests;dur=6.6, metrics_evaluations;dur=7.2, total;dur=13.4"
+    }
+  ],
+  "parity": "The full HTML document returned for the experiment page is byte-for-byte identical in all three modes (cmp), so only how the data is loaded changed, not what is shown.",
+  "edgeCases": {
+    "experimentUnderWrongProject": "not-found page, no workspace data in the body, same as before",
+    "experimentThatDoesNotExist": "not-found page, same as before",
+    "noSessionOrInvalidKey": "redirect to /login, same as before"
+  },
+  "tests": {
+    "backendUnit": "27 passed (src)",
+    "backendE2eAgainstRealPostgres": "243 passed in 18 files, including test/workspace.e2e-spec.ts (new): the workspace response equals the separate routes piece by piece; whole-experiment health/drift equal the per-run routes; Server-Timing lists every part; other users get 404",
+    "frontend": "178 passed; tsc and eslint clean"
+  }
+}

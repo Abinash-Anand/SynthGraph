@@ -33,6 +33,6 @@ import { ExperimentsController } from './experiments.controller.js';
     UpdateExperimentService,
     ArchiveExperimentService,
   ],
-  exports: [EXPERIMENT_REPOSITORY],
+  exports: [EXPERIMENT_REPOSITORY, GetExperimentService],
 })
 export class ExperimentsModule {}

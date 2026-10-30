@@ -73,6 +73,7 @@ import { ListReproductionManifestsService } from './services/list-reproduction-m
 
   exports: [
     GetReproductionManifestService,
+    ListReproductionManifestsService,
   ],
 })
 export class ReproductionModule {}

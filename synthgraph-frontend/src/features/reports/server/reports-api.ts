@@ -5,6 +5,8 @@ import type {
   CaptureCompletenessReport,
   DatasetImpactReport,
   EfficiencyLeaderboard,
+  ExperimentTrainingRunDriftReport,
+  ExperimentTrainingRunHealthReport,
   ParameterCorrelationReport,
   TrainingRunDriftReport,
   TrainingRunHealthReport,
@@ -55,6 +57,26 @@ export function getTrainingRunDrift(
   trainingRunId: string,
 ): Promise<TrainingRunDriftReport> {
   return backendFetch(`/reports/training-run-drift?trainingRunId=${trainingRunId}`, {
+    token: apiKey,
+  });
+}
+
+/** Health for every run of an experiment in one request (see `getTrainingRunHealth` for one run). */
+export function getExperimentTrainingRunHealth(
+  apiKey: string,
+  experimentId: string,
+): Promise<ExperimentTrainingRunHealthReport> {
+  return backendFetch(`/reports/experiment-training-run-health?experimentId=${experimentId}`, {
+    token: apiKey,
+  });
+}
+
+/** Drift for every run of an experiment in one request (see `getTrainingRunDrift` for one run). */
+export function getExperimentTrainingRunDrift(
+  apiKey: string,
+  experimentId: string,
+): Promise<ExperimentTrainingRunDriftReport> {
+  return backendFetch(`/reports/experiment-training-run-drift?experimentId=${experimentId}`, {
     token: apiKey,
   });
 }

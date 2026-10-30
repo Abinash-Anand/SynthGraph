@@ -57,5 +57,6 @@ import { ListTrainingRunMetricsService } from './services/list-training-run-metr
     CreateTrainingRunMetricsBatchService,
     ListTrainingRunMetricsService,
   ],
+  exports: [ListTrainingRunMetricsService],
 })
 export class TrainingRunMetricsModule {}

@@ -19,6 +19,8 @@ import { GetCaptureCompletenessReportService } from './services/get-capture-comp
 import { GetDatasetImpactReportService } from './services/get-dataset-impact-report.service.js';
 import { GetEfficiencyLeaderboardService } from './services/get-efficiency-leaderboard.service.js';
 import { GetParameterCorrelationReportService } from './services/get-parameter-correlation-report.service.js';
+import { GetExperimentTrainingRunDriftService } from './services/get-experiment-training-run-drift.service.js';
+import { GetExperimentTrainingRunHealthService } from './services/get-experiment-training-run-health.service.js';
 import { GetTrainingRunDriftService } from './services/get-training-run-drift.service.js';
 import { GetTrainingRunHealthService } from './services/get-training-run-health.service.js';
 import { GetTrainingRunKeysService } from './services/get-training-run-keys.service.js';
@@ -68,6 +70,13 @@ import { SearchTrainingRunsService } from './services/search-training-runs.servi
     GetTrainingRunDriftService,
     GetDatasetImpactReportService,
     GetTrainingRunKeysService,
+    GetExperimentTrainingRunHealthService,
+    GetExperimentTrainingRunDriftService,
+  ],
+  exports: [
+    GetParameterCorrelationReportService,
+    GetExperimentTrainingRunHealthService,
+    GetExperimentTrainingRunDriftService,
   ],
 })
 export class ReportsModule {}

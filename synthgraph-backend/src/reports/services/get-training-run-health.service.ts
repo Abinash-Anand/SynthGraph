@@ -1,10 +1,11 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 
+import type { TrainingRunMetric } from '../../database/entities/training-run-metric.entity.js';
 import type { TrainingRunRepository } from '../../training-runs/repositories/training-run.repository.js';
 import { TRAINING_RUN_REPOSITORY } from '../../training-runs/repositories/training-run.tokens.js';
 import { ReportsRepository } from '../repositories/reports.repository.js';
 
-const DEFAULT_WINDOW_SIZE = 5;
+export const DEFAULT_HEALTH_WINDOW_SIZE = 5;
 // A window's predicted total change smaller than 1% of the metric's own
 // average magnitude reads as noise, not a real trend - purely a trend
 // classifier, not a value judgment: which direction is "better" for a
@@ -45,6 +46,69 @@ function computeSlope(points: Array<{ step: number; value: number }>): number {
   return numerator / denominator;
 }
 
+/**
+ * One run's health report from its most recent metric rows (oldest first).
+ * Shared by the per-run route and the whole-experiment route, so the two
+ * cannot disagree about what a trend is.
+ */
+export function buildTrainingRunHealthReport(
+  trainingRunId: string,
+  windowSize: number,
+  recentRows: TrainingRunMetric[],
+): TrainingRunHealthReport {
+  const pointsByKey = new Map<string, Array<{ step: number; value: number }>>();
+  for (const row of recentRows) {
+    for (const [key, rawValue] of Object.entries(row.metrics ?? {})) {
+      if (typeof rawValue !== 'number') continue;
+      const points = pointsByKey.get(key) ?? [];
+      points.push({ step: row.step, value: rawValue });
+      pointsByKey.set(key, points);
+    }
+  }
+
+  const metrics: TrainingRunHealthMetric[] = [];
+  for (const [metricKey, points] of pointsByKey) {
+    const latest = points[points.length - 1];
+
+    if (points.length < 2) {
+      metrics.push({
+        metricKey,
+        sampleCount: points.length,
+        trend: 'insufficient_data',
+        slope: null,
+        latestStep: latest?.step ?? null,
+        latestValue: latest?.value ?? null,
+      });
+      continue;
+    }
+
+    const slope = computeSlope(points);
+    const steps = points.map((p) => p.step);
+    const totalChange = slope * (Math.max(...steps) - Math.min(...steps));
+    const avgAbsValue =
+      points.reduce((sum, p) => sum + Math.abs(p.value), 0) / points.length;
+    const relativeChange = totalChange / (avgAbsValue || 1e-9);
+
+    const trend: TrainingRunHealthMetric['trend'] =
+      Math.abs(relativeChange) < FLAT_THRESHOLD_RATIO
+        ? 'flat'
+        : slope > 0
+          ? 'increasing'
+          : 'decreasing';
+
+    metrics.push({
+      metricKey,
+      sampleCount: points.length,
+      trend,
+      slope,
+      latestStep: latest.step,
+      latestValue: latest.value,
+    });
+  }
+
+  return { trainingRunId, windowSize, metrics };
+}
+
 @Injectable()
 export class GetTrainingRunHealthService {
   constructor(
@@ -59,7 +123,7 @@ export class GetTrainingRunHealthService {
   async execute(
     trainingRunId: string,
     userId: string,
-    windowSize: number = DEFAULT_WINDOW_SIZE,
+    windowSize: number = DEFAULT_HEALTH_WINDOW_SIZE,
   ): Promise<TrainingRunHealthReport> {
     const trainingRun = await this.trainingRunRepository.findByIdForUser(
       trainingRunId,
@@ -74,56 +138,6 @@ export class GetTrainingRunHealthService {
       windowSize,
     );
 
-    const pointsByKey = new Map<string, Array<{ step: number; value: number }>>();
-    for (const row of recentRows) {
-      for (const [key, rawValue] of Object.entries(row.metrics ?? {})) {
-        if (typeof rawValue !== 'number') continue;
-        const points = pointsByKey.get(key) ?? [];
-        points.push({ step: row.step, value: rawValue });
-        pointsByKey.set(key, points);
-      }
-    }
-
-    const metrics: TrainingRunHealthMetric[] = [];
-    for (const [metricKey, points] of pointsByKey) {
-      const latest = points[points.length - 1];
-
-      if (points.length < 2) {
-        metrics.push({
-          metricKey,
-          sampleCount: points.length,
-          trend: 'insufficient_data',
-          slope: null,
-          latestStep: latest?.step ?? null,
-          latestValue: latest?.value ?? null,
-        });
-        continue;
-      }
-
-      const slope = computeSlope(points);
-      const steps = points.map((p) => p.step);
-      const totalChange = slope * (Math.max(...steps) - Math.min(...steps));
-      const avgAbsValue =
-        points.reduce((sum, p) => sum + Math.abs(p.value), 0) / points.length;
-      const relativeChange = totalChange / (avgAbsValue || 1e-9);
-
-      const trend: TrainingRunHealthMetric['trend'] =
-        Math.abs(relativeChange) < FLAT_THRESHOLD_RATIO
-          ? 'flat'
-          : slope > 0
-            ? 'increasing'
-            : 'decreasing';
-
-      metrics.push({
-        metricKey,
-        sampleCount: points.length,
-        trend,
-        slope,
-        latestStep: latest.step,
-        latestValue: latest.value,
-      });
-    }
-
-    return { trainingRunId, windowSize, metrics };
+    return buildTrainingRunHealthReport(trainingRunId, windowSize, recentRows);
   }
 }

@@ -6,16 +6,8 @@ import { isSeen } from "@/features/onboarding/onboarding-rules";
 import { readOnboardingSeen } from "@/features/onboarding/server/onboarding-state";
 import { WORKSPACE_TOUR } from "@/features/onboarding/tours/workspace-tour";
 import { getExperimentForProject } from "@/features/experiments/server/experiments-api";
-import { loadEnrichedGenerations } from "@/features/experiments/server/enriched-generations";
+import { loadExperimentWorkspace } from "@/features/experiments/server/load-workspace";
 import { stopwatch } from "@/features/experiments/server/workspace-payload";
-import {
-  getParameterCorrelationReport,
-  getTrainingRunDrift,
-  getTrainingRunHealth,
-} from "@/features/reports/server/reports-api";
-import { listEvaluationResults } from "@/features/evaluation-results/server/evaluation-results-api";
-import { listTrainingRunMetrics } from "@/features/training-runs/server/training-run-metrics-api";
-import { listTrainingRunsForExperiment } from "@/features/training-runs/server/training-runs-api";
 import { NotFoundError } from "@/shared/http/errors";
 
 type PageParams = { projectId: string; experimentId: string };
@@ -44,41 +36,36 @@ export default async function ExperimentDetailPage({ params }: { params: Promise
   // scoped, small N) rather than fetched on demand per inspector selection
   // - see EnrichedTrainingRun/EnrichedGeneration's own comment on why.
   //
-  // Nothing below depends on anything else's result, so it all goes out at
-  // once: two network round trips in total instead of one per call. Any
-  // NotFoundError (experiment missing or not the user's) still becomes a 404.
+  // One backend request when the backend has the workspace route, the separate
+  // routes otherwise (see loadExperimentWorkspace). Any NotFoundError
+  // (experiment missing or not the user's) still becomes a 404.
   const elapsedMs = stopwatch();
-  let data;
+  let workspace;
   try {
-    data = await Promise.all([
-      getExperimentForProject(session.apiKey, projectId, experimentId),
-      getParameterCorrelationReport(session.apiKey, experimentId),
-      listTrainingRunsForExperiment(session.apiKey, experimentId).then((trainingRuns) =>
-        Promise.all(
-          trainingRuns.map(async (run) => {
-            const [metrics, evaluations, health, drift] = await Promise.all([
-              listTrainingRunMetrics(session.apiKey, run.id),
-              listEvaluationResults(session.apiKey, run.id),
-              getTrainingRunHealth(session.apiKey, run.id),
-              getTrainingRunDrift(session.apiKey, run.id),
-            ]);
-            return { run, metrics, evaluations, health, drift };
-          }),
-        ),
-      ),
-      loadEnrichedGenerations(session.apiKey, experimentId),
-    ]);
+    workspace = await loadExperimentWorkspace(session.apiKey, projectId, experimentId);
   } catch (error) {
     if (error instanceof NotFoundError) notFound();
     throw error;
   }
-  const [experiment, correlationReport, enrichedTrainingRuns, enrichedGenerations] = data;
+  const {
+    experiment,
+    correlationReport,
+    trainingRuns: enrichedTrainingRuns,
+    generations: enrichedGenerations,
+    load,
+  } = workspace;
   console.info("experiment_workspace.loaded", {
     experimentId,
     ms: elapsedMs(),
     generations: enrichedGenerations.length,
     trainingRuns: enrichedTrainingRuns.length,
     manifestFailures: enrichedGenerations.filter((g) => g.manifestError).length,
+    source: load.source,
+    // With the workspace route: that one request's duration and the backend's
+    // own per-part breakdown (Server-Timing), to see where a slow load went.
+    ...(load.source === "workspace"
+      ? { backendMs: load.call.ms, retries: load.call.retries, serverTiming: load.call.serverTiming }
+      : {}),
   });
 
   // Only worth touring once there is something to tour - an experiment with

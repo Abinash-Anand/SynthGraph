@@ -5,12 +5,30 @@ const SYNTHGRAPH_API_URL = process.env.SYNTHGRAPH_API_URL ?? "http://localhost:3
 
 type Method = "GET" | "POST" | "PATCH" | "DELETE";
 
+/** How long one backend call took, as the caller saw it (retries included). */
+export type BackendCallTiming = {
+  method: Method;
+  path: string;
+  status: number;
+  ms: number;
+  /** Rate-limit retries before the answer. */
+  retries: number;
+  /** The backend's own `Server-Timing` breakdown, when it sends one. */
+  serverTiming: string | null;
+};
+
 type BackendFetchOptions = {
   method?: Method;
   body?: unknown;
   /** Bearer credential: either the transient login JWT or a long-lived `sg_...` API key. */
   token?: string;
+  /** Called once with how the call went, whether it succeeded or not. */
+  onTiming?: (timing: BackendCallTiming) => void;
 };
+
+// Opt-in: set BACKEND_FETCH_TIMING=1 to log every backend call's duration.
+// Paths carry resource ids but never the bearer token or any request body.
+const LOG_EVERY_CALL = process.env.BACKEND_FETCH_TIMING === "1";
 
 // A burst of parallel reads (a workspace page makes dozens) can trip the
 // backend's rate limit by a few requests. Waiting out a short `Retry-After`
@@ -32,7 +50,8 @@ function retryDelayMs(response: Response, attempt: number): number | null {
  * consistent everywhere.
  */
 export async function backendFetch<T>(path: string, options: BackendFetchOptions = {}): Promise<T> {
-  const { method = "GET", body, token } = options;
+  const { method = "GET", body, token, onTiming } = options;
+  const startedAt = performance.now();
 
   const headers: Record<string, string> = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -49,20 +68,36 @@ export async function backendFetch<T>(path: string, options: BackendFetchOptions
     });
 
   let response = await send();
+  let retries = 0;
   // Reads only: a rejected request was never executed, but replaying a write
   // is not something to do on the caller's behalf.
-  for (let attempt = 0; method === "GET" && response.status === 429 && attempt < MAX_RATE_LIMIT_RETRIES; attempt++) {
-    const waitMs = retryDelayMs(response, attempt);
+  while (method === "GET" && response.status === 429 && retries < MAX_RATE_LIMIT_RETRIES) {
+    const waitMs = retryDelayMs(response, retries);
     if (waitMs === null) break;
     await new Promise((resolve) => setTimeout(resolve, waitMs));
     response = await send();
+    retries += 1;
+  }
+
+  const raw = response.status === 204 ? "" : await response.text();
+
+  if (onTiming || LOG_EVERY_CALL) {
+    const timing: BackendCallTiming = {
+      method,
+      path,
+      status: response.status,
+      ms: Math.round(performance.now() - startedAt),
+      retries,
+      serverTiming: response.headers.get("server-timing"),
+    };
+    onTiming?.(timing);
+    if (LOG_EVERY_CALL) console.info("backend_fetch", timing);
   }
 
   if (response.status === 204) {
     return undefined as T;
   }
 
-  const raw = await response.text();
   const data = raw ? parseJson(raw) : undefined;
 
   if (!response.ok) {

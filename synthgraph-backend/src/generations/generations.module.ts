@@ -105,6 +105,6 @@ import { CreateGenerationAssetReferenceService } from './services/create-generat
     CreateGenerationAssetReferenceService,
   ],
 
-  exports: [GENERATION_REPOSITORY],
+  exports: [GENERATION_REPOSITORY, ListGenerationsService],
 })
 export class GenerationsModule {}
