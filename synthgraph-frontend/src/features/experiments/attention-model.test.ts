@@ -10,7 +10,9 @@ const run = (
     id: `${name}-id`,
     name,
     status: overrides.status ?? "completed",
-    captureStatus: overrides.capture === null || overrides.capture === undefined ? null : { status: overrides.capture },
+    // Omitted means a run that reported complete capture; null means it never reported.
+    captureStatus:
+      overrides.capture === undefined ? { status: "complete" } : overrides.capture === null ? null : { status: overrides.capture },
   },
   drift: { drift: Array.from({ length: overrides.drift ?? 0 }, () => ({})) },
 });
@@ -45,9 +47,34 @@ describe("computeAttentionEntries", () => {
     assert.deepEqual(computeAttentionEntries([run({ status: "completed", capture: "complete" })]), []);
   });
 
-  it("does not flag a run that never reported capture (captureStatus is null)", () => {
-    // Documented limit, not an endorsement: the Capture Completeness report counts these as unknown.
-    assert.deepEqual(computeAttentionEntries([run({ capture: null })]), []);
+  it("flags a run that never reported capture, as the Capture Completeness report counts it", () => {
+    // Regression: Overview flagged only an explicit "unknown", so a run with a null
+    // captureStatus was counted as unknown by the report but not flagged here.
+    const [entry] = computeAttentionEntries([run({ capture: null }, "silent")]);
+    assert.deepEqual(entry.reasons, ["capture not reported"]);
+  });
+
+  it("flags a run that is still running and has not reported capture, like the report", () => {
+    const entries = computeAttentionEntries([run({ status: "running", capture: null }, "running")]);
+    assert.deepEqual(entries.map((e) => e.reasons), [["capture not reported"]]);
+  });
+
+  it("agrees with the capture report on which runs have no complete capture", () => {
+    // The report buckets by `captureStatus?.status ?? "unknown"`; partial and unknown
+    // there are exactly the runs flagged here for capture.
+    const runs = [
+      run({ capture: "complete" }, "complete"),
+      run({ capture: "partial" }, "partial"),
+      run({ capture: "unknown" }, "unknown"),
+      run({ capture: null }, "never"),
+    ];
+    const reportNeedsAttention = runs
+      .filter((r) => ["partial", "unknown"].includes(r.run.captureStatus?.status ?? "unknown"))
+      .map((r) => r.run.name);
+    const flaggedForCapture = computeAttentionEntries(runs)
+      .filter((entry) => entry.reasons.some((reason) => reason.startsWith("capture")))
+      .map((entry) => entry.runName);
+    assert.deepEqual(flaggedForCapture, reportNeedsAttention);
   });
 });
 
@@ -65,9 +92,10 @@ describe("describeEmptyAttention", () => {
     assert.match(text, /^No runs flagged\./);
   });
 
-  it("says what it does not check", () => {
+  it("says what it does not check, and no longer lists never-reported capture there", () => {
     assert.match(text, /Metric behaviour/);
-    assert.match(text, /never reported capture/);
+    assert.match(text, /capture never reported/); // now a check that is run
+    assert.doesNotMatch(text, /are not checked/);
   });
 
   it("matches the reasons the rules can produce", () => {
@@ -75,6 +103,7 @@ describe("describeEmptyAttention", () => {
       computeAttentionEntries([
         run({ status: "failed", capture: "partial", drift: 1 }, "a"),
         run({ capture: "unknown" }, "b"),
+        run({ capture: null }, "c"),
       ]).flatMap((entry) => entry.reasons.map((reason) => (reason.startsWith("drift") ? "drift" : reason))),
     );
     assert.deepEqual(new Set(ATTENTION_CHECKS.map((check) => check.reason)), produced);
