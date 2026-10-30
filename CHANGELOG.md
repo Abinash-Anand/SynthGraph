@@ -35,6 +35,10 @@ This project does not yet have tagged releases - entries accumulate under
   another project, or reusing a dataset of another project, is refused before anything
   is created (`SynthGraphCrossProjectReferenceError`). `use(generation)` no longer
   fails for a generation that produced no dataset.
+- `GET /reports/capture-completeness/runs` lists the runs behind the capture report's counts with what is
+  wrong with each one's capture, and `GET /reports/capture-completeness` gains `integrations` (left open,
+  close rate, coverage). The Capture Completeness page shows the backend's answer. Its "unknown" list now
+  includes runs that explicitly reported `unknown`, which the report already counted.
 - `GET /reports/experiment-attention?experimentId=` and `attention` on `GET /experiments/:id/workspace`:
   which training runs need a look (failed, capture partial, unknown or never reported, drift) and which
   checks that covers. The Overview now shows the backend's answer instead of working it out itself.
