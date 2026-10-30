@@ -1,0 +1,25 @@
+{
+  "capturedOn": "2026-10-30",
+  "what": "Workspace page load with the session check and the workspace request started together. Same setup as local-real-backend.json: real backend, real Postgres, production Next build, proxy adding 75 ms each way (about 150 ms round trip), same seeded data.",
+  "caveat": "A local database answers in milliseconds, so this shows the effect of round trips, not production milliseconds. The production re-check after deploy is the real number.",
+  "before_this_change": { "pageLoadMs": [402, 387, 372, 375], "backendCalls": 3, "sequentialHops": 2, "calls": "session, then workspace and page-title lookup" },
+  "session_and_workspace_in_parallel_only": {
+    "pageLoadMs": [359, 342, 358, 355],
+    "backendCalls": 3,
+    "note": "The two requests started together (offsets 0 and 1 ms), but the page-title lookup in generateMetadata still waited for the session check and became the longest path."
+  },
+  "plus_title_shares_the_workspace_request": {
+    "pageLoadMs": [250, 231, 236, 228],
+    "backendCalls": 2,
+    "sequentialHops": 1,
+    "calls": ["session@0+175ms", "workspace@0+190ms"]
+  },
+  "pageContent": "The rendered data is the same: 637 stream rows in both, differing only in the build id and in where one long string is split across stream chunks. The page title is identical. Row order and ids shift because the title now resolves with the page.",
+  "edgeCases": {
+    "experimentUnderWrongProject": "not-found page, no workspace data in the body",
+    "experimentThatDoesNotExist": "not-found page, no workspace data in the body",
+    "noSession": "307 to /login, no backend calls",
+    "invalidKey": "307 to /api/auth/clear-session?next=/login; 4 backend calls instead of 2 (workspace requested with the rejected key, all 401), only for invalid keys"
+  },
+  "tests": "frontend 181 passed (3 new for settle); tsc and eslint clean"
+}
