@@ -1,56 +1,32 @@
-// What went wrong with a run's capture, in words. Pure and framework-free.
+// How the Capture Completeness page words what the backend says. Pure and
+// framework-free so the wording is tested on its own.
+//
+// What is wrong with a run's capture, the 50% majority rule, and how each
+// integration is doing are all decided by the backend (registry entry ARCH-005):
+// `GET /reports/capture-completeness` returns the integrations rated, and
+// `GET /reports/capture-completeness/runs` returns the runs behind the counts with
+// their issues. Nothing here decides a flag. This module turns structured issues
+// into sentences and orders a list for display.
 
-export type IntegrationCounts = { total: number; attached: number; closed: number };
-export type RunIntegrations = Record<string, { attached: boolean; closed: boolean }>;
+export type CaptureIssue =
+  | { kind: "not_attached"; integration: string }
+  | { kind: "never_closed"; integration: string }
+  | { kind: "not_reported"; integration: string; reportedBy: number; totalRuns: number };
 
-export type CaptureIssue = {
-  integration: string;
-  kind: "never-closed" | "not-attached" | "not-reported";
-  message: string;
-};
-
-/**
- * An integration other runs report but this one doesn't is only worth
- * flagging when most runs have it - otherwise a one-off integration would
- * make every other run look broken.
- */
-const MAJORITY = 0.5;
-
-export function describeRunCapture(
-  run: RunIntegrations | null | undefined,
-  byIntegration: Record<string, IntegrationCounts>,
-  totalRuns: number,
-): CaptureIssue[] {
-  const issues: CaptureIssue[] = [];
-  const reported = run ?? {};
-
-  for (const [integration, state] of Object.entries(reported)) {
-    if (!state.attached) {
-      issues.push({
-        integration,
-        kind: "not-attached",
-        message: `${integration} was reported but never attached.`,
-      });
-    } else if (!state.closed) {
-      issues.push({
-        integration,
-        kind: "never-closed",
-        message: `${integration} attached but was never closed out, so its data may be incomplete.`,
-      });
+export function describeCaptureIssue(issue: CaptureIssue): string {
+  switch (issue.kind) {
+    case "not_attached":
+      return `${issue.integration} was reported but never attached.`;
+    case "never_closed":
+      return `${issue.integration} attached but was never closed out, so its data may be incomplete.`;
+    case "not_reported":
+      return `${issue.integration} is reported by ${issue.reportedBy} of ${issue.totalRuns} runs but not this one.`;
+    default: {
+      // An issue kind from a newer backend is shown rather than dropped.
+      const unknown = issue as { kind: string; integration?: string };
+      return `${unknown.integration ?? "An integration"}: ${unknown.kind.replaceAll("_", " ")}.`;
     }
   }
-
-  for (const [integration, counts] of Object.entries(byIntegration)) {
-    if (integration in reported) continue;
-    if (totalRuns > 0 && counts.total / totalRuns > MAJORITY) {
-      issues.push({
-        integration,
-        kind: "not-reported",
-        message: `${integration} is reported by ${counts.total} of ${totalRuns} runs but not this one.`,
-      });
-    }
-  }
-  return issues;
 }
 
 export type IntegrationHealth = {
@@ -58,28 +34,17 @@ export type IntegrationHealth = {
   total: number;
   attached: number;
   closed: number;
-  /** closed / total, 0..1 */
-  closeRate: number;
   /** Attached but never closed. */
   dangling: number;
+  /** closed / total, 0 to 1. */
+  closeRate: number;
+  /** Share of all runs that reported the integration, 0 to 1. */
   coverage: number;
 };
 
-export function integrationHealth(
-  byIntegration: Record<string, IntegrationCounts>,
-  totalRuns: number,
-): IntegrationHealth[] {
-  return Object.entries(byIntegration)
-    .map(([integration, counts]) => ({
-      integration,
-      total: counts.total,
-      attached: counts.attached,
-      closed: counts.closed,
-      closeRate: counts.total > 0 ? counts.closed / counts.total : 0,
-      dangling: Math.max(0, counts.attached - counts.closed),
-      coverage: totalRuns > 0 ? counts.total / totalRuns : 0,
-    }))
-    .sort((a, b) => a.closeRate - b.closeRate || a.integration.localeCompare(b.integration));
+/** Weakest first, as the table is read: lowest close rate, then by name. Ordering only. */
+export function weakestFirst(health: readonly IntegrationHealth[]): IntegrationHealth[] {
+  return [...health].sort((a, b) => a.closeRate - b.closeRate || a.integration.localeCompare(b.integration));
 }
 
 export type CaptureStatusFilter = "complete" | "partial" | "unknown";
@@ -87,3 +52,7 @@ export type CaptureStatusFilter = "complete" | "partial" | "unknown";
 export function parseStatusFilter(raw: string | undefined): CaptureStatusFilter | null {
   return raw === "complete" || raw === "partial" || raw === "unknown" ? raw : null;
 }
+
+/** What the run list says when the backend returned none. */
+export const CAPTURE_RUNS_UNAVAILABLE =
+  "The runs behind these counts and the per-integration ratings are not available from this backend version.";

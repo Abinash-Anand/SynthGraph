@@ -1,8 +1,10 @@
 import "server-only";
+import { NotFoundError } from "@/shared/http/errors";
 import { backendFetch } from "@/shared/http/http";
 import type {
   BestRunsReport,
   CaptureCompletenessReport,
+  CaptureCompletenessRuns,
   DatasetImpactReport,
   EfficiencyLeaderboard,
   ExperimentTrainingRunDriftReport,
@@ -22,6 +24,29 @@ export function getCaptureCompletenessReport(
 ): Promise<CaptureCompletenessReport> {
   const query = projectId ? `?projectId=${projectId}` : "";
   return backendFetch(`/reports/capture-completeness${query}`, { token: apiKey });
+}
+
+/**
+ * The runs behind the report's counts. Resolves to null when the backend does not have the
+ * route (it predates it), so the page can say so instead of failing.
+ */
+export async function getCaptureCompletenessRuns(
+  apiKey: string,
+  options: { projectId?: string; status?: "complete" | "partial" | "unknown" },
+): Promise<CaptureCompletenessRuns | null> {
+  const params = new URLSearchParams();
+  if (options.projectId) params.set("projectId", options.projectId);
+  if (options.status) params.set("status", options.status);
+  const query = params.toString();
+  try {
+    return await backendFetch<CaptureCompletenessRuns>(
+      `/reports/capture-completeness/runs${query ? `?${query}` : ""}`,
+      { token: apiKey },
+    );
+  } catch (error) {
+    if (error instanceof NotFoundError) return null;
+    throw error;
+  }
 }
 
 export function getEfficiencyLeaderboard(

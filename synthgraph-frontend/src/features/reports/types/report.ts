@@ -1,3 +1,4 @@
+import type { CaptureIssue, IntegrationHealth } from "../capture-model";
 import type {
   AggregatedDirections,
   DeclaredDirection,
@@ -16,6 +17,28 @@ export type CaptureCompletenessReport = {
     string,
     { total: number; attached: number; closed: number }
   >;
+  /** The same integrations rated by the backend. Absent from a backend that predates it. */
+  integrations?: IntegrationHealth[];
+};
+
+/** A run behind the report's counts, with what the backend found wrong with its capture. */
+export type CaptureCompletenessRun = {
+  trainingRunId: string;
+  name: string;
+  createdAt: string;
+  /** The status the run reported, or null when it never reported capture. */
+  captureStatus: "complete" | "partial" | "unknown" | null;
+  projectId: string;
+  projectName: string;
+  experimentId: string;
+  experimentName: string;
+  issues: CaptureIssue[];
+};
+
+export type CaptureCompletenessRuns = {
+  total: number;
+  truncated: boolean;
+  runs: CaptureCompletenessRun[];
 };
 
 export type EfficiencyLeaderboardEntry = {
