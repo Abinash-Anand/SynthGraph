@@ -44,6 +44,10 @@ This project does not yet have tagged releases - entries accumulate under
   Leaderboard asks the user to choose a direction for the view (not saved)
   rather than assuming "higher". Experiments recorded before directions existed
   show none until someone declares one.
+- The evaluation-checkpoint chart no longer reads a step out of an evaluation's name. It
+  plots on the recorded checkpoint step when every plotted evaluation has one, and by
+  recorded order, with a note, when any does not. Evaluations recorded before checkpoint
+  steps existed show "Not recorded" until they are re-recorded with a step.
 
 ### Fixed
 - CORS now requires an explicit origin allowlist in production, instead of

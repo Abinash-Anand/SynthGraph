@@ -1,4 +1,5 @@
 import type { EvaluationResult } from "@/features/evaluation-results/types/evaluation-result";
+import { hasCheckpointStep } from "@/features/experiments/checkpoint-model";
 import { formatDateTime, formatMetricValue } from "@/shared/lib/format";
 import { KeyValueList } from "@/shared/ui/KeyValueList";
 
@@ -24,6 +25,10 @@ export function EvaluationInspector({
         rows={[
           { label: "Created", value: formatDateTime(evaluation.createdAt) },
           { label: "Dataset version", value: evaluation.datasetVersionId },
+          {
+            label: "Checkpoint step",
+            value: hasCheckpointStep(evaluation) ? String(evaluation.checkpointStep) : "Not recorded",
+          },
         ]}
       />
 

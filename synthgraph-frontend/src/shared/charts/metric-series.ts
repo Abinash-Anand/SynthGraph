@@ -117,9 +117,3 @@ export function aggregateRuns(runs: Array<Array<[number, number]>>): BandPoint[]
   return result.sort((a, b) => a.step - b.step);
 }
 
-/** Checkpoint step from an evaluation's name ("go1-eval-run3-step20160" -> 20160). */
-export function parseCheckpointStep(name: string | null): number | null {
-  if (!name) return null;
-  const match = /step[-_ ]?(\d+)/i.exec(name);
-  return match ? Number(match[1]) : null;
-}

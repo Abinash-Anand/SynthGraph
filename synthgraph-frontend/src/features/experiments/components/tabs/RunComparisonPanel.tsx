@@ -9,7 +9,6 @@ import { extractMetricKeys } from "@/shared/charts/MetricKeyPicker";
 import {
   aggregateRuns,
   domainIndexOf,
-  parseCheckpointStep,
   preferredSeriesKeys,
   splitStepDomains,
 } from "@/shared/charts/metric-series";
@@ -22,6 +21,12 @@ import {
   rankingDirection,
 } from "@/shared/lib/metric-direction";
 import { compareMetricKeys } from "@/shared/lib/metric-semantics";
+import {
+  type CheckpointAxisSummary,
+  checkpointAxisFor,
+  checkpointPoints,
+  describeCheckpointAxis,
+} from "../../checkpoint-model";
 import { describeEvaluationSummary, outcomeMetricKeys, preferredOutcomeKey, summarizeEvaluations } from "../../outcomes";
 import type { EnrichedTrainingRun } from "../../types/experiment-workspace";
 
@@ -359,27 +364,22 @@ function TrainingCurves({ runs, metricDirections }: { runs: EnrichedTrainingRun[
 
 type CheckpointRun = { id: string; name: string; color: string; points: Array<[number, number]> };
 
-function checkpointSeries(runs: EnrichedTrainingRun[], metricKey: string): { series: CheckpointRun[]; parsed: boolean } {
-  let parsed = true;
-  const series = runs.map((r, index): CheckpointRun => {
-    const rows = r.evaluations
-      .map((evaluation, order) => {
-        const value = evaluation.metrics[metricKey];
-        if (typeof value !== "number" || !Number.isFinite(value)) return null;
-        const step = parseCheckpointStep(evaluation.name);
-        if (step === null) parsed = false;
-        return { step: step ?? order, value };
-      })
-      .filter((row): row is { step: number; value: number } => row !== null)
-      .sort((a, b) => a.step - b.step);
-    return {
+function checkpointSeries(
+  runs: EnrichedTrainingRun[],
+  metricKey: string,
+): { series: CheckpointRun[]; axis: CheckpointAxisSummary } {
+  // One axis for the whole chart: a recorded step and a list position are different
+  // units, so they are never plotted together (see checkpoint-model.ts).
+  const axis = checkpointAxisFor(runs, metricKey);
+  const series = runs.map(
+    (r, index): CheckpointRun => ({
       id: r.run.id,
       name: r.run.name,
       color: SERIES_COLORS[index % SERIES_COLORS.length],
-      points: rows.map((row): [number, number] => [row.step, row.value]),
-    };
-  });
-  return { series, parsed };
+      points: checkpointPoints(r.evaluations, metricKey, axis.axis),
+    }),
+  );
+  return { series, axis };
 }
 
 function EvaluationCheckpoints({ runs, metricDirections }: { runs: EnrichedTrainingRun[]; metricDirections: MetricDirections }) {
@@ -388,7 +388,7 @@ function EvaluationCheckpoints({ runs, metricDirections }: { runs: EnrichedTrain
   const metricKey = keys.includes(chosen) ? chosen : preferredOutcomeKey(keys, metricDirections);
   const [hidden, toggle] = useHidden();
 
-  const { series, parsed } = useMemo(() => checkpointSeries(runs, metricKey), [runs, metricKey]);
+  const { series, axis } = useMemo(() => checkpointSeries(runs, metricKey), [runs, metricKey]);
   const withData = series.filter((s) => s.points.length > 0);
   const live = withData.filter((s) => !hidden.has(s.id));
 
@@ -405,7 +405,7 @@ function EvaluationCheckpoints({ runs, metricDirections }: { runs: EnrichedTrain
       },
       xAxis: {
         type: "value",
-        name: parsed ? "checkpoint step" : "evaluation order",
+        name: axis.axis === "step" ? "checkpoint step" : "evaluation order (as recorded)",
         nameLocation: "middle",
         nameGap: 24,
         nameTextStyle: AXIS,
@@ -430,7 +430,7 @@ function EvaluationCheckpoints({ runs, metricDirections }: { runs: EnrichedTrain
         data: s.points,
       })),
     }),
-    [live, parsed],
+    [live, axis.axis],
   );
 
   if (keys.length === 0) {
@@ -451,7 +451,7 @@ function EvaluationCheckpoints({ runs, metricDirections }: { runs: EnrichedTrain
         </div>
         <p className="max-w-[48ch] text-[12px] text-research-ink-muted">
           How each run scored at each evaluation checkpoint: {directionLabel(direction)}.
-          {parsed ? "" : " Checkpoint steps couldn't be read from the evaluation names, so they're shown in order."}
+          {describeCheckpointAxis(axis) ? ` ${describeCheckpointAxis(axis)}` : ""}
         </p>
       </div>
       <RunChips series={withData} hidden={hidden} onToggle={toggle} />

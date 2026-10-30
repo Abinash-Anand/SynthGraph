@@ -4,7 +4,6 @@ import {
   aggregateRuns,
   domainIndexOf,
   normalizeValues,
-  parseCheckpointStep,
   preferredSeriesKeys,
   READABLE_SERIES_LIMIT,
   rangeOf,
@@ -82,15 +81,6 @@ describe("aggregateRuns", () => {
   });
   it("returns nothing for a single run", () => {
     assert.deepEqual(aggregateRuns([[[0, 1]]]), []);
-  });
-});
-
-describe("parseCheckpointStep", () => {
-  it("reads the step out of an evaluation name", () => {
-    assert.equal(parseCheckpointStep("go1-eval-run3-step20160"), 20160);
-    assert.equal(parseCheckpointStep("eval_step_500"), 500);
-    assert.equal(parseCheckpointStep("final"), null);
-    assert.equal(parseCheckpointStep(null), null);
   });
 });
 
