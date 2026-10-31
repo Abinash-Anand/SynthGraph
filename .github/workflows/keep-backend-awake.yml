@@ -1,0 +1,56 @@
+name: Keep backend awake
+
+# The hosted backend runs on Render's free tier, which stops an instance after about
+# 15 minutes without a request. A request every 5 minutes keeps it running, so the first
+# visitor does not wait through a cold start (close to 30 seconds, the SDK's timeout).
+#
+# This only makes requests. It changes nothing in the repository or the backend.
+#
+# Notes
+#  - GitHub runs scheduled workflows on a best-effort basis: a run can start a few minutes
+#    late, and now and then one is skipped. Five minutes leaves room for that.
+#  - GitHub switches scheduled workflows off after 60 days without repository activity.
+#    If that happens, re-enable it under the Actions tab.
+#  - If the backend is down, this job fails and GitHub emails you. That is intended.
+#  - The health check does not touch the database. To also keep the database from being
+#    paused for inactivity, add a repository secret named SYNTHGRAPH_KEEPALIVE_KEY holding
+#    an API key. The second step then makes one authenticated request that reads from the
+#    database. Use a key made only for this, so it can be revoked on its own.
+#  - To point it at another backend, set a repository variable named BACKEND_URL.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+# Never run two at once: a slow cold start should not pile up behind itself.
+concurrency:
+  group: keep-backend-awake
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      BACKEND_URL: ${{ vars.BACKEND_URL || 'https://synthgraph.onrender.com' }}
+      KEEPALIVE_KEY: ${{ secrets.SYNTHGRAPH_KEEPALIVE_KEY }}
+    steps:
+      - name: Health check
+        run: |
+          # A sleeping instance can take about 30 seconds to wake, so allow for that and retry.
+          curl --fail --silent --show-error \
+            --max-time 120 --retry 3 --retry-delay 15 --retry-all-errors \
+            --output /dev/null --write-out "health: HTTP %{http_code} in %{time_total}s\n" \
+            "$BACKEND_URL/health"
+
+      - name: Database check (only if a key is set)
+        if: ${{ env.KEEPALIVE_KEY != '' }}
+        run: |
+          curl --fail --silent --show-error \
+            --max-time 60 --retry 2 --retry-delay 10 --retry-all-errors \
+            --header "Authorization: Bearer $KEEPALIVE_KEY" \
+            --output /dev/null --write-out "database: HTTP %{http_code} in %{time_total}s\n" \
+            "$BACKEND_URL/auth/me/api-key"
