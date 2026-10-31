@@ -1,7 +1,7 @@
 /**
  * Code samples shown on the website. The record sample is the same code as the
  * documentation's quickstart (src/content/docs/quickstart.mdx), which was run
- * against SDK 0.6.0 and a real backend. Keep the two in step.
+ * against SDK 0.6.0 (the same code as 1.0.0) and a real backend. Keep the two in step.
  */
 export const CONFIGURE_SNIPPET = `$ export SYNTHGRAPH_API_KEY="..."
 $ export SYNTHGRAPH_API_URL="https://your-synthgraph-backend"`;
