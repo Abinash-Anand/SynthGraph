@@ -1,0 +1,96 @@
+This page takes you from nothing to a recorded generation, training run and evaluation that you can see in the dashboard. You need Python 3.11 or later.
+
+## 1. Get an API key
+
+Create an account at [synthgraph.dev/register](/register) and sign in. Open **Settings**, then **API Keys**, and create a key. Copy it when it is shown: it is displayed once.
+
+The SDK and the command line tool read the key from the environment. There is deliberately no option to pass it on the command line, because that would put it in your shell history.
+
+## 2. Install the SDK
+
+<Install />
+
+## 3. Point the SDK at a backend
+
+```bash
+export SYNTHGRAPH_API_KEY="sg_..."
+export SYNTHGRAPH_API_URL="https://synthgraph.onrender.com"
+```
+
+That is the hosted backend. If you run your own, use its URL instead.
+
+<Callout type="tip" title="The hosted backend sleeps when idle">
+
+The first request after a quiet period can take close to 30 seconds while it wakes up, and the SDK's default timeout is 30 seconds. If your first call times out, run it again, or raise the limit with `export SYNTHGRAPH_TIMEOUT=90`.
+
+</Callout>
+
+## 4. Record a run
+
+Save this as `capture.py`. Replace `run_my_blender_pipeline()` with your own code: SynthGraph does not touch it.
+
+```python
+from synthgraph import SynthGraph
+
+with SynthGraph() as sg:  # reads the two environment variables above
+    project = sg.project("Adverse weather detection")
+    experiment = project.experiment("vehicle_detection_rain")
+
+    with experiment.generation(
+        generator="blender",
+        generator_version="4.2",
+        parameters={"weather": "rain", "occlusion": 0.3, "camera_distance": 12},
+        seed=42,
+    ) as generation:
+        run_my_blender_pipeline()  # your code, unchanged
+
+        dataset = generation.dataset(
+            name="rain_dataset_v1",
+            uri="s3://lab-bucket/rain_dataset_v1",
+            format="image",
+        )
+
+    training = experiment.training(
+        model="yolo",
+        framework="pytorch",
+        dataset=dataset,
+        config={"epochs": 50, "batch_size": 32, "learning_rate": 0.001},
+    )
+    training.start()
+    training.log_metric(step=1, metrics={"loss": 0.9})
+    training.evaluation(
+        metrics={"mAP": 0.724, "precision": 0.78, "recall": 0.69},
+        dataset_version_id=dataset,
+    )
+    training.complete()
+```
+
+```bash
+python capture.py
+```
+
+What each part records:
+
+- **`project` and `experiment`** are created every time you call them with a name, so running the script twice gives you two projects. To add to a project you already have, open it by id with `sg.project(id="...")`.
+- **The first `with` block** is the generation. It starts when the block is entered and is marked completed when it exits cleanly. If your code raises, it is marked failed and your exception is raised again, untouched. The failed generation stays in your history.
+- **`generation.dataset(...)`** records a reference to your data: a name, where it lives, a format. Nothing is uploaded.
+- **`experiment.training(...)`** records the training run, linked to the dataset it used. You move it through its own lifecycle: `start()` when it begins and `complete()` when it ends, or `fail()` if it breaks. A training run is not started for you.
+- **`training.evaluation(...)`** records what the run scored and which dataset version it was scored on. That dataset version is required: an evaluation always says what it was measured on.
+
+## 5. See it in the dashboard
+
+Sign in at [synthgraph.dev/login](/login). Your project appears under **Projects**. Open the experiment to see its workspace, with the generation, the training run, its metrics and the evaluation, and the lineage that connects them.
+
+## 6. Read it back from the command line
+
+```bash
+synthgraph projects list
+synthgraph experiments list --project <project-id>
+synthgraph training-runs get <training-run-id>
+```
+
+Add `--json` to any command to get machine-readable output.
+
+## Where to go next
+
+- Back to the **[introduction](/docs)** for what SynthGraph records and what it does not.

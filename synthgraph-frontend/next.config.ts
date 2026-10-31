@@ -1,3 +1,4 @@
+import createMDX from "@next/mdx";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
@@ -12,4 +13,15 @@ const nextConfig: NextConfig = {
   ...(process.env.VERCEL ? {} : { output: "standalone" as const }),
 };
 
-export default nextConfig;
+// The documentation site (src/content/docs) is MDX. Pages are loaded with a
+// dynamic import from the docs route, not file-based routing, so pageExtensions
+// stays as it was. Plugins are named by string with serializable options,
+// which is what Turbopack needs.
+const withMDX = createMDX({
+  options: {
+    remarkPlugins: ["remark-gfm"],
+    rehypePlugins: ["rehype-slug", ["@shikijs/rehype", { theme: "github-dark", fallbackLanguage: "text" }]],
+  },
+});
+
+export default withMDX(nextConfig);

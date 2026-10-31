@@ -39,17 +39,19 @@ with SynthGraph() as sg:  # reads the two environment variables above
             format="image",
         )
 
-    with experiment.training(
+    training = experiment.training(
         model="yolo",
         framework="pytorch",
         dataset=dataset,
         config={"epochs": 50, "batch_size": 32, "learning_rate": 0.001},
-    ) as training:
-        training.log_metric(step=1, metrics={"loss": 0.9})
-        training.evaluation(
-            metrics={"mAP": 0.724, "precision": 0.78, "recall": 0.69},
-            dataset_version_id=dataset,
-        )`;
+    )
+    training.start()
+    training.log_metric(step=1, metrics={"loss": 0.9})
+    training.evaluation(
+        metrics={"mAP": 0.724, "precision": 0.78, "recall": 0.69},
+        dataset_version_id=dataset,
+    )
+    training.complete()`;
 
 const CLI = `$ synthgraph projects list
 $ synthgraph experiments list --project <project-id>
@@ -79,7 +81,7 @@ const SECTIONS = [
   {
     id: "record",
     title: "Record",
-    body: "A few lines around the code you already have. The with blocks start and finish the generation and the training run for you, and mark them failed if your code raises. Your dataset stays where it is: SynthGraph stores the reference, not the bytes.",
+    body: "A few lines around the code you already have. The with block starts and finishes the generation for you, and marks it failed if your code raises. A training run is started and completed with explicit calls. Your dataset stays where it is: SynthGraph stores the reference, not the bytes.",
     code: RECORD,
     language: "python" as const,
     filename: "capture.py",

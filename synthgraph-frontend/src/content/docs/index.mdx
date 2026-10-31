@@ -1,0 +1,44 @@
+SynthGraph is a lineage system for synthetic training data. It records what generated a dataset, which model trained on it, and what that model scored, and links those records into one graph you can inspect later.
+
+You keep working in Blender, Unity, Isaac Lab, PyTorch, notebooks and scripts exactly as you do now. A few calls from the Python SDK write down what happened. A dashboard and a command line tool let you read it back.
+
+## What it records
+
+| Record | What it holds |
+| --- | --- |
+| **Project** and **experiment** | How your work is grouped. An experiment holds the generations and training runs that belong together. |
+| **Generation** | One run of a generator: the generator and its version, the seed, your parameters, and a status that moves from pending to running to completed or failed. A failed generation is kept. |
+| **Dataset version** and **asset version** | A reference to data or a scene: where it lives, what you call it, and optionally a checksum. |
+| **Training run** | The model, the framework, your configuration, the metrics logged step by step, and how completely its telemetry was captured. |
+| **Evaluation** | The metrics a training run scored, the dataset version it was scored on, and optionally the checkpoint step. |
+
+The links between them are recorded, not guessed. A training run is linked to the data it used, and an evaluation is linked to the data it was scored on. If you never record a link, the dashboard shows no line there instead of inventing one.
+
+## How the pieces fit
+
+```text
+your script  ──(Python SDK, HTTPS)──▶  SynthGraph backend  ──▶  dashboard
+                                              │
+                                              └──────────────────▶  command line
+```
+
+The backend is the system of record. It stores the records, validates them, and decides what they mean: which direction is better for a metric, which runs need attention, how complete your capture was. The dashboard and the command line show those conclusions. They do not make their own.
+
+## What SynthGraph does not do
+
+<Callout type="note" title="Know the limits before you adopt it">
+
+- **It does not store your data.** A dataset version is a URI and some metadata. Your hundred-gigabyte render stays where you put it. The only time the SDK reads your files is if you ask it to compute a checksum.
+- **It does not generate data or train models.** It records the runs you already do.
+- **It does not regenerate a dataset for you.** The reproduction manifest lists what you would need to rerun a generation, and says what is missing. It grades how completely things were recorded, not whether a rerun will match.
+- **There are no plugins for Blender, Unity or Omniverse.** Your script calls the SDK. The framework helpers that exist are for reinforcement learning libraries.
+
+</Callout>
+
+## Who it is for
+
+Researchers and engineers who generate synthetic data, whether that is rendered images for a detector or randomized simulation for a reinforcement learning policy, and who want to be able to answer "which seed, which parameters, which generator version produced this result?" months later.
+
+## Where to go next
+
+- **[Quickstart](/docs/quickstart)**: record your first generation, training run and evaluation in a few minutes.
