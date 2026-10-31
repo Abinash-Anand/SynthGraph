@@ -1,0 +1,94 @@
+The SynthGraph API is an HTTPS and JSON API. The SDK, the CLI and the dashboard all use it, and you can call it directly.
+
+The backend serves an interactive reference, generated from the code, at `/docs`, and the OpenAPI document at `/docs-json`. For the hosted backend that is [synthgraph.onrender.com/docs](https://synthgraph.onrender.com/docs). It lists every route, parameter and response. This page covers the conventions that apply to all of them.
+
+## Authentication
+
+Send an API key as a bearer token:
+
+```bash
+curl -H "Authorization: Bearer $SYNTHGRAPH_API_KEY" "$SYNTHGRAPH_API_URL/projects"
+```
+
+- Keys start with `sg_` followed by 64 hexadecimal characters.
+- A missing header gives `401 Authentication required`. A key that does not exist or was revoked gives `401 Invalid API key`.
+- Create a key in the dashboard under **Settings, API Keys**, or with `POST /api-keys`. The full key is returned once. The backend stores only a SHA-256 hash of it, so it cannot show it again.
+- Revoke a key with `DELETE /api-keys/<id>`. It stops working immediately.
+- Passwords belong to the dashboard sign-in (`POST /auth/register` and `POST /auth/login`). Data routes accept API keys only.
+
+## Errors
+
+Errors use the standard NestJS shape:
+
+```json
+{ "message": "Invalid API key", "error": "Unauthorized", "statusCode": 401 }
+```
+
+When a request body fails validation, `message` is a list of what is wrong:
+
+```json
+{
+  "message": ["property nope should not exist", "name should not be empty"],
+  "error": "Bad Request",
+  "statusCode": 400
+}
+```
+
+| Status | Meaning |
+| --- | --- |
+| 400 | The request is invalid. Properties the API does not know about are rejected rather than ignored. |
+| 401 | No key, or a wrong or revoked key. |
+| 404 | The record does not exist, or it belongs to someone else. The two look the same. |
+| 409 | A conflict, for example changing a finished generation or declaring a different metric direction. |
+| 429 | Too many requests. |
+
+## Rate limits
+
+| Scope | Limit |
+| --- | --- |
+| Each API key | 120 requests a minute |
+| Each IP address | 3,000 requests a minute |
+| `POST /auth/register` and `POST /auth/login` | 10 a minute per IP address |
+
+Responses carry `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset` headers, with `-ip` variants for the per-address limit. A rejected request gets a `429` and a `Retry-After` header. `GET /health` is not limited.
+
+The limits are held in memory by each running backend, so they are per instance.
+
+## Pagination
+
+List routes take `limit` (1 to 200, default 100) and `offset` (default 0). They return a plain array, with no total count, so request the next page until you get fewer rows than `limit`.
+
+A few routes differ: the capture-completeness run list allows a `limit` up to 100, and recent search results up to 50. A batch of metric points holds 1 to 1,000 items, and comparisons take 2 to 10 ids.
+
+## Identifiers and time
+
+Records have UUID identifiers. Timestamps are ISO 8601 strings in UTC.
+
+Generation responses use snake case (`experiment_id`, `started_at`) and also include a `normalized` object in camel case. Most other responses use camel case.
+
+## Versioning
+
+The API has no version prefix. Changes are additive: a new field or route is added beside the old one, and an existing response shape or route is not changed or removed.
+
+## Routes
+
+| Area | Routes |
+| --- | --- |
+| Projects | `POST` and `GET /projects`, `GET`, `PATCH` and `DELETE /projects/<id>` |
+| Experiments | `POST` and `GET /projects/<id>/experiments`, `GET`, `PATCH` and `DELETE /experiments/<id>` |
+| Generations | `POST` and `GET /experiments/<id>/generations`, `GET` and `PATCH /generations/<id>`, `POST /generations/<id>/datasets`, `POST /generations/<id>/assets` |
+| Datasets and assets | `POST` and `GET /datasets`, `/datasets/<id>/versions`, `/dataset-versions/<id>`, and the same for `/assets` and `/asset-versions/<id>` |
+| Training runs | `POST` and `GET /experiments/<id>/training-runs`, `GET` and `PATCH /training-runs/<id>`, `PATCH /training-runs/<id>/capture-status`, `POST /training-runs/<id>/datasets`, `POST` and `GET /training-runs/<id>/generations` |
+| Metrics | `POST` and `GET /training-runs/<id>/metrics`, `POST /training-runs/<id>/metrics/batch` |
+| Evaluations | `POST` and `GET /training-runs/<id>/evaluations`, `GET /evaluation-results/<id>` |
+| Metric directions | `GET`, `POST` and `PUT /experiments/<id>/metric-directions` |
+| Comparison | `POST /generations/compare`, `POST /training-runs/compare` |
+| Reproduction and documentation | `GET /generations/<id>/reproduction-manifest`, `GET /generations/<id>/documentation` |
+| Reports | `GET /reports/...`: capture completeness, efficiency leaderboard, best runs, parameter correlation, training run search, health, drift and attention |
+| Workspace | `GET /experiments/<id>/workspace` |
+| Search | `GET /search`, `GET /search/recent` |
+| Keys and account | `POST`, `GET` and `DELETE /api-keys`, `GET /auth/me/api-key` |
+
+`DELETE` on a project, experiment, dataset or asset archives it. Generations, training runs, metrics and evaluations cannot be deleted through the API.
+
+The [interactive reference](https://synthgraph.onrender.com/docs) is the authority for exact parameters and responses.

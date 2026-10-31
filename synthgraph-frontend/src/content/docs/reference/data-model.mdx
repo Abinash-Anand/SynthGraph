@@ -1,0 +1,98 @@
+The fields of each record, as the API returns them and the SDK sends them. Every record has a UUID `id` and a `createdAt` timestamp.
+
+## Ownership
+
+```text
+User ─▶ Project ─▶ Experiment ─▶ Generation ─▶ (dataset versions, asset versions)
+                              └▶ Training run ─▶ Metric points
+                                              └▶ Evaluations
+```
+
+Datasets and assets belong to a user. A dataset also becomes scoped to a project the first time it is referenced, and a reference from another project is rejected.
+
+## Project and experiment
+
+| Field | Meaning |
+| --- | --- |
+| `name` | Up to 255 characters. Required. |
+| `description` | Free text. Optional. |
+| `archivedAt` | Set when archived. Archived records are hidden and cannot be opened. |
+| `updatedAt` | When last renamed or edited. |
+
+## Generation
+
+| Field | Meaning |
+| --- | --- |
+| `name` | The run's name. |
+| `generator` | `{ name, version, type }`. The name is required. |
+| `parameters` | Any JSON object. No schema is imposed. |
+| `reproducibility` | `{ seed, code_version, environment, configuration_hash }`, all optional. `environment` is a JSON object of facts such as Python version and git commit. |
+| `status` | `pending`, `running`, `completed` or `failed`. |
+| `startedAt`, `completedAt` | Set when the status becomes running, and when it becomes completed or failed. |
+| `inputs`, `outputs` | Lists of references. |
+
+Status moves forward only: pending to running, then running to completed or failed. Completed and failed are final. An invalid change is rejected with `409`. The API has no route to change a generation's generator, parameters or seed after it is created.
+
+## Dataset and dataset version
+
+A **dataset** has a `name`, an optional description and metadata, and a project scope. A **dataset version** is one immutable state of it:
+
+| Field | Meaning |
+| --- | --- |
+| `version` | A label, up to 100 characters, unique within its dataset. The SDK uses the current UTC time if you give none. |
+| `uri` | Where the data lives. Required. Stored as text and never opened. |
+| `format` | A free-text label. Optional. |
+| `size` | Bytes, as a number, returned as a string. Optional. |
+| `checksum` | Up to 255 characters. Optional. The SDK writes `sha256:<hex>` for a file and `sha256-tree:<hex>` for a folder it hashed. |
+| `metadata` | Any JSON object. |
+
+There is no route to edit a version.
+
+## Asset and asset version
+
+The same as a dataset, with a `type` on the asset (for example `scene`, `model`, `texture`) and no `format` on the version. Assets have no project scope.
+
+## Training run
+
+| Field | Meaning |
+| --- | --- |
+| `name` | The run's name. |
+| `trainer` | `{ name, version, type }` describing the model and framework. |
+| `parameters` | Your configuration, a JSON object. The SDK's `config=` is stored here. |
+| `status` | The same four values and the same rules as a generation. |
+| `startedAt`, `completedAt` | Set as the status changes. |
+| `captureStatus` | `null` if the run never reported, otherwise `{ status, integrations }` where `status` is `complete`, `partial` or `unknown`. |
+| `datasets` | The dataset versions the run was linked to. |
+| `generationReferences` | The generations the run was recorded as using. A link is exact and cannot be changed afterwards. |
+| `metadata` | Any JSON object. |
+
+## Metric point
+
+| Field | Meaning |
+| --- | --- |
+| `step` | An integer. |
+| `metrics` | A JSON object of names to values. |
+
+Points are returned in order of step. A request that creates many points at once takes between 1 and 1,000.
+
+## Evaluation
+
+| Field | Meaning |
+| --- | --- |
+| `datasetVersionId` | The dataset version it was measured on. Required. |
+| `metrics` | A JSON object of names to values. Required. |
+| `name` | A label. Optional. |
+| `checkpointStep` | An integer from 0 to 2,147,483,647. Optional. It is never read from the name. |
+| `metadata` | Any JSON object. |
+
+## Metric direction
+
+One per experiment and metric name.
+
+| Field | Meaning |
+| --- | --- |
+| `metricKey` | The exact metric name, up to 200 characters. |
+| `direction` | `maximize`, `minimize` or `neutral`. |
+| `correctedAt`, `correctionNote` | Set when the direction was corrected on purpose, with the reason. |
+
+Declaring a different direction for a metric that already has one is rejected with `409`. Only a correction, which needs a note, changes it.

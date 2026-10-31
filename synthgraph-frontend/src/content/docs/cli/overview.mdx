@@ -1,0 +1,79 @@
+The `synthgraph` command reads back what the SDK recorded. It is a query and export tool: you use it to look at provenance, compare it, and export manifests and documentation from a terminal or a script.
+
+It installs with the SDK. See [Installation and configuration](/docs/installation).
+
+```bash
+synthgraph --version
+synthgraph auth whoami
+```
+
+## Configure it
+
+The CLI reads the same environment variables as the SDK:
+
+```bash
+export SYNTHGRAPH_API_KEY="sg_..."
+export SYNTHGRAPH_API_URL="https://your-synthgraph-backend"
+```
+
+There is deliberately no `--api-key` option, because a key on the command line ends up in your shell history and in process listings. `--api-url` and `--timeout` exist as global options, placed before the command.
+
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `auth whoami` | Shows which account your key belongs to. The key is never printed. |
+| `projects`, `experiments`, `generations`, `training-runs`, `evaluations`, `datasets`, `assets` | List and show records. |
+| `experiments search` | Searches experiments in a project by name or description. |
+| `training-runs metrics` | Lists a run's metric points, ordered by step. |
+| `compare` | Compares two or more generations. |
+| `manifest` | Exports a generation's reproduction manifest. |
+| `docs` | Exports a generation's generated Markdown documentation. |
+| `metrics` | Lists, declares and corrects metric directions. |
+
+See the [command reference](/docs/cli/reference) for every option.
+
+## Reading and writing
+
+The CLI is mainly a read surface. Creating projects, generations, runs, evaluations and datasets is the SDK's job, so there is one place that writes your research data.
+
+Three commands do write, because they record small facts about records that already exist:
+
+- `metrics set-direction` and `metrics correct-direction`, which declare and correct a [metric direction](/docs/sdk/metric-directions).
+- `training-runs link-generation`, which records that a run used a generation. A link cannot be changed or removed afterwards, and linking the same pair again changes nothing.
+
+## Output formats
+
+Commands print a table by default. Add `--json` to any command for machine-readable output:
+
+```bash
+synthgraph --json projects list
+synthgraph generations list --experiment <experiment-id> --json
+```
+
+`--json` works both before the command and as an option of the command. `manifest` and `docs` can write to a file with `--output`.
+
+## You do not have to know the id
+
+In an interactive terminal, the id arguments are optional. If you leave one out, the CLI offers the last id of that kind you used on this machine, or lists your resources and asks you to pick one. It remembers the last ids in `~/.synthgraph/cli-state.json`. That file only changes which lookup runs by default. It never affects what is written to the backend.
+
+None of this happens in a script or a pipeline. When standard input is not a terminal, a missing id is an immediate usage error, so scripts behave the same every time.
+
+A mistyped command gets a suggestion, for example "No such command 'trainig-runs'. Did you mean 'training-runs'?". `synthgraph --install-completion` sets up tab completion for command and option names.
+
+## Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| 0 | Success. |
+| 1 | General failure, including a failed export. |
+| 2 | Invalid usage or configuration. |
+| 3 | Authentication failed. |
+| 4 | Not authorized. |
+| 5 | Not found. |
+| 6 | Validation error or conflict. |
+| 7 | Transport or backend failure. |
+
+## There is no `synthgraph reproduce`
+
+A manifest records what would be needed to reconstruct an experiment. It is a record, not a runnable script. Running your tools again stays your decision, in your environment.

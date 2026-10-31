@@ -1,0 +1,116 @@
+A reproduction manifest gathers what you would need to rerun one generation, and says plainly what is missing. It is a record, not a runnable script: it carries no dataset bytes and no credentials.
+
+Get one from the dashboard (the **Reproduction** tab), the CLI, or the SDK:
+
+```bash
+synthgraph manifest <generation-id> --output reproduction.json
+```
+
+```py
+manifest = generation.manifest()
+```
+
+Or from the API: `GET /generations/<id>/reproduction-manifest`.
+
+## What the grade means, and what it does not
+
+<Callout type="warning" title="The grade measures recording, not reproducibility">
+
+The assessment counts which of the fields that matter for a rebuild were recorded. It does **not** check that the recorded values are correct, that the data or the code still exist, or that running the same thing again would give the same result. A generation graded `complete` was well recorded. It is not guaranteed to be reproducible.
+
+</Callout>
+
+## The shape
+
+```json
+{
+  "schemaVersion": "1.0",
+  "classificationVersion": 2,
+  "classification": {
+    "known": [
+      { "field": "Generator", "value": "blender" },
+      { "field": "Generator version", "value": "4.2" },
+      { "field": "Seed", "value": "11" },
+      { "field": "Code version", "value": "ae5d5aca443d11b13229e050ea5a2b161e9bedb7" }
+    ],
+    "supplied": [
+      { "field": "python_version", "value": "3.12.10" },
+      { "field": "dirty", "value": "true" }
+    ],
+    "missing": ["Configuration hash"],
+    "external": [
+      { "field": "output", "value": "<dataset-version-id>" }
+    ]
+  },
+  "assessment": {
+    "method": { "version": 2, "completeAt": 0.85, "mostlyAt": 0.6, "externalWeight": 0.5 },
+    "grade": "partial",
+    "score": 0.9,
+    "counts": { "known": 4, "supplied": 9, "external": 1, "missing": 1 },
+    "blockers": ["The code had uncommitted changes when this ran, so it can't be rebuilt from the recorded commit."],
+    "blockerTags": ["uncommitted code"],
+    "notes": [
+      "1 input lives outside SynthGraph and may have changed since: output.",
+      "Not recorded: Configuration hash."
+    ]
+  },
+  "generation": { "id": "...", "name": "rain_light", "generator": {}, "parameters": {}, "reproducibility": {}, "status": "completed", "inputs": [], "outputs": [] },
+  "normalized": {},
+  "datasetReferences": [{ "datasetVersionId": "<dataset-version-id>", "role": "output" }]
+}
+```
+
+The example is shortened: `supplied` lists every environment fact that was recorded, and `generation` and `normalized` carry the full record.
+
+| Key | What it holds |
+| --- | --- |
+| `schemaVersion` | The manifest format. Currently `1.0`. |
+| `classificationVersion` | How fields were classified. Version 2 also counts a recorded git commit as a known code version. A manifest without it should be read as version 1. |
+| `classification` | Each field that matters, sorted into four groups (below). |
+| `assessment` | The grade, the score and the reasons. |
+| `generation` | The generation as recorded: its id, experiment, name, description, generator, parameters, reproducibility, status, inputs and outputs. |
+| `normalized` | The same generation in the API's normalized, camel-case shape, with timestamps and metadata. |
+| `datasetReferences` | The dataset versions attached to the generation, each with its role. |
+
+## The four groups
+
+**Known.** Fields you recorded as part of the generation's definition:
+
+- **Generator**: always present.
+- **Generator version**, **Seed** and **Configuration hash**, if recorded. A seed of `0` counts as recorded.
+- **Code version**, from `code_version`, or failing that from a recorded git commit.
+
+**Supplied.** Every environment fact recorded with the generation: Python version, operating system, architecture, and git commit, branch, repository and whether the tree had uncommitted changes. See [Code and environment provenance](/docs/sdk/provenance). If none were recorded, `Environment` appears under missing instead.
+
+**Missing.** Fields that matter and were not recorded: `Generator version`, `Seed`, `Code version`, `Configuration hash` and `Environment`.
+
+**External.** Each dataset version attached to the generation, listed by its role and its id. These inputs live outside the manifest. They may have changed since, so they count for less than recorded facts.
+
+Asset references are not part of the classification or `datasetReferences`.
+
+## How the score and grade are computed
+
+```text
+score = (known + supplied + 0.5 × external) / (known + supplied + external + missing)
+```
+
+| Score | Grade |
+| --- | --- |
+| 0.85 or higher | `complete` |
+| 0.6 up to 0.85 | `mostly` |
+| below 0.6 | `partial` |
+| nothing to count | `unknown` |
+
+Blockers can lower the grade whatever the score is:
+
+| Blocker | Tag | Effect |
+| --- | --- | --- |
+| The git working tree had uncommitted changes (`dirty` is true) | `uncommitted code` | The grade cannot be better than `partial`. |
+| No seed was recorded | `no seed` | The grade cannot be better than `mostly`. |
+| No code version was recorded | `no code version` | The grade cannot be better than `mostly`. |
+
+So a generation can have a high score and still be `partial` because its code was not committed, which is the case in the example above.
+
+## Generated documentation
+
+For a written version, `GET /generations/<id>/documentation` (or `synthgraph docs`) returns Markdown with the generation's id, status, description, generator, parameters, reproducibility, inputs, outputs and dataset references. It is a plain template filled from the record. It does not include the assessment.

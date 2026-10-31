@@ -104,6 +104,106 @@ export const DOCS_NAV: DocSection[] = [
       },
     ],
   },
+  {
+    title: "Dashboard",
+    pages: [
+      {
+        slug: "dashboard/overview",
+        title: "Dashboard overview",
+        description: "Sign in, find your way around, and manage projects, datasets, assets and API keys.",
+      },
+      {
+        slug: "dashboard/experiment-workspace",
+        title: "The experiment workspace",
+        description: "What each of the six tabs shows: overview, runs, lineage, metrics, parameters and reproduction.",
+      },
+      {
+        slug: "dashboard/compare",
+        title: "Compare",
+        description: "Put generations or training runs side by side and see which fields differ.",
+      },
+      {
+        slug: "dashboard/reports",
+        title: "Reports",
+        description: "Capture completeness, the efficiency leaderboard, best runs and training run search.",
+      },
+    ],
+  },
+  {
+    title: "Command line",
+    pages: [
+      {
+        slug: "cli/overview",
+        title: "CLI overview",
+        description: "Read back and export provenance from a terminal or a script.",
+      },
+      {
+        slug: "cli/recipes",
+        title: "CLI recipes",
+        description: "Tested commands for common tasks.",
+      },
+      {
+        slug: "cli/reference",
+        title: "CLI command reference",
+        description: "Every command and option, as the tool prints it.",
+      },
+    ],
+  },
+  {
+    title: "Reference",
+    pages: [
+      {
+        slug: "reference/reproduction-manifest",
+        title: "The reproduction manifest",
+        description: "The manifest's shape, how its score and grade are computed, and what they do not mean.",
+      },
+      {
+        slug: "reference/api",
+        title: "The API",
+        description: "Authentication, errors, rate limits, pagination and the routes.",
+      },
+      {
+        slug: "reference/data-model",
+        title: "Data model",
+        description: "The fields of every record.",
+      },
+      {
+        slug: "reference/limits",
+        title: "Limits and what SynthGraph does not do",
+        description: "What it does not do, and where it is still rough.",
+      },
+      {
+        slug: "reference/changelog",
+        title: "Changelog",
+        description: "What changed, newest first.",
+      },
+    ],
+  },
+  {
+    title: "Operate",
+    pages: [
+      {
+        slug: "operate/self-hosting",
+        title: "Self-hosting",
+        description: "Run the database, the backend and the dashboard yourself.",
+      },
+      {
+        slug: "operate/backend-configuration",
+        title: "Backend configuration",
+        description: "Every setting the backend and the dashboard read.",
+      },
+      {
+        slug: "operate/security",
+        title: "Security",
+        description: "How keys, passwords and access work, and how to report a problem.",
+      },
+      {
+        slug: "operate/faq",
+        title: "FAQ",
+        description: "Short answers to common questions and errors.",
+      },
+    ],
+  },
 ];
 
 export function docHref(slug: string): string {

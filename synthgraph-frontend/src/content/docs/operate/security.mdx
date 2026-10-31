@@ -1,0 +1,46 @@
+How SynthGraph handles keys, passwords and access, what it does not do, and how to report a problem. It makes no compliance claims: it has no security certifications, and nothing here is a certification or legal advice.
+
+## Who can see what
+
+Every record belongs to a user. Each request is checked against the owner of what it asks for, through the chain from user to project to experiment to the record. A record you do not own looks the same as one that does not exist: the API answers `404`, so one user cannot discover another's ids.
+
+## API keys
+
+- A key is `sg_` followed by 64 random hexadecimal characters.
+- The backend stores only a SHA-256 hash of it. The full key is shown once, when you create it, and the backend cannot show it again.
+- Revoking a key makes it stop working at once.
+- The SDK never logs a key, never writes it into a record or a manifest, and never puts it in an error message. The CLI has no `--api-key` option, so a key never lands in your shell history.
+
+Treat a key like a password. Anyone who has it can read and write your records.
+
+## Passwords and sessions
+
+- Passwords are hashed with argon2. The API never returns them.
+- Signing in to the dashboard creates an API key that runs your browser session, and stores it in a cookie that is `HttpOnly` (not readable by scripts on the page), `SameSite=Lax`, `Secure` in production, and lasts 30 days. These keys appear under **Settings, API Keys**. Revoke any you do not recognise, and signing out ends that session.
+- Sign-in uses a short-lived token that lasts 15 minutes. It is not used for research data.
+
+## Abuse limits
+
+Requests are rate-limited per API key and per address, and sign-in and sign-up are limited more tightly. See [The API](/docs/reference/api).
+
+## Your data
+
+SynthGraph stores references to your data and metadata about your runs, not the data itself. A dataset version is a URI and a name. See [Limits and what SynthGraph does not do](/docs/reference/limits).
+
+The only time the SDK reads your files is when you ask it to compute a checksum. It also records your Python version, operating system, architecture and git details by default. You can turn that off. See [Code and environment provenance](/docs/sdk/provenance).
+
+## What it does not do
+
+- **No security headers.** The backend does not add headers such as `Strict-Transport-Security` or a content security policy. Add them in the reverse proxy in front of it.
+- **No TLS of its own.** Put HTTPS in front of it.
+- **No audit log** of who read what.
+- **No hard delete through the API.** Archiving hides a project, an experiment, a dataset or an asset. If you run your own instance, you control the database.
+- **No certifications.** It has no SOC 2 or ISO 27001 and makes no claim of compliance with a regulation.
+
+## Running it yourself
+
+If you self-host, the secrets and the database are yours to protect. See [Self-hosting](/docs/operate/self-hosting) and [Backend configuration](/docs/operate/backend-configuration). In production the backend refuses to start with an unset or default `JWT_SECRET`.
+
+## Report a vulnerability
+
+Please do not open a public issue. Email **contact@synthgraph.dev** with what you found and its impact, the steps to reproduce it, and the component and version or commit. The maintainers will acknowledge it and work on a fix and a disclosure plan before details are published. No response time is promised. The full policy is [`SECURITY.md`](https://github.com/Abinash-Anand/SynthGraph/blob/main/SECURITY.md) in the repository.

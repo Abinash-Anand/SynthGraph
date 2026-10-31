@@ -56,15 +56,20 @@ print(resource_metadata())                              # a one-off CPU, memory 
 | `resource_metadata()` | A point-in-time snapshot of CPU, memory and GPU. It takes about 100 ms, because the CPU percentage needs a short measuring interval. |
 | `installed_packages_metadata()` | Every installed package and its version. It is a full dependency inventory, so it is never called for you. |
 
-Pass the result as `environment=` or `metadata=` when you create a generation or training run:
+Pass the result as `environment=` when you create a generation, or as `metadata=` on a training run:
 
-```py
-experiment.generation(
+```python
+generation = experiment.generation(
     generator="blender",
-    environment=environment_metadata(include_packages=["torch", "numpy"]),
-    metadata={"packages": installed_packages_metadata()},
+    environment={
+        **environment_metadata(include_packages=["numpy"]),
+        "all_packages": installed_packages_metadata(),
+    },
 )
+print(sorted(generation.generation.reproducibility.environment)[:4])
 ```
+
+Use `environment=` for a generation: it is where the reproduction manifest looks for these facts. A training run also takes `metadata=` for anything extra. A generation does not.
 
 ## The reproduction manifest
 

@@ -1,0 +1,43 @@
+The dashboard is where you read back what the SDK recorded. It has no write forms for your research data: runs, datasets and evaluations come from the SDK. You use the dashboard to look, compare, rename and archive.
+
+## Create an account and sign in
+
+Create an account at [synthgraph.dev/register](/register) with an email address and a password of at least 8 characters, then sign in at [synthgraph.dev/login](/login).
+
+## The navigation
+
+The left-hand navigation has five groups.
+
+| Group | Pages |
+| --- | --- |
+| **Dashboard** | **Overview**, **Projects**, **Datasets**, **Assets** |
+| **Reports** | **Capture Completeness**, **Efficiency Leaderboard**, **Best Runs**, **Training Run Search**. See [Reports](/docs/dashboard/reports). |
+| **Tools** | **Compare**. See [Compare](/docs/dashboard/compare). |
+| **Settings** | **API Keys** |
+
+Press **Ctrl K** (or **Cmd K**) anywhere in the dashboard to open the search and command palette. **Take the tour** in the sidebar starts a guided walk through the main screens.
+
+## Projects
+
+**Projects** lists your projects with their descriptions and creation dates. Open a project to see its experiments, and open an experiment to get its workspace. See [The experiment workspace](/docs/dashboard/experiment-workspace).
+
+Projects, experiments, datasets and assets can be renamed. **Archive** hides one from the dashboard: archived items are not listed and cannot be opened, and they are not deleted from the database.
+
+## Datasets and assets
+
+**Datasets** and **Assets** list every dataset and asset you own. Open one to see its versions, each with its URI, format, size and checksum if you recorded them.
+
+Each call to `generation.dataset(...)` or `generation.asset(...)` with a name creates a new dataset or asset. If you call it twice with the same name, you will see two entries with that name. To add a version to an existing one, pass its id as `dataset_id` or `asset_id`. See [Datasets and checksums](/docs/sdk/datasets).
+
+## API keys
+
+**Settings, API Keys** lists your keys, with the first characters of each, when it was created, and a **Revoke** button.
+
+- Create a key here to use with the SDK and the command line tool. The full key is shown once, when you create it. Copy it then.
+- **Every sign-in to the dashboard also creates a key**, which runs your browser session. These appear in the same list. If you see one you do not recognise, revoke it.
+- A revoked key stops working immediately: the API answers `401 Invalid API key`.
+
+## What the dashboard does not do
+
+- It does not edit a generation, a training run or an evaluation. Those are recorded once, through the SDK.
+- It does not upload or display your data. It shows where the data lives.

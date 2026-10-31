@@ -1,0 +1,37 @@
+What changed in SynthGraph, newest first. There are no tagged releases yet, so entries are grouped by SDK version where one applies, and by month for the rest. The full list is in [`CHANGELOG.md`](https://github.com/Abinash-Anand/SynthGraph/blob/main/CHANGELOG.md) in the repository.
+
+## October 2026
+
+### SDK 0.6.0: explicit lineage
+
+- `training.use(generation)` and `training.link_generation(generation)` record that a training run used a generation, including a simulation that wrote no dataset. `experiment.training(..., generations=[...])` does the same at creation. `synthgraph training-runs link-generation` and `training-runs generations` do it from the command line. See [Link data to results](/docs/sdk/lineage).
+- A dataset belongs to the first project that references it. Linking it from another project raises `SynthGraphCrossProjectReferenceError`.
+- The lineage graph in the dashboard draws only recorded links. Timing-inferred lines are gone.
+
+### SDK 0.5.0: checkpoint steps
+
+- `training.evaluation(..., checkpoint_step=N)` records the step an evaluation was taken at. The dashboard orders and plots checkpoints by it and no longer reads a step out of an evaluation's name.
+
+### SDK 0.4.0: declared metric directions
+
+- `experiment.declare_metric_directions(...)`, `experiment.training(metric_directions=...)` and `synthgraph metrics set-direction` declare whether a bigger or smaller value of a metric is better. A different direction for an already-declared metric is rejected, and a correction needs a note. See [Declare metric directions](/docs/sdk/metric-directions).
+- The dashboard no longer guesses a direction from a metric's name.
+
+### Dashboard and API
+
+- **Efficiency leaderboard.** Runs are ranked per evaluation set and are never ranked on a score blended across sets. The frontier, value per hour and "beaten by" come from the backend.
+- **Capture completeness.** The backend decides what is wrong with a run's capture and how each integration is doing. A new route lists the runs behind each count, and the "unknown" list now includes runs that explicitly reported `unknown`.
+- **Flagged runs.** The backend decides which runs the experiment Overview flags, using five fixed checks.
+- **Explicit run-to-generation links** and the routes behind them, `POST` and `GET /training-runs/<id>/generations`.
+
+## Earlier
+
+- Declared metric directions, evaluation checkpoint steps and project-scoped datasets arrived with their backend routes before the SDK and dashboard used them.
+- Per-IP rate limiting, tighter on sign-in and sign-up. Pagination on every list route. A batch route for metric points. Rename and archive for projects, experiments, datasets and assets.
+- A consistent `normalized` shape on every generation response.
+- CORS needs an explicit allowlist in production, and the backend refuses to start in production with an unset or default `JWT_SECRET`.
+- MIT license, CI, and contribution and security guidelines.
+
+## Keeping up
+
+Watch the repository on GitHub for releases and changes. When an SDK change could break your code, it is listed here first.

@@ -1,0 +1,71 @@
+## What is SynthGraph?
+
+A lineage system for synthetic training data. It records what generated a dataset, which model trained on it, and what that model scored, and links them into a graph. See the [introduction](/docs).
+
+## Does it store my data?
+
+No. A dataset or asset version is a URI, a name and optionally a checksum. SynthGraph never reads or uploads the bytes. The only time the SDK reads your files is when you ask it to compute a checksum.
+
+## Does it work with Blender, Unity or Omniverse?
+
+You call the SDK from your own script, so anything that runs Python can record to it. There are no plugins for those tools. The [framework helpers](/docs/sdk/integrations) cover reinforcement learning libraries: stable-baselines3, skrl, rl_games, Isaac Lab, MuJoCo Playground and Weights & Biases.
+
+## Can it regenerate or reproduce my dataset?
+
+No. The [reproduction manifest](/docs/reference/reproduction-manifest) lists what you would need to rerun a generation and what was not recorded. Its grade measures how completely things were recorded, not whether a rerun would match.
+
+## Is it free? Is it open source?
+
+It is open source under the MIT license: [github.com/Abinash-Anand/SynthGraph](https://github.com/Abinash-Anand/SynthGraph). You can run it yourself. There is also a hosted backend, which is an alpha service. See [Self-hosting](/docs/operate/self-hosting).
+
+## Which Python versions does the SDK need?
+
+Python 3.11 or later.
+
+## My first request timed out
+
+The hosted backend sleeps when idle, and waking it can take close to 30 seconds, which is the SDK's default timeout. Run it again, or raise the limit with `export SYNTHGRAPH_TIMEOUT=90`.
+
+## I got a 429 error
+
+An API key is limited to about 120 requests a minute, and each `log_metric` call is one request. Log at an interval, for example every N steps or once an epoch, instead of every step. See [Errors and retries](/docs/sdk/errors).
+
+## I got a 409 when I completed a generation
+
+A generation has to be started before it can be completed, and a finished generation cannot change again. Inside a `with` block this is handled for you. Outside one, call `start()` first. See [Record a generation](/docs/sdk/generations).
+
+## My training run is still "pending"
+
+A training run is not started or finished for you. Call `training.start()` when it begins and `training.complete()` when it ends. A `with` block on a training run only closes attached integrations. See [Training runs and metrics](/docs/sdk/training-runs).
+
+## The lineage graph has no lines
+
+Lines appear only for links you recorded. Pass the dataset or generation a run used when you create it, or call `training.use(generation)`. See [Link data to results](/docs/sdk/lineage).
+
+## The dashboard says a run's capture is "unknown" or "not reported"
+
+The run never reported its capture status. That happens when no integration was attached, or `training.close()` was never called. See [Resource monitoring and capture status](/docs/sdk/resource-monitoring).
+
+## Why does the Metrics tab stop at 100 points?
+
+The experiment workspace loads at most the first 100 metric points of each run. They are all stored. See [Limits and what SynthGraph does not do](/docs/reference/limits).
+
+## Why is there no "better" or "worse" next to my metric?
+
+You have not declared which direction is better for it. SynthGraph never guesses from a name. See [Declare metric directions](/docs/sdk/metric-directions).
+
+## Why do I have two datasets with the same name?
+
+Each `generation.dataset(name=...)` call creates a new dataset. To add a version to one you already have, pass its id as `dataset_id`. See [Datasets and checksums](/docs/sdk/datasets).
+
+## How do I delete something?
+
+Projects, experiments, datasets and assets can be archived in the dashboard, which hides them. Generations, training runs, metrics and evaluations cannot be removed through the API. If you run your own backend, you control the database.
+
+## Is the API stable?
+
+It has no version number and changes only additively: an existing response shape or route is not changed or removed. The SDK is an alpha, and its surface can still change. The [changelog](/docs/reference/changelog) says when it does.
+
+## How do I report a bug or a security problem?
+
+Open an issue on [GitHub](https://github.com/Abinash-Anand/SynthGraph/issues). For a vulnerability, do not open a public issue: see [Security](/docs/operate/security).

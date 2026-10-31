@@ -28,10 +28,15 @@ print(generation.status)  # "pending"
 | `parameters` | Your configuration: any JSON object. SynthGraph does not impose a schema. |
 | `seed` | The random seed, if the run has one. |
 | `name` | A name for the run. If you leave it out, the generator's name is used. |
-| `description`, `metadata` | Free text, and any extra JSON you want stored. |
 | `code_version`, `environment` | Override what the SDK would otherwise capture. See [Code and environment provenance](/docs/sdk/provenance). |
 
 A new generation is `pending`. Nothing has run yet, and nothing has been decided: the definition is on record before the outcome.
+
+<Callout type="warning" title="A generation has no description or metadata field">
+
+The SDK will let you pass `description=` or `metadata=` to `experiment.generation(...)`, but the backend rejects them with `body.description is not supported`. Put anything you want to keep, such as a note about the run, in `parameters`, which takes any JSON object.
+
+</Callout>
 
 ## Let the with block run the lifecycle
 
