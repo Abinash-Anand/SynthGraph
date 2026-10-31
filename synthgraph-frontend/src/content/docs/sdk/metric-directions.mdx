@@ -1,0 +1,81 @@
+Is a bigger number better? For reward and accuracy it is. For loss and error it is not. SynthGraph never guesses from a metric's name. You say which way is better, once, and everything that depends on it reads your answer.
+
+The examples on this page share this setup:
+
+```python
+from synthgraph import SynthGraph
+
+sg = SynthGraph()
+experiment = sg.project("Docs: directions").experiment("example")
+```
+
+## Declare directions
+
+```python
+experiment.declare_metric_directions({
+    "loss": "minimize",
+    "mAP": "maximize",
+    "reward_std": "neutral",
+})
+```
+
+There are three values:
+
+| Direction | Meaning |
+| --- | --- |
+| `maximize` | A bigger value is better. |
+| `minimize` | A smaller value is better. |
+| `neutral` | There is no better direction, for example a spread or a count. |
+
+Declare one at a time with `experiment.declare_metric_direction("loss", "minimize")`. Declaring several at once is all or nothing: if one is rejected, none are saved. Read what has been declared:
+
+```python
+print(experiment.metric_directions())
+```
+
+You can also declare them when you create a run:
+
+```python
+training = experiment.training(
+    model="ppo",
+    framework="brax",
+    metric_directions={"reward": "maximize"},
+)
+```
+
+Declaring the same direction again is harmless. Keys are exact metric names: there are no patterns and no prefixes.
+
+## What depends on it
+
+- The dashboard's training curves and trend judgements say whether a metric is **improving** or **worsening**.
+- Charts and tables say "best" and colour values as better or worse.
+- The efficiency leaderboard and the best-runs report rank runs.
+
+For a metric nobody declared, or one declared `neutral`, none of that happens. The dashboard shows the values and does not pick a winner, and it says why.
+
+## You cannot silently change your mind
+
+Declaring a *different* direction for a metric that already has one is rejected:
+
+```py
+experiment.declare_metric_direction("loss", "maximize")
+# SynthGraphMetricDirectionConflictError: ... A different direction is already declared for "loss"
+# in this experiment. Nothing was changed. To change a declared direction, correct it explicitly
+# with a note.
+```
+
+To change it on purpose, correct it with a reason, which is recorded:
+
+```python
+experiment.correct_metric_direction("loss", "minimize", note="Declared the wrong way round by mistake")
+```
+
+## Across experiments
+
+Reports that span experiments state a direction for a metric only when every experiment that reports it declared the same one. If they disagree, or some have not declared it, the report says the experiments disagree and ranks nothing.
+
+<Callout type="note" title="Nothing is declared for you">
+
+Existing experiments have no directions until someone declares them. The framework integrations do not declare directions either. Declare yours once, near where you create the experiment.
+
+</Callout>

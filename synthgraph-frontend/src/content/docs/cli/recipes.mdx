@@ -1,0 +1,84 @@
+Short, tested commands for things you will want to do. Replace the placeholders in angle brackets with ids from your own account.
+
+## Check that your key works
+
+```bash
+synthgraph auth whoami
+```
+
+It prints the id and email of the account behind `SYNTHGRAPH_API_KEY`.
+
+## Find an experiment and its runs
+
+```bash
+synthgraph projects list
+synthgraph experiments list --project <project-id>
+synthgraph experiments search --project <project-id> "rain"
+synthgraph generations list --experiment <experiment-id>
+synthgraph training-runs list --experiment <experiment-id>
+```
+
+## Inspect one training run
+
+```bash
+synthgraph training-runs get <training-run-id>
+synthgraph training-runs metrics <training-run-id>
+synthgraph evaluations list --training-run <training-run-id>
+```
+
+`training-runs get` shows the run's configuration, status, capture report and attached datasets. `metrics` lists up to the first page of points, ordered by step.
+
+## Find runs whose capture was incomplete
+
+```bash
+synthgraph training-runs list --experiment <experiment-id> --capture-status partial
+```
+
+The values are `complete`, `partial` and `unknown`. See [Resource monitoring and capture status](/docs/sdk/resource-monitoring).
+
+## Export a reproduction manifest
+
+```bash
+synthgraph manifest <generation-id> --output reproduction.json
+```
+
+The file records what you would need to reconstruct the generation and what is missing. It carries no dataset bytes and no credentials. See [The reproduction manifest](/docs/reference/reproduction-manifest).
+
+## Export generated documentation
+
+```bash
+synthgraph docs <generation-id> --output experiment.md
+```
+
+A Markdown description of a generation, useful for a lab record, a paper supplement or a handover.
+
+## Compare two generations
+
+```bash
+synthgraph compare <generation-id-a> <generation-id-b>
+```
+
+It lists the fields that differ, such as parameters, and the start and end times. Add `--json` for the raw comparison.
+
+## Use it in a script
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Latest generation's manifest grade, from JSON
+id=$(synthgraph generations list --experiment "$EXPERIMENT_ID" --json | python -c "import sys, json; print(json.load(sys.stdin)[0]['id'])")
+synthgraph manifest "$id" --output manifest.json
+python -c "import json; print(json.load(open('manifest.json'))['assessment']['grade'])"
+```
+
+The exit codes in the [overview](/docs/cli/overview) let a script tell "not found" (5) from "not authorised" (4) or a backend failure (7).
+
+## Declare a metric direction
+
+```bash
+synthgraph metrics set-direction <experiment-id> loss minimize
+synthgraph metrics list <experiment-id>
+```
+
+Declaring the same direction again changes nothing. Declaring a different one is rejected. To change one on purpose, use `synthgraph metrics correct-direction` with a note.

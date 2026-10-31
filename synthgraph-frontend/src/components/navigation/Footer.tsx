@@ -1,20 +1,21 @@
 import Link from "next/link";
+import { PRODUCT } from "@/data/product";
 import { FOOTER_GROUPS, SITE } from "@/data/site";
 import { LogoMark } from "./Logo";
 
 export function Footer() {
   return (
     <footer className="border-t border-line bg-base/40">
-      <div className="shell grid gap-12 py-16 md:grid-cols-[1.4fr_repeat(3,1fr)] md:py-20">
+      <div className="shell grid gap-12 py-16 md:grid-cols-[1.4fr_repeat(4,1fr)] md:py-20">
         <div className="flex flex-col gap-4">
           <div className="flex items-center gap-2.5 text-ink">
             <LogoMark />
             <span className="text-[15px] font-medium tracking-[-0.01em]">SynthGraph</span>
           </div>
           <p className="max-w-[30ch] text-[14px] leading-[1.65] text-ink-muted">
-            Synthetic-data provenance for computer-vision research.
+            Provenance for synthetic-data and simulation-driven research.
           </p>
-          <p className="mono-label mt-2">Private research pilot</p>
+          <p className="mono-label mt-2">Open source · MIT</p>
         </div>
 
         {FOOTER_GROUPS.map((group) => (
@@ -39,20 +40,28 @@ export function Footer() {
           <h2 className="mono-label">Resources</h2>
           <ul className="flex flex-col gap-2.5">
             <li>
-              <span className="flex items-center gap-2 text-[14px] text-ink-dim">
-                Documentation
-                <span className="font-mono text-[10px] tracking-[0.12em] text-ink-faint uppercase">
-                  Planned
-                </span>
-              </span>
+              <a
+                href={SITE.github}
+                className="text-[14px] text-ink-muted transition-colors duration-200 hover:text-ink"
+              >
+                GitHub
+              </a>
             </li>
             <li>
-              <span className="flex items-center gap-2 text-[14px] text-ink-dim">
-                GitHub
-                <span className="font-mono text-[10px] tracking-[0.12em] text-ink-faint uppercase">
-                  Planned
-                </span>
-              </span>
+              <a
+                href={PRODUCT.pypiUrl}
+                className="text-[14px] text-ink-muted transition-colors duration-200 hover:text-ink"
+              >
+                Python SDK on PyPI
+              </a>
+            </li>
+            <li>
+              <a
+                href={`${SITE.github}/blob/main/LICENSE`}
+                className="text-[14px] text-ink-muted transition-colors duration-200 hover:text-ink"
+              >
+                MIT license
+              </a>
             </li>
           </ul>
         </div>

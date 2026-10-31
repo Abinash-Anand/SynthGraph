@@ -1,0 +1,754 @@
+Every command below is shown as the tool prints it with `--help`, so this page matches the version you have installed. Run `synthgraph --help`, or `synthgraph <command> --help`, to see the same text locally.
+
+## Global options
+
+These go before the command: `synthgraph --json projects list`.
+
+```text
+
+ Usage: synthgraph [OPTIONS] COMMAND [ARGS]...
+
+ Query, inspect and export SynthGraph provenance.
+
+ Provenance is captured with the Python SDK while your research runs. This CLI is how you inspect
+ and export it afterwards.
+
+ Credentials come from the environment:
+
+
+   export SYNTHGRAPH_API_KEY=...
+   export SYNTHGRAPH_API_URL=https://your-synthgraph-backend
+
+ There is deliberately no --api-key option: it would put your key into shell history and process
+ listings.
+
++- Options ---------------------------------------------------------------------------------------+
+| --json                                 Print machine-readable JSON from every command.          |
+| --api-url                     <str>    SynthGraph backend URL. Defaults to $SYNTHGRAPH_API_URL. |
+| --timeout                     <float>  Request timeout in seconds.                              |
+| --version                              Show the installed version and exit.                     |
+| --install-completion                   Install completion for the current shell.                |
+| --show-completion                      Show completion for the current shell, to copy it or     |
+|                                        customize the installation.                              |
+| --help                -h               Show this message and exit.                              |
++-------------------------------------------------------------------------------------------------+
++- Commands --------------------------------------------------------------------------------------+
+| compare        Compare two or more generation runs.                                             |
+| manifest       Export the reproduction manifest for a generation.                               |
+| docs           Export backend-generated Markdown documentation for a generation.                |
+| auth           Inspect the identity behind the configured API key.                              |
+| projects       List and inspect projects.                                                       |
+| experiments    List, search and inspect experiments.                                            |
+| generations    List and inspect generation runs.                                                |
+| metrics        Declare and read the direction (maximize, minimize, neutral) of an experiment's  |
+|                metrics.                                                                         |
+| training-runs  List and inspect training runs, including capture-completeness status.           |
+| evaluations    List and inspect evaluation results.                                             |
+| assets         List and inspect asset references and their versions.                            |
+| datasets       List and inspect dataset references and their versions.                          |
++-------------------------------------------------------------------------------------------------+
+```
+
+## `synthgraph compare`
+
+```text
+
+ Usage: synthgraph compare [OPTIONS] {GENERATION_ID GENERATION_ID...}
+
+ Compare two or more generation runs.
+
+ Example:
+
+ synthgraph compare <generation-id-a> <generation-id-b>
+
++- Arguments -------------------------------------------------------------------------------------+
+| *    GENERATION_ID GENERATION_ID...      <str>  Two or more generation IDs to compare.          |
+|                                                 [required]                                      |
++-------------------------------------------------------------------------------------------------+
++- Options ---------------------------------------------------------------------------------------+
+| --json            Print the raw comparison JSON.                                                |
+| --help  -h        Show this message and exit.                                                   |
++-------------------------------------------------------------------------------------------------+
+```
+
+## `synthgraph manifest`
+
+```text
+
+ Usage: synthgraph manifest [OPTIONS] {generation_id}
+
+ Export the reproduction manifest for a generation.
+
+ The manifest records what would be needed to reconstruct the experiment.
+ It is a record, not a runnable script, and it carries no dataset bytes and
+ no credentials.
+
+ Examples:
+
+     synthgraph manifest <generation-id>
+
+     synthgraph manifest <generation-id> --output reproduction.json
+
++- Arguments -------------------------------------------------------------------------------------+
+| *    generation_id      <str>  Generation ID. [required]                                        |
++-------------------------------------------------------------------------------------------------+
++- Options ---------------------------------------------------------------------------------------+
+| --output  -o      <path>  Write the manifest to this file instead of stdout.                    |
+| --json                    Accepted for consistency; the manifest is always JSON.                |
+| --help    -h              Show this message and exit.                                           |
++-------------------------------------------------------------------------------------------------+
+```
+
+## `synthgraph docs`
+
+```text
+
+ Usage: synthgraph docs [OPTIONS] {generation_id}
+
+ Export backend-generated Markdown documentation for a generation.
+
+ Useful for paper supplements, lab records and experiment handover.
+
+ Examples:
+
+     synthgraph docs <generation-id>
+
+     synthgraph docs <generation-id> --output experiment.md
+
++- Arguments -------------------------------------------------------------------------------------+
+| *    generation_id      <str>  Generation ID. [required]                                        |
++-------------------------------------------------------------------------------------------------+
++- Options ---------------------------------------------------------------------------------------+
+| --output  -o      <path>  Write the Markdown to this file instead of stdout.                    |
+| --json                    Wrap the Markdown in a JSON object for scripting.                     |
+| --help    -h              Show this message and exit.                                           |
++-------------------------------------------------------------------------------------------------+
+```
+
+## `synthgraph auth`
+
+### `synthgraph auth whoami`
+
+```text
+
+ Usage: synthgraph auth whoami [OPTIONS]
+
+ Show which SynthGraph account the current API key belongs to.
+
+ The key itself is never printed.
+
+ Example:
+
+     synthgraph auth whoami
+
++- Options ---------------------------------------------------------------------------------------+
+| --json            Print JSON instead of a table.                                                |
+| --help  -h        Show this message and exit.                                                   |
++-------------------------------------------------------------------------------------------------+
+```
+
+## `synthgraph projects`
+
+### `synthgraph projects list`
+
+```text
+
+ Usage: synthgraph projects list [OPTIONS]
+
+ List the projects visible to your account.
+
+ Example:
+
+ synthgraph projects list
+
++- Options ---------------------------------------------------------------------------------------+
+| --json            Print JSON instead of a table.                                                |
+| --help  -h        Show this message and exit.                                                   |
++-------------------------------------------------------------------------------------------------+
+```
+
+### `synthgraph projects get`
+
+```text
+
+ Usage: synthgraph projects get [OPTIONS] {project_id}
+
+ Show one project.
+
+ Example:
+
+ synthgraph projects get 1d0c...  --json
+
++- Arguments -------------------------------------------------------------------------------------+
+| *    project_id      <str>  Project ID. [required]                                              |
++-------------------------------------------------------------------------------------------------+
++- Options ---------------------------------------------------------------------------------------+
+| --json            Print JSON instead of a field list.                                           |
+| --help  -h        Show this message and exit.                                                   |
++-------------------------------------------------------------------------------------------------+
+```
+
+## `synthgraph experiments`
+
+### `synthgraph experiments list`
+
+```text
+
+ Usage: synthgraph experiments list [OPTIONS]
+
+ List the experiments in a project.
+
+ Omitting ``--project`` in an interactive terminal prompts you to pick
+ one from your actual projects.
+
+ Example:
+
+     synthgraph experiments list --project <project-id>
+
++- Options ---------------------------------------------------------------------------------------+
+| --project  -p      <str>  Project ID.                                                           |
+| --search   -s      <str>  Filter by search term.                                                |
+| --json                    Print JSON instead of a table.                                        |
+| --help     -h             Show this message and exit.                                           |
++-------------------------------------------------------------------------------------------------+
+```
+
+### `synthgraph experiments search`
+
+```text
+
+ Usage: synthgraph experiments search [OPTIONS] {query}
+
+ Search experiments in a project by name or description.
+
+ The backend performs the search; this does not filter locally. Omitting
+ ``--project`` in an interactive terminal prompts you to pick one.
+
+ Example:
+
+     synthgraph experiments search --project <project-id> "rain"
+
++- Arguments -------------------------------------------------------------------------------------+
+| *    query      <str>  Search term. [required]                                                  |
++-------------------------------------------------------------------------------------------------+
++- Options ---------------------------------------------------------------------------------------+
+| --project  -p      <str>  Project ID.                                                           |
+| --json                    Print JSON instead of a table.                                        |
+| --help     -h             Show this message and exit.                                           |
++-------------------------------------------------------------------------------------------------+
+```
+
+### `synthgraph experiments get`
+
+```text
+
+ Usage: synthgraph experiments get [OPTIONS] [experiment_id]
+
+ Show one experiment.
+
+ Omitting the ID in an interactive terminal prompts you to pick a project,
+ then an experiment within it.
+
+ Example:
+
+     synthgraph experiments get <experiment-id>
+
++- Arguments -------------------------------------------------------------------------------------+
+|   experiment_id      <str>  Experiment ID.                                                      |
++-------------------------------------------------------------------------------------------------+
++- Options ---------------------------------------------------------------------------------------+
+| --json            Print JSON instead of a field list.                                           |
+| --help  -h        Show this message and exit.                                                   |
++-------------------------------------------------------------------------------------------------+
+```
+
+## `synthgraph generations`
+
+### `synthgraph generations list`
+
+```text
+
+ Usage: synthgraph generations list [OPTIONS]
+
+ List the generation runs in an experiment.
+
+ Filtering is performed by the backend. Omitting ``--experiment`` in an
+ interactive terminal prompts you to pick one.
+
+ Examples:
+
+     synthgraph generations list --experiment <experiment-id>
+
+     synthgraph generations list --experiment <experiment-id> \
+         --parameters '{"weather":"rain","occlusion":0.3}'
+
++- Options ---------------------------------------------------------------------------------------+
+| --experiment  -e      <str>  Experiment ID.                                                     |
+| --parameters          <str>  Filter by generation parameters, as a JSON object:                 |
+|                              '{"weather":"rain"}'                                               |
+| --json                       Print JSON instead of a table.                                     |
+| --help        -h             Show this message and exit.                                        |
++-------------------------------------------------------------------------------------------------+
+```
+
+### `synthgraph generations get`
+
+```text
+
+ Usage: synthgraph generations get [OPTIONS] [generation_id]
+
+ Show one generation run, including its parameters and provenance.
+
+ Omitting the ID in an interactive terminal prompts you to pick a
+ project, then an experiment, then a generation within it.
+
+ Example:
+
+     synthgraph generations get <generation-id> --json
+
++- Arguments -------------------------------------------------------------------------------------+
+|   generation_id      <str>  Generation ID.                                                      |
++-------------------------------------------------------------------------------------------------+
++- Options ---------------------------------------------------------------------------------------+
+| --json            Print JSON instead of a field list.                                           |
+| --help  -h        Show this message and exit.                                                   |
++-------------------------------------------------------------------------------------------------+
+```
+
+## `synthgraph metrics`
+
+### `synthgraph metrics list`
+
+```text
+
+ Usage: synthgraph metrics list [OPTIONS] [experiment]
+
+ Show the directions declared so far in an experiment.
+
+ A metric that is not listed has no declared direction; it is not guessed
+ from its name.
+
+ Example:
+
+     synthgraph metrics list <experiment-id>
+
++- Arguments -------------------------------------------------------------------------------------+
+|   experiment      <str>  Experiment ID.                                                         |
++-------------------------------------------------------------------------------------------------+
++- Options ---------------------------------------------------------------------------------------+
+| --json            Print JSON instead of a table.                                                |
+| --help  -h        Show this message and exit.                                                   |
++-------------------------------------------------------------------------------------------------+
+```
+
+### `synthgraph metrics set-direction`
+
+```text
+
+ Usage: synthgraph metrics set-direction [OPTIONS] {experiment} {metric}
+                                         {direction}
+
+ Declare whether a bigger or smaller value of a metric is better.
+
+ Declaring the same direction again changes nothing. Declaring a different
+ one than before is rejected and nothing is changed; use
+ ``correct-direction`` to change it on purpose.
+
+ Example:
+
+     synthgraph metrics set-direction <experiment-id> loss minimize
+
++- Arguments -------------------------------------------------------------------------------------+
+| *    experiment      <str>  Experiment ID. [required]                                           |
+| *    metric          <str>  Metric key, exactly as it is logged. [required]                     |
+| *    direction       <str>  maximize, minimize or neutral. [required]                           |
++-------------------------------------------------------------------------------------------------+
++- Options ---------------------------------------------------------------------------------------+
+| --json            Print JSON instead of a table.                                                |
+| --help  -h        Show this message and exit.                                                   |
++-------------------------------------------------------------------------------------------------+
+```
+
+### `synthgraph metrics correct-direction`
+
+```text
+
+ Usage: synthgraph metrics correct-direction [OPTIONS] {experiment} {metric}
+                                             {direction}
+
+ Correct a direction that was declared earlier, recording why.
+
+ Only a metric that already has a declaration can be corrected.
+
+ Example:
+
+     synthgraph metrics correct-direction <experiment-id> loss minimize             --note
+ "declared as maximize by mistake"
+
++- Arguments -------------------------------------------------------------------------------------+
+| *    experiment      <str>  Experiment ID. [required]                                           |
+| *    metric          <str>  Metric key, exactly as it is logged. [required]                     |
+| *    direction       <str>  maximize, minimize or neutral. [required]                           |
++-------------------------------------------------------------------------------------------------+
++- Options ---------------------------------------------------------------------------------------+
+| *  --note  -n      <str>  Why the earlier declaration was wrong. [required]                     |
+|    --json                 Print JSON instead of a table.                                        |
+|    --help  -h             Show this message and exit.                                           |
++-------------------------------------------------------------------------------------------------+
+```
+
+## `synthgraph training-runs`
+
+### `synthgraph training-runs list`
+
+```text
+
+ Usage: synthgraph training-runs list [OPTIONS]
+
+ List the training runs in an experiment.
+
+ ``--capture-status`` is the audit query this feature exists for: find
+ every run where something didn't get fully captured, without digging
+ through logs. Omitting ``--experiment`` in an interactive terminal
+ prompts you to pick one.
+
+ Examples:
+
+     synthgraph training-runs list --experiment <experiment-id>
+
+     synthgraph training-runs list --experiment <experiment-id> \
+         --capture-status partial
+
++- Options ---------------------------------------------------------------------------------------+
+| --experiment      -e      <str>  Experiment ID.                                                 |
+| --capture-status          <str>  Filter by capture completeness: complete, partial or unknown.  |
+| --json                           Print JSON instead of a table.                                 |
+| --help            -h             Show this message and exit.                                    |
++-------------------------------------------------------------------------------------------------+
+```
+
+### `synthgraph training-runs get`
+
+```text
+
+ Usage: synthgraph training-runs get [OPTIONS] [training_run_id]
+
+ Show one training run: its config, status, capture-completeness report and attached datasets.
+
+ Omitting the ID in an interactive terminal prompts you to pick a
+ project, then an experiment, then a training run within it.
+
+ Example:
+
+     synthgraph training-runs get <training-run-id>
+
++- Arguments -------------------------------------------------------------------------------------+
+|   training_run_id      <str>  Training run ID.                                                  |
++-------------------------------------------------------------------------------------------------+
++- Options ---------------------------------------------------------------------------------------+
+| --json            Print JSON instead of a field list.                                           |
+| --help  -h        Show this message and exit.                                                   |
++-------------------------------------------------------------------------------------------------+
+```
+
+### `synthgraph training-runs metrics`
+
+```text
+
+ Usage: synthgraph training-runs metrics [OPTIONS] [training_run_id]
+
+ List the metric points recorded for a training run, ordered by step.
+
+ Omitting the ID in an interactive terminal prompts you to pick one.
+
+ Example:
+
+     synthgraph training-runs metrics <training-run-id>
+
++- Arguments -------------------------------------------------------------------------------------+
+|   training_run_id      <str>  Training run ID.                                                  |
++-------------------------------------------------------------------------------------------------+
++- Options ---------------------------------------------------------------------------------------+
+| --json            Print JSON instead of a table.                                                |
+| --help  -h        Show this message and exit.                                                   |
++-------------------------------------------------------------------------------------------------+
+```
+
+### `synthgraph training-runs generations`
+
+```text
+
+ Usage: synthgraph training-runs generations [OPTIONS] {training_run_id}
+
+ List the generations a training run was recorded as using.
+
+ An empty list means none was recorded, not that none was used.
+
+ Example:
+
+     synthgraph training-runs generations <training-run-id>
+
++- Arguments -------------------------------------------------------------------------------------+
+| *    training_run_id      <str>  Training run ID. [required]                                    |
++-------------------------------------------------------------------------------------------------+
++- Options ---------------------------------------------------------------------------------------+
+| --json            Print JSON instead of a table.                                                |
+| --help  -h        Show this message and exit.                                                   |
++-------------------------------------------------------------------------------------------------+
+```
+
+### `synthgraph training-runs link-generation`
+
+```text
+
+ Usage: synthgraph training-runs link-generation [OPTIONS] {training_run_id}
+                                                 {generation_id}
+
+ Record that a training run used a generation.
+
+ The generation may be in another experiment, but must be in the run's own
+ project. A link is exact and cannot be changed or removed afterwards.
+ Linking the same pair again changes nothing. Use this to link runs that
+ already exist; nothing links them automatically.
+
+ Example:
+
+     synthgraph training-runs link-generation <training-run-id> <generation-id>
+
++- Arguments -------------------------------------------------------------------------------------+
+| *    training_run_id      <str>  Training run ID. [required]                                    |
+| *    generation_id        <str>  Generation ID. [required]                                      |
++-------------------------------------------------------------------------------------------------+
++- Options ---------------------------------------------------------------------------------------+
+| --json            Print JSON instead of a field list.                                           |
+| --help  -h        Show this message and exit.                                                   |
++-------------------------------------------------------------------------------------------------+
+```
+
+## `synthgraph evaluations`
+
+### `synthgraph evaluations list`
+
+```text
+
+ Usage: synthgraph evaluations list [OPTIONS]
+
+ List the evaluation results recorded for a training run.
+
+ Omitting ``--training-run`` in an interactive terminal prompts you to
+ pick one.
+
+ Example:
+
+     synthgraph evaluations list --training-run <training-run-id>
+
++- Options ---------------------------------------------------------------------------------------+
+| --training-run  -t      <str>  Training run ID.                                                 |
+| --json                         Print JSON instead of a table.                                   |
+| --help          -h             Show this message and exit.                                      |
++-------------------------------------------------------------------------------------------------+
+```
+
+### `synthgraph evaluations get`
+
+```text
+
+ Usage: synthgraph evaluations get [OPTIONS] [evaluation_id]
+
+ Show one evaluation result.
+
+ Omitting the ID in an interactive terminal prompts you to pick a
+ project, then an experiment, then a training run, then an evaluation.
+
+ Example:
+
+     synthgraph evaluations get <evaluation-id>
+
++- Arguments -------------------------------------------------------------------------------------+
+|   evaluation_id      <str>  Evaluation result ID.                                               |
++-------------------------------------------------------------------------------------------------+
++- Options ---------------------------------------------------------------------------------------+
+| --json            Print JSON instead of a field list.                                           |
+| --help  -h        Show this message and exit.                                                   |
++-------------------------------------------------------------------------------------------------+
+```
+
+## `synthgraph assets`
+
+### `synthgraph assets list`
+
+```text
+
+ Usage: synthgraph assets list [OPTIONS]
+
+ List every asset the authenticated user owns.
+
+ Example:
+
+ synthgraph assets list
+
++- Options ---------------------------------------------------------------------------------------+
+| --json            Print JSON instead of a table.                                                |
+| --help  -h        Show this message and exit.                                                   |
++-------------------------------------------------------------------------------------------------+
+```
+
+### `synthgraph assets get`
+
+```text
+
+ Usage: synthgraph assets get [OPTIONS] [asset_id]
+
+ Show one asset's logical identity.
+
+ Omitting the ID in an interactive terminal prompts you to pick one.
+
+ Example:
+
+     synthgraph assets get <asset-id>
+
++- Arguments -------------------------------------------------------------------------------------+
+|   asset_id      <str>  Asset ID.                                                                |
++-------------------------------------------------------------------------------------------------+
++- Options ---------------------------------------------------------------------------------------+
+| --json            Print JSON instead of a field list.                                           |
+| --help  -h        Show this message and exit.                                                   |
++-------------------------------------------------------------------------------------------------+
+```
+
+### `synthgraph assets versions`
+
+```text
+
+ Usage: synthgraph assets versions [OPTIONS] [asset_id]
+
+ List the versions recorded for an asset.
+
+ Omitting the ID in an interactive terminal prompts you to pick one.
+
+ Example:
+
+     synthgraph assets versions <asset-id>
+
++- Arguments -------------------------------------------------------------------------------------+
+|   asset_id      <str>  Asset ID.                                                                |
++-------------------------------------------------------------------------------------------------+
++- Options ---------------------------------------------------------------------------------------+
+| --json            Print JSON instead of a table.                                                |
+| --help  -h        Show this message and exit.                                                   |
++-------------------------------------------------------------------------------------------------+
+```
+
+### `synthgraph assets get-version`
+
+```text
+
+ Usage: synthgraph assets get-version [OPTIONS] [asset_version_id]
+
+ Show one immutable asset version.
+
+ Omitting the ID in an interactive terminal prompts you to pick an
+ asset, then a version of it.
+
+ Example:
+
+     synthgraph assets get-version <asset-version-id>
+
++- Arguments -------------------------------------------------------------------------------------+
+|   asset_version_id      <str>  Asset version ID.                                                |
++-------------------------------------------------------------------------------------------------+
++- Options ---------------------------------------------------------------------------------------+
+| --json            Print JSON instead of a field list.                                           |
+| --help  -h        Show this message and exit.                                                   |
++-------------------------------------------------------------------------------------------------+
+```
+
+## `synthgraph datasets`
+
+### `synthgraph datasets list`
+
+```text
+
+ Usage: synthgraph datasets list [OPTIONS]
+
+ List every dataset the authenticated user owns.
+
+ Example:
+
+ synthgraph datasets list
+
++- Options ---------------------------------------------------------------------------------------+
+| --json            Print JSON instead of a table.                                                |
+| --help  -h        Show this message and exit.                                                   |
++-------------------------------------------------------------------------------------------------+
+```
+
+### `synthgraph datasets get`
+
+```text
+
+ Usage: synthgraph datasets get [OPTIONS] [dataset_id]
+
+ Show one dataset's logical identity.
+
+ Omitting the ID in an interactive terminal prompts you to pick one.
+
+ Example:
+
+     synthgraph datasets get <dataset-id>
+
++- Arguments -------------------------------------------------------------------------------------+
+|   dataset_id      <str>  Dataset ID.                                                            |
++-------------------------------------------------------------------------------------------------+
++- Options ---------------------------------------------------------------------------------------+
+| --json            Print JSON instead of a field list.                                           |
+| --help  -h        Show this message and exit.                                                   |
++-------------------------------------------------------------------------------------------------+
+```
+
+### `synthgraph datasets versions`
+
+```text
+
+ Usage: synthgraph datasets versions [OPTIONS] [dataset_id]
+
+ List the versions recorded for a dataset.
+
+ Omitting the ID in an interactive terminal prompts you to pick one.
+
+ Example:
+
+     synthgraph datasets versions <dataset-id>
+
++- Arguments -------------------------------------------------------------------------------------+
+|   dataset_id      <str>  Dataset ID.                                                            |
++-------------------------------------------------------------------------------------------------+
++- Options ---------------------------------------------------------------------------------------+
+| --json            Print JSON instead of a table.                                                |
+| --help  -h        Show this message and exit.                                                   |
++-------------------------------------------------------------------------------------------------+
+```
+
+### `synthgraph datasets get-version`
+
+```text
+
+ Usage: synthgraph datasets get-version [OPTIONS] [dataset_version_id]
+
+ Show one immutable dataset version.
+
+ Omitting the ID in an interactive terminal prompts you to pick a
+ dataset, then a version of it.
+
+ Example:
+
+     synthgraph datasets get-version <dataset-version-id>
+
++- Arguments -------------------------------------------------------------------------------------+
+|   dataset_version_id      <str>  Dataset version ID.                                            |
++-------------------------------------------------------------------------------------------------+
++- Options ---------------------------------------------------------------------------------------+
+| --json            Print JSON instead of a field list.                                           |
+| --help  -h        Show this message and exit.                                                   |
++-------------------------------------------------------------------------------------------------+
+```

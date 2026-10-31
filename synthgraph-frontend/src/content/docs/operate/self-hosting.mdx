@@ -1,0 +1,92 @@
+SynthGraph is open source under the MIT license, and you can run the whole thing yourself: a Postgres database, the backend API, and the dashboard. Your records then live in your own database, and the SDK and CLI point at your own backend.
+
+You need **Docker with Compose**, or **Node.js 22 or later** and **PostgreSQL 16**. The code is at [github.com/Abinash-Anand/SynthGraph](https://github.com/Abinash-Anand/SynthGraph).
+
+## With Docker Compose
+
+The repository's `docker-compose.yml` starts three services:
+
+| Service | What it is | Port on your machine |
+| --- | --- | --- |
+| `postgres` | PostgreSQL 16, with the user, password and database all named `synthgraph` | 5432 |
+| `backend` | The API | 3000 |
+| `frontend` | The dashboard | 3001 |
+
+### 1. Set a secret
+
+The backend image runs in production mode, and in production it **refuses to start** with an unset `JWT_SECRET` or with the sample value `dev-only-change-me`. Create a `.env` file next to `docker-compose.yml` with a real one:
+
+```bash
+cp .env.example .env
+# then put a long random value in JWT_SECRET, for example from:
+openssl rand -hex 32
+```
+
+### 2. Start it
+
+```bash
+docker compose up --build
+```
+
+### 3. Create the tables
+
+The images do not run migrations, and the schema is only ever changed by migrations. Run them once from a checkout of the repository, against the database Compose started:
+
+```bash
+cd synthgraph-backend
+npm ci
+DATABASE_URL=postgresql://synthgraph:synthgraph@localhost:5432/synthgraph npm run migration:run
+```
+
+Run the same command again after you update SynthGraph. Migrations that have already run are skipped. The migrations so far only add to the schema.
+
+### 4. Use it
+
+- The dashboard is at `http://localhost:3001`. Create an account there.
+- The API is at `http://localhost:3000`, and its interactive reference at `http://localhost:3000/docs`.
+- Point the SDK and the CLI at it:
+
+```bash
+export SYNTHGRAPH_API_URL="http://localhost:3000"
+export SYNTHGRAPH_API_KEY="sg_..."   # create one under Settings, API Keys
+```
+
+Check the backend is up with `curl http://localhost:3000/health`. It answers `{"status":"ok", ...}`. It does not check the database, so an `ok` does not mean Postgres is reachable.
+
+## Without Docker
+
+**Backend.** Create a database, then:
+
+```bash
+cd synthgraph-backend
+npm ci
+export DATABASE_URL="postgresql://user:password@localhost:5432/synthgraph"
+export JWT_SECRET="$(openssl rand -hex 32)"
+npm run migration:run
+npm run build
+NODE_ENV=production npm run start:prod
+```
+
+It listens on port 3000, or on `PORT`.
+
+**Dashboard.** It needs to know where the backend is, on the server side only:
+
+```bash
+cd synthgraph-frontend
+npm ci
+export SYNTHGRAPH_API_URL="http://localhost:3000"
+npm run build
+npx next start -p 3001
+```
+
+Do not put the backend address in a variable that starts with `NEXT_PUBLIC_`: it would be exposed to the browser. The dashboard calls the backend from its own server.
+
+## Before you expose it
+
+- **Put it behind HTTPS.** The backend speaks plain HTTP. Terminate TLS in front of it.
+- **Rate limits are per instance.** They are held in memory. Behind a reverse proxy the backend sees the proxy's address, so the per-address limits are shared by everyone using that proxy.
+- **The backend adds no security headers itself.** If you want headers such as `Strict-Transport-Security`, set them in the proxy.
+- **Back up your database.** It is the only copy of your records.
+- **Decide about the API reference.** `/docs` is public unless you set `DISABLE_API_DOCS=true`. It describes the API's shape, nothing sensitive.
+
+See [Backend configuration](/docs/operate/backend-configuration) for every setting, and [Security](/docs/operate/security) for how keys and sessions work.

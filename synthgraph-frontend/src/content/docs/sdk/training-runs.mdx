@@ -1,0 +1,86 @@
+A training run records one model training: what model and framework, with what configuration, on which data, and how its metrics moved.
+
+The examples on this page share this setup:
+
+```python
+from synthgraph import SynthGraph
+
+sg = SynthGraph()
+experiment = sg.project("Docs: training runs").experiment("example")
+generation = experiment.generation(generator="blender", generator_version="4.2", seed=1)
+dataset = generation.dataset(name="train_set", uri="s3://lab-bucket/train_set")
+```
+
+## Record a training run
+
+```python
+training = experiment.training(
+    model="yolo",
+    framework="pytorch",
+    dataset=dataset,
+    config={"epochs": 50, "batch_size": 32, "learning_rate": 0.001},
+)
+```
+
+| Argument | Meaning |
+| --- | --- |
+| `model` | The model's name. Required. |
+| `framework`, `framework_version` | The training framework and its version. |
+| `config` | Your configuration, any JSON object. |
+| `dataset`, `datasets`, `generations` | What the run used. See [Link data to results](/docs/sdk/lineage). |
+| `name`, `description`, `metadata` | A name, free text, and any extra JSON. |
+| `metric_directions` | Declare which way is better for your metrics. See [Declare metric directions](/docs/sdk/metric-directions). |
+| `capture_environment` | Turn off the default capture of environment details. |
+
+## The lifecycle is yours to call
+
+A training run is **not** started or finished for you. Call the steps yourself:
+
+```python
+training.start()
+# ... train ...
+training.complete()   # or training.fail() if it broke
+```
+
+Like a generation, a training run moves forward only, and completed and failed are final. If you never call `start()` and `complete()`, the run stays pending and the dashboard treats it that way.
+
+<Callout type="warning" title="A with block does not finish the run">
+
+A training run can be used in a `with` block, but that only closes the integrations attached to it, such as a resource monitor. It does **not** start, complete or fail the run. This is different from a generation, whose `with` block does manage its status.
+
+</Callout>
+
+## Log metrics
+
+```python
+training = experiment.training(model="yolo", framework="pytorch", dataset=dataset)
+training.start()
+
+for step in range(1, 6):
+    training.log_metric(step=step, metrics={"loss": 1.0 / step})
+
+training.complete()
+```
+
+- `step` must be an integer. A float such as `1.5` is rejected before any request is sent.
+- `metrics` is a dictionary of names to values. Use numbers for anything you want charted.
+- Metric names are yours. Names with a slash, such as `train/loss`, are kept as written.
+
+Read them back:
+
+```python
+for point in training.metrics():
+    print(point.step, point.metrics)
+```
+
+### How often to log
+
+Every `log_metric` call is one HTTP request, and an API key is limited to about 120 requests a minute. Logging every step of a fast training loop will hit that limit, and the SDK then raises `SynthGraphRateLimitError`. Log at a sensible interval: every N steps, or once per epoch.
+
+### Reading back is limited to 100 points
+
+`training.metrics()` returns the first page the backend sends, which is at most 100 points ordered by step. A run with more points than that still has them all stored, but this call will not return them all.
+
+## Evaluate and link
+
+Record what the run scored with [`training.evaluation(...)`](/docs/sdk/evaluations).

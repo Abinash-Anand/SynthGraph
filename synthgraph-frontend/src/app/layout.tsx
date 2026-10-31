@@ -19,32 +19,33 @@ const mono = JetBrains_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE.url),
   title: {
-    default: "SynthGraph — Synthetic Data Experiment Provenance",
+    default: "SynthGraph — Provenance for synthetic-data research",
     template: "%s — SynthGraph",
   },
   description:
-    "SynthGraph helps computer-vision researchers track synthetic-data provenance, dataset versions, training lineage, and evaluation results so experiments are easier to reproduce and understand.",
+    "SynthGraph records where synthetic training data came from and what it trained: generator, seed and parameters, dataset versions, training runs and evaluations, linked into one graph. Open source.",
   keywords: [
     "synthetic data provenance",
-    "synthetic data experiment tracking",
-    "computer vision research",
-    "experiment lineage",
+    "synthetic data lineage",
+    "experiment tracking",
+    "domain randomization",
+    "reinforcement learning experiments",
     "dataset versioning",
-    "reproducible machine learning experiments",
+    "reproducibility",
   ],
   openGraph: {
     type: "website",
     siteName: SITE.name,
-    title: "SynthGraph — Synthetic Data Experiment Provenance",
+    title: "SynthGraph — Provenance for synthetic-data research",
     description:
-      "Provenance for synthetic-data experiments: generation parameters, dataset versions, training runs and evaluation results, connected into a reproducible research history.",
+      "Know exactly what produced your model. Generator, seed and parameters, dataset versions, training runs and evaluations, linked into one graph you can inspect later. Open source.",
     url: SITE.url,
   },
   twitter: {
     card: "summary_large_image",
-    title: "SynthGraph — Synthetic Data Experiment Provenance",
+    title: "SynthGraph — Provenance for synthetic-data research",
     description:
-      "Provenance for synthetic-data experiments, built for computer-vision researchers.",
+      "Know exactly what produced your model. Open source provenance for synthetic-data and simulation-driven research.",
   },
   robots: { index: true, follow: true },
 };

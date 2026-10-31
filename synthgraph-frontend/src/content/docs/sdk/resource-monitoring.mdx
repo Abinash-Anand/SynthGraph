@@ -1,0 +1,74 @@
+The SDK can sample CPU, memory and GPU use in the background while a training run works, and it records how completely your telemetry was captured.
+
+The examples on this page share this setup:
+
+```python
+from synthgraph import SynthGraph
+
+sg = SynthGraph()
+experiment = sg.project("Docs: resources").experiment("example")
+```
+
+## Sample resources during a run
+
+```python
+training = experiment.training(model="yolo", framework="pytorch")
+training.start()
+
+training.monitor_resources(interval_seconds=10.0)
+
+# ... train ...
+
+training.close()
+training.complete()
+```
+
+`monitor_resources` starts a background thread that records a sample every `interval_seconds` (10 by default), and one last sample when it stops. `training.close()` stops it. A `with` block does the same:
+
+```py
+with experiment.training(model="yolo", framework="pytorch") as training:
+    training.start()
+    training.monitor_resources()
+    # ... train ...
+# leaving the block tears the monitor down; it does not complete the run
+```
+
+## What is recorded
+
+| Key | When it is present |
+| --- | --- |
+| `cpu_count` | Always. |
+| `cpu_percent`, `memory_total_mb`, `memory_available_mb`, `memory_percent` | When `psutil` is installed. See [Installation](/docs/installation). |
+| `gpu` | When `nvidia-smi` is on your path: a list with one entry per GPU, holding its name, total and used memory, and utilization percent. |
+
+Nothing is faked. A key that cannot be read on your machine is simply absent. There is no disk, network, temperature or power telemetry.
+
+<Callout type="note" title="Samples are stored as metrics">
+
+Resource samples are saved as ordinary metric points on the run, with their own sample counter as the step: 0, 1, 2 and so on. That counter is not your training step, so on a run that also logs its own metrics, resource points share the step axis with them.
+
+</Callout>
+
+## Capture status
+
+When a run's integrations are closed, the SDK reports how completely the telemetry was captured:
+
+| Status | Meaning |
+| --- | --- |
+| `complete` | Every attached integration closed cleanly. |
+| `partial` | An attached integration failed while closing, so its data may be incomplete. |
+| no status | The run never reported: nothing was attached, or `close()` was never called. |
+
+A run with no status is counted as **unknown** in the dashboard and the capture-completeness report, because there is no way to tell what happened.
+
+Find incomplete runs later from the command line:
+
+```bash
+synthgraph training-runs list --experiment <experiment-id> --capture-status partial
+```
+
+If reporting the status itself fails, for example because the backend is unreachable, the SDK warns instead of raising, so a telemetry problem never breaks your training.
+
+## Closing matters
+
+Every attachment made through `monitor_resources()` or a framework integration registers with the run, and they are all closed together by `training.close()` or by leaving the `with` block. Close the run when training ends. If you forget, the monitor's thread stops with your process, but the run never reports a capture status and shows up as unknown.

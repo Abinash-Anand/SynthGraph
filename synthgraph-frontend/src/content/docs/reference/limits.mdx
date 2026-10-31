@@ -1,0 +1,44 @@
+What SynthGraph does not do, and where it is still rough. It is an alpha: SDK 0.6, no tagged releases, and an API that only changes by adding. Read this page before you rely on it.
+
+## What it does not do
+
+- **It does not store your data.** A dataset or asset version is a reference: a URI, a name and optionally a checksum. SynthGraph never reads, uploads or keeps the bytes. Where they live, and whether they are still there next year, is up to you.
+- **It does not generate data or train models.** It records the runs you already do.
+- **It does not regenerate a dataset.** The [reproduction manifest](/docs/reference/reproduction-manifest) lists what you would need to rerun a generation and what is missing. There is no command that reruns it.
+- **It does not prove a result is reproducible.** The manifest's grade measures how completely a generation was recorded. It does not check the values are right, that the code or data still exist, or that a rerun matches.
+- **It has no plugins for Blender, Unity or Omniverse.** Your script calls the SDK. The [framework helpers](/docs/sdk/integrations) that exist are for reinforcement learning libraries.
+- **It does not guess.** Lineage links, metric directions and "better" verdicts come from what you recorded. If you recorded nothing, the dashboard shows nothing and says so.
+- **It does not recommend or optimise parameters.**
+
+## Limits in the SDK and API
+
+| Limit | Detail |
+| --- | --- |
+| **Request rate** | About 120 requests a minute per API key. Each `log_metric` call is one request, so log at an interval, not at every step. |
+| **No batch call in the SDK** | The API can take up to 1,000 metric points in one request, but the SDK sends them one at a time. |
+| **Writes are not retried** | The API has no idempotency key. A write that fails in transit raises an error that says its outcome is unknown. See [Errors and retries](/docs/sdk/errors). |
+| **Reading metrics back** | `training.metrics()` returns at most the first 100 points. |
+| **Fields the backend does not accept** | `metadata` on a project or an experiment, and `description` or `metadata` on a generation, are rejected by the backend even though the SDK lets you pass them. Use `parameters` for a generation. |
+| **An evaluation needs a dataset version** | Every evaluation names the dataset version it was scored on. A simulator evaluation with no dataset still needs a reference, for example a dataset version that stands for the evaluation setup. |
+| **No model or checkpoint references** | You can record a `checkpoint_step`, but there is no field for a checkpoint file or model weights. A field such as `checkpointUri` is rejected. |
+| **Parameters are free-form** | `parameters` is any JSON object. SynthGraph does not validate or type it. |
+| **Search is simple** | Global search matches names. Training run search matches one numeric condition on a parameter or a metric. |
+| **No wall-clock time** | The SDK sends no timestamps with metric points. The only time is when the backend received them. |
+| **No run tags** | There is no tags field. |
+| **Archive, not delete** | Projects, experiments, datasets and assets can be archived. Generations, training runs, metrics and evaluations cannot be removed through the API. |
+
+## Limits in the dashboard
+
+- **History is capped at 100 metric points per run.** The experiment workspace loads the earliest 100 points of each run. A run with more has them all stored, but the Metrics tab shows only the first 100. The workspace also loads at most 100 runs per experiment.
+- **The Parameters view is exploratory.** It is worked out in your browser, needs at least five runs with a result, and shows association, never cause.
+- **Evaluation conditions are stored, not used.** You can put conditions such as weather or terrain in an evaluation's `metadata`. The API returns them, but the dashboard does not group or filter by them. To compare conditions, record each condition against its own dataset version. The leaderboard separates scores by dataset version.
+- **Metrics with no declared direction get no verdict.** That is deliberate. [Declare directions](/docs/sdk/metric-directions) to get them.
+
+## The hosted backend
+
+- **It sleeps when idle.** The first request after a quiet period can take close to 30 seconds, which is the SDK's default timeout.
+- **It is an alpha service.** Keep your own copy of anything you cannot afford to lose, or [run your own backend](/docs/operate/self-hosting).
+
+## Status
+
+SDK 0.6 is an alpha. The API is unversioned and changes only additively: an existing response shape or route is not changed or removed. The SDK's surface can still change, and the [changelog](/docs/reference/changelog) says when it does.

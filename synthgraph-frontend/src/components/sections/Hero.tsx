@@ -5,10 +5,10 @@ import { Reveal } from "@/components/ui/Reveal";
 import { DEMO_DISCLAIMER } from "@/data/demo-data";
 
 const CHAIN = [
-  { label: "Generation", detail: "generator, parameters, seed" },
-  { label: "Dataset version", detail: "referenced, not uploaded" },
-  { label: "Training run", detail: "configuration and inputs" },
-  { label: "Evaluation result", detail: "metrics tied to their source" },
+  { label: "Generation", detail: "generator, version, seed, parameters" },
+  { label: "Dataset version", detail: "a reference, not an upload" },
+  { label: "Training run", detail: "model, configuration, the data it used" },
+  { label: "Evaluation", detail: "scores, tied to what they were measured on" },
 ];
 
 export function Hero() {
@@ -19,7 +19,7 @@ export function Hero() {
       <div className="shell relative">
         <Reveal>
           <Badge tone="cyan" dot>
-            Private research pilot
+            Open source · SDK 0.6 alpha
           </Badge>
         </Reveal>
 
@@ -31,26 +31,27 @@ export function Hero() {
 
         <Reveal delay={0.12}>
           <p className="mt-7 max-w-[68ch] text-[17px] leading-[1.62] text-ink-muted md:text-[20px]">
-            SynthGraph captures the provenance of synthetic-data experiments, connecting
-            generation parameters, datasets, training runs, and evaluation results into a
-            reproducible research history.
+            SynthGraph records where your synthetic training data came from and what it
+            trained: the generator, seed and parameters, the dataset versions, the training
+            runs and their evaluations, linked into one graph you can inspect months later.
           </p>
         </Reveal>
 
         <Reveal delay={0.18}>
           <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <ButtonLink href="/demo" size="lg" arrow>
-              Request a Demo
+            <ButtonLink href="/docs/quickstart" size="lg" arrow>
+              Get started
             </ButtonLink>
-            <ButtonLink href="/how-it-works" size="lg" variant="secondary">
-              See How It Works
+            <ButtonLink href="/docs" size="lg" variant="secondary">
+              Read the docs
             </ButtonLink>
           </div>
         </Reveal>
 
         <Reveal delay={0.24}>
           <p className="mt-6 font-mono text-[12px] leading-[1.7] text-ink-dim">
-            Built for computer-vision researchers. Designed to work with the tools you already use.
+            For researchers who generate synthetic data, from rendered images to randomized
+            simulation. You keep your tools, and your data stays where it is.
           </p>
         </Reveal>
       </div>

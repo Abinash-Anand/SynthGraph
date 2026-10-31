@@ -48,19 +48,19 @@ function fieldsOf(submission: Submission): Array<[string, string]> {
   return [
     ["Name", submission.name],
     ["Email", submission.email],
-    ["Institution", submission.institution],
-    ["Role", submission.role],
-    ["Team size", submission.teamSize],
-    ["Research area", submission.researchArea],
-    ["Workflow", submission.workflow.join(", ")],
-    ["Current tools", submission.currentTools],
+    ["Institution", optional(submission.institution)],
+    ["Role", optional(submission.role)],
+    ["Team size", optional(submission.teamSize)],
+    ["Research area", optional(submission.researchArea)],
+    ["Workflow", optional(submission.workflow.join(", "))],
+    ["Current tools", optional(submission.currentTools)],
     ["Dataset scale", optional(submission.datasetScale)],
     ["Generator", optional(submission.generator)],
     ["Training framework", optional(submission.trainingFramework)],
     ["Experiment tracking", optional(submission.experimentTracking)],
     ["GitHub", optional(submission.github)],
     ["LinkedIn", optional(submission.linkedin)],
-    ["Goal", submission.goal],
+    ["Goal", optional(submission.goal)],
     ["Message", submission.message],
   ];
 }
@@ -69,7 +69,7 @@ function renderText(submission: Submission, receivedAt: string): string {
   const rows = fieldsOf(submission)
     .map(([label, value]) => `${label}: ${value}`)
     .join("\n");
-  return `New demo request\n\n${rows}\n\nReceived: ${formatReceivedAt(receivedAt)}\n`;
+  return `New message from the website\n\n${rows}\n\nReceived: ${formatReceivedAt(receivedAt)}\n`;
 }
 
 function renderHtml(submission: Submission, receivedAt: string): string {
@@ -89,9 +89,9 @@ function renderHtml(submission: Submission, receivedAt: string): string {
 <html>
   <body style="margin:0;padding:24px;background:#f4f6fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif;">
     <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e7f0;border-radius:10px;padding:28px;">
-      <h1 style="margin:0 0 4px;font-size:17px;font-weight:600;color:#12151c;">New demo request</h1>
+      <h1 style="margin:0 0 4px;font-size:17px;font-weight:600;color:#12151c;">New message from the website</h1>
       <p style="margin:0 0 20px;font-size:13px;color:#626d81;">
-        ${escapeHtml(submission.name)} · ${escapeHtml(submission.institution)}
+        ${escapeHtml(submission.name)}${submission.institution ? ` · ${escapeHtml(submission.institution)}` : ""}
       </p>
       <table style="width:100%;border-collapse:collapse;">${rows}</table>
       <p style="margin:20px 0 0;padding-top:16px;border-top:1px solid #e2e7f0;font-size:12px;color:#626d81;">
@@ -138,7 +138,7 @@ export async function sendDemoRequestEmail(
 
   if (!apiKey || !to || !from) {
     throw new DemoEmailError(
-      "RESEND_API_KEY, DEMO_NOTIFY_TO and DEMO_NOTIFY_FROM must all be set to send demo requests.",
+      "RESEND_API_KEY, DEMO_NOTIFY_TO and DEMO_NOTIFY_FROM must all be set to send website messages.",
     );
   }
 
@@ -146,7 +146,7 @@ export async function sendDemoRequestEmail(
     from,
     to,
     replyTo: submission.email,
-    subject: singleLine(`Demo request — ${submission.institution} (${submission.role})`),
+    subject: singleLine(`Website message — ${submission.name}${submission.institution ? ` (${submission.institution})` : ""}`),
     text: renderText(submission, receivedAt),
     html: renderHtml(submission, receivedAt),
   });
@@ -179,14 +179,8 @@ export async function sendDemoConfirmationEmail(submission: Submission): Promise
   const firstName = firstNameOf(submission.name);
   const text = `Hi ${firstName},
 
-Thanks for requesting a SynthGraph demo — we have your research context and
+Thanks for getting in touch with SynthGraph — we have your message and
 will follow up with next steps.
-
-For reference, here is what you told us:
-
-  Institution:   ${submission.institution}
-  Research area: ${submission.researchArea}
-  Workflow:      ${submission.workflow.join(", ")}
 
 Just reply to this email if you want to add anything.
 
@@ -197,7 +191,7 @@ Just reply to this email if you want to add anything.
     from,
     to: submission.email,
     replyTo: team,
-    subject: "Your SynthGraph demo request",
+    subject: "We got your message",
     text,
     html: `<!doctype html>
 <html>
@@ -205,14 +199,9 @@ Just reply to this email if you want to add anything.
     <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e2e7f0;border-radius:10px;padding:28px;">
       <h1 style="margin:0 0 16px;font-size:17px;font-weight:600;color:#12151c;">Request received.</h1>
       <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#12151c;">
-        Hi ${escapeHtml(firstName)}, thanks for requesting a SynthGraph demo — we have your
+        Hi ${escapeHtml(firstName)}, thanks for getting in touch with SynthGraph — we have your
         research context and will follow up with next steps.
       </p>
-      <table style="width:100%;border-collapse:collapse;margin:0 0 16px;">
-        <tr><td style="padding:6px 16px 6px 0;color:#626d81;font-size:13px;white-space:nowrap;">Institution</td><td style="padding:6px 0;color:#12151c;font-size:14px;">${escapeHtml(submission.institution)}</td></tr>
-        <tr><td style="padding:6px 16px 6px 0;color:#626d81;font-size:13px;white-space:nowrap;">Research area</td><td style="padding:6px 0;color:#12151c;font-size:14px;">${escapeHtml(submission.researchArea)}</td></tr>
-        <tr><td style="padding:6px 16px 6px 0;color:#626d81;font-size:13px;white-space:nowrap;">Workflow</td><td style="padding:6px 0;color:#12151c;font-size:14px;">${escapeHtml(submission.workflow.join(", "))}</td></tr>
-      </table>
       <p style="margin:0;padding-top:16px;border-top:1px solid #e2e7f0;font-size:13px;color:#626d81;">
         Just reply to this email if you want to add anything.
       </p>

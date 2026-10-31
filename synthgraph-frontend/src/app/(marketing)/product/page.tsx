@@ -1,123 +1,127 @@
 import type { Metadata } from "next";
 import { LineageScene } from "@/components/3d/dynamic";
+import { DashboardShowcase } from "@/components/sections/DashboardShowcase";
 import { FinalCTA } from "@/components/sections/FinalCTA";
-import { ProductPreview } from "@/components/sections/ProductPreview";
 import { StatusBadge } from "@/components/ui/Badge";
 import { ButtonLink } from "@/components/ui/Button";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { FeatureList, type Feature } from "@/components/ui/FeatureBlock";
 import { PageHero } from "@/components/ui/PageHero";
+import { PRODUCT } from "@/data/product";
 
 export const metadata: Metadata = {
   title: "Product",
   description:
-    "Generation provenance, dataset and asset versioning, training and evaluation lineage, search, comparison, reproduction manifests and storage references.",
+    "What SynthGraph records and shows: generations, dataset and asset versions, training runs and metrics, evaluations, lineage, declared metric directions, reports, and a reproduction manifest.",
 };
+
+const available = <StatusBadge status="available" />;
 
 const FEATURES: Feature[] = [
   {
-    id: "generation-provenance",
-    eyebrow: "Generation provenance",
+    id: "generations",
+    eyebrow: "Generations",
     title: "The run that produced the data, recorded as a run.",
-    body: "A Generation is a first-class record. It names the generator and its version, the parameters it was given, the seed it used, the asset versions it referenced and the code version it ran under. It exists from the moment the run starts, not after it succeeds.",
+    body: "A generation records the generator, its version, the seed and your parameters, and moves from pending to running to completed or failed. A failed generation is kept. The definition is written before the outcome is known, and it cannot be edited afterwards.",
     fields: [
-      ["generator.name", "e.g. blender"],
-      ["generator.version", "e.g. 4.2.0"],
-      ["parameters", "the arguments the run was given"],
-      ["reproducibility.seed", "the seed used"],
+      ["generator, generator_version", "what ran, e.g. blender 4.2"],
+      ["seed", "the random seed, if the run has one"],
+      ["parameters", "any JSON object, no schema imposed"],
       ["status", "pending, running, completed, failed"],
-      ["experiment_id", "the experiment it belongs to"],
+      ["environment", "Python, OS, git commit, branch, dirty flag"],
     ],
-    status: <StatusBadge status="private-pilot" />,
+    note: "Environment details are recorded by default and can be turned off.",
+    status: available,
   },
   {
-    id: "dataset-versioning",
-    eyebrow: "Dataset versioning",
-    title: "DatasetVersion, not a folder name.",
-    body: "A logical dataset accumulates versions. Every generation, training run and evaluation refers to a specific DatasetVersion, so a record still means something after the dataset has grown, been filtered, or been regenerated.",
+    id: "data",
+    eyebrow: "Datasets and assets",
+    title: "Versions by reference, not by folder name.",
+    body: "A dataset or an asset accumulates immutable versions. Each one is a URI, a label and optional details. SynthGraph never reads or stores the data. If you want proof the bytes are unchanged, ask the SDK to hash a local file or folder.",
     fields: [
-      ["dataset", "the logical dataset"],
-      ["version", "the specific version referenced"],
-      ["uri", "where the data actually lives"],
-      ["checksum", "content identity, where available"],
-      ["format", "image, video, annotation set"],
-      ["created_by", "the generation that produced it"],
+      ["name, uri", "where it lives, stored as text and never opened"],
+      ["version", "a label; the current UTC time if you give none"],
+      ["format, size", "optional descriptions"],
+      ["checksum", "yours, or computed for a local path on request"],
     ],
-    status: <StatusBadge status="private-pilot" />,
+    status: available,
   },
   {
-    id: "asset-versioning",
-    eyebrow: "Asset versioning",
-    title: "Scene assets are versioned inputs too.",
-    body: "A generation can reference exact AssetVersions rather than an asset name. Replacing a model or a texture on disk no longer silently changes the meaning of every run that used it.",
+    id: "training",
+    eyebrow: "Training runs",
+    title: "The model, its configuration and its metrics.",
+    body: "A training run records the model, the framework, your configuration and the data it used. You move it through its lifecycle and log metrics by step. Resource use can be sampled in the background, and the run reports how completely its telemetry was captured.",
     fields: [
-      ["asset", "the logical asset"],
-      ["version", "the version referenced"],
-      ["referenced_by", "the generations that used it"],
+      ["model, framework, config", "what was trained, and how"],
+      ["log_metric(step, metrics)", "metrics by step"],
+      ["monitor_resources()", "CPU, memory and GPU samples"],
+      ["capture status", "complete, partial, or never reported"],
     ],
-    status: <StatusBadge status="private-pilot" />,
+    status: available,
   },
   {
-    id: "training-lineage",
-    eyebrow: "Training lineage",
-    title: "A model is downstream of specific data.",
-    body: "A TrainingRun records its configuration and the exact DatasetVersions it consumed. That single link is what turns a pile of checkpoints into a history you can reason about.",
+    id: "evaluations",
+    eyebrow: "Evaluations",
+    title: "A score is recorded with what it was measured on.",
+    body: "An evaluation always names the dataset version it was scored on, and can record the checkpoint step. Scores on different datasets are different results, so the dashboard keeps them apart: the leaderboard ranks a run only against runs scored on the same evaluation set.",
     fields: [
-      ["framework", "e.g. PyTorch"],
-      ["model", "e.g. YOLO"],
-      ["config", "hyperparameters and training setup"],
-      ["inputs", "the DatasetVersions consumed"],
+      ["metrics", "names to values"],
+      ["dataset_version_id", "required: what it was measured on"],
+      ["checkpoint_step", "the step it was taken at, never read from a name"],
     ],
-    status: <StatusBadge status="private-pilot" />,
+    status: available,
   },
   {
-    id: "evaluation-lineage",
-    eyebrow: "Evaluation lineage",
-    title: "Metrics keep their chain of custody.",
-    body: "An EvaluationResult belongs to a TrainingRun and, through it, to the dataset versions, the generation and the parameters upstream. A number in a table can always be traced back to the run that produced it.",
+    id: "lineage",
+    eyebrow: "Lineage",
+    title: "Every line is a link someone recorded.",
+    body: "Say which data a run used, or which generation, and the graph connects them. If you record nothing, it draws nothing and says so. A dataset belongs to the first project that references it, so one project's lineage cannot silently pull in another's.",
     fields: [
-      ["metrics", "e.g. mAP, precision, recall"],
-      ["training_run_id", "the run evaluated"],
-      ["dataset_version", "what it was evaluated against"],
+      ["training(dataset=, datasets=, generations=)", "link at creation"],
+      ["use(), add_dataset()", "link afterwards"],
+      ["link_generation()", "a run that used a generation but no dataset"],
     ],
-    status: <StatusBadge status="private-pilot" />,
+    status: available,
   },
   {
-    id: "search",
-    eyebrow: "Search",
-    title: "Query the experiment history, not the filesystem.",
-    body: "Experiments are searchable by project, generator, time and recorded metadata — including the parameters on the generation itself.",
-    status: <StatusBadge status="private-pilot" />,
+    id: "directions",
+    eyebrow: "Metric directions",
+    title: "You declare what better means.",
+    body: "Bigger is better for reward and worse for loss. You declare it once per experiment, and nothing is inferred from a metric's name. A different direction for a declared metric is rejected, and a correction needs a note. Without a declaration there is no verdict.",
+    fields: [
+      ["maximize, minimize, neutral", "the three values"],
+      ["correction note", "required to change one on purpose"],
+    ],
+    status: available,
   },
   {
-    id: "comparison",
-    eyebrow: "Comparison",
-    title: "Field-by-field differences between two experiments.",
-    body: "Two experiments aligned on their recorded fields, with the differences marked. It shows what changed; it does not claim to show why the result changed.",
-    note: "Comparison is an inspection tool. Attributing a result to a parameter remains a research judgement, and SynthGraph does not make it for you.",
-    status: <StatusBadge status="private-pilot" />,
+    id: "reports",
+    eyebrow: "Reports",
+    title: "Across experiments and projects.",
+    body: "Capture completeness shows where telemetry has gaps. The efficiency leaderboard plots result against training time per evaluation set. Best runs lists the best value of each metric whose direction was declared. Training run search finds runs by a numeric condition on a parameter or a metric.",
+    status: available,
   },
   {
     id: "reproduction",
-    eyebrow: "Reproduction",
-    title: "A manifest that includes what is missing.",
-    body: "The reproduction manifest gathers the recorded configuration, seeds, asset versions, dataset references and code version, and lists the dependencies that were external or unrecorded.",
-    note: "SynthGraph makes dependencies and known provenance explicit. It does not guarantee exact reproduction when external dependencies were not captured.",
-    status: <StatusBadge status="private-pilot" />,
+    eyebrow: "Reproduction and documentation",
+    title: "What you would need to rerun it, and what is missing.",
+    body: "The reproduction manifest sorts what was recorded into known, supplied, outside SynthGraph and missing, and grades how completely a generation was recorded. The grade does not claim a rerun will match. A generated Markdown description is available too.",
+    note: "It grades recording, not reproducibility.",
+    status: available,
   },
   {
-    id: "storage-references",
-    eyebrow: "Storage references",
-    title: "References to data, not copies of it.",
-    body: "Datasets are referenced by URI and, where available, by checksum. Large generated data can stay on the researcher’s filesystem, lab storage or object storage; SynthGraph stores the pointer and the provenance around it.",
-    status: <StatusBadge status="private-pilot" />,
+    id: "cli",
+    eyebrow: "Command line",
+    title: "Read it back from a terminal or a script.",
+    body: "The synthgraph command lists and shows records, compares generations, searches experiments, and exports manifests and documentation. Every command can print JSON, and the exit codes tell a script what went wrong.",
+    status: available,
   },
   {
-    id: "documentation",
-    eyebrow: "Documentation",
-    title: "Reference documentation for the SDK and the data model.",
-    body: "Written documentation covering the client, the record types and the lifecycle rules is being produced alongside the SDK during the pilot.",
-    status: <StatusBadge status="planned" />,
+    id: "open",
+    eyebrow: "Open source",
+    title: `Under the ${PRODUCT.license} license, and yours to run.`,
+    body: "Run the database, the backend and the dashboard yourself, so your records live in your own Postgres. There is also a hosted backend, which is an alpha service.",
+    status: available,
   },
 ];
 
@@ -127,11 +131,16 @@ export default function ProductPage() {
       <PageHero
         eyebrow="Product"
         title="A record of what produced every result."
-        lede="SynthGraph holds a small number of record types and the relationships between them. Everything the product does — search, comparison, reproduction — reads from those records."
+        lede="SynthGraph holds a small number of record types and the links between them. Everything the product does, such as comparison, reports and the reproduction manifest, reads from those records."
       >
-        <ButtonLink href="/demo" arrow>
-          Request a Demo
-        </ButtonLink>
+        <div className="flex flex-wrap gap-3">
+          <ButtonLink href="/docs/quickstart" arrow>
+            Get started
+          </ButtonLink>
+          <ButtonLink href="/docs/reference/limits" variant="secondary">
+            What it does not do
+          </ButtonLink>
+        </div>
       </PageHero>
 
       <section className="border-t border-line py-16">
@@ -147,7 +156,7 @@ export default function ProductPage() {
         </div>
       </section>
 
-      <ProductPreview />
+      <DashboardShowcase />
       <FinalCTA />
     </>
   );

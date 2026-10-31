@@ -1,0 +1,77 @@
+Every error the SDK raises is a `SynthGraphError`, so one `except` clause can catch them all. The more specific types let you handle the cases you care about.
+
+## The error types
+
+```text
+SynthGraphError
+├── SynthGraphConfigurationError        missing or inconsistent settings
+├── SynthGraphValidationError           input rejected, before or by the backend (400, 422)
+├── SynthGraphTransportError            timeouts, connection failures, unreadable responses
+└── SynthGraphHTTPError                 the backend answered with an error
+    ├── SynthGraphAuthenticationError   401
+    ├── SynthGraphAuthorizationError    403
+    ├── SynthGraphNotFoundError         404
+    ├── SynthGraphConflictError         409
+    │   ├── SynthGraphCrossProjectReferenceError
+    │   └── SynthGraphMetricDirectionConflictError
+    ├── SynthGraphRateLimitError        429
+    └── SynthGraphServerError           5xx
+```
+
+HTTP errors carry the `status_code`, a `message`, the `operation` and the request `path`. Validation errors also carry the `field` that was wrong.
+
+```py
+from synthgraph import SynthGraphConflictError, SynthGraphError
+
+try:
+    generation.complete()
+except SynthGraphConflictError as error:
+    print(error.status_code, error.message)   # 409 ... Cannot transition generation from pending to completed
+except SynthGraphError as error:
+    print("something else went wrong:", error)
+```
+
+## Checks happen before the request when they can
+
+The SDK validates what it can before sending anything: an integer `step`, a `checkpoint_step` in range, a local path for `compute_checksum`, a dataset that belongs to the right project. A call that fails these checks raises `SynthGraphValidationError` or `SynthGraphCrossProjectReferenceError` and leaves nothing behind.
+
+## What is retried
+
+Only reads. A `GET` request is retried when it fails with a connection error, a timeout, or a 408, 429, 500, 502, 503 or 504 response. The defaults are:
+
+| Setting | Default |
+| --- | --- |
+| Attempts | 3, from `SYNTHGRAPH_MAX_ATTEMPTS`, between 1 and 10 |
+| Backoff | Exponential, starting at 0.5 seconds and capped at 8 seconds |
+| Request timeout | 30 seconds, from `SYNTHGRAPH_TIMEOUT` |
+
+## Writes are never retried
+
+Creating a record, changing a status, logging a metric: none of these is retried automatically. The API has no idempotency key yet, so a blind retry of a write could record something twice.
+
+That means a write can fail in a way where you cannot know whether it was saved. The SDK says so plainly instead of guessing:
+
+```py
+from synthgraph import SynthGraphTransportError
+
+try:
+    training.log_metric(step=10, metrics={"loss": 0.2})
+except SynthGraphTransportError as error:
+    if error.outcome_unknown:
+        # The request may or may not have reached the backend.
+        ...
+```
+
+`outcome_unknown` is `True` when a write failed in transit, for example a timeout after the request was sent. It is `False` for a failed read, because reading twice does no harm. A write that fails with an HTTP error, such as a 409, is different: the backend answered, so you know it was not applied.
+
+## Rate limits
+
+An API key is limited to about 120 requests a minute. Exceeding it raises `SynthGraphRateLimitError` (HTTP 429). Each `log_metric` call is one request, so log at an interval rather than at every step. Reads are retried on a 429, writes are not.
+
+## The hosted backend and timeouts
+
+The hosted backend sleeps when idle. The first request after a quiet period can take close to 30 seconds, which is the default timeout. If your first call times out, try again, or raise the limit:
+
+```bash
+export SYNTHGRAPH_TIMEOUT=90
+```

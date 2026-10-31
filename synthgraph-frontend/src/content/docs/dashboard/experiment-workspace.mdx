@@ -1,0 +1,92 @@
+Open an experiment from its project and you get its workspace: everything recorded under that experiment, split across six tabs.
+
+The header shows the experiment's name, how many generations and training runs it has and how many runs have completed, when it was created, and a few actions:
+
+| Action | What it does |
+| --- | --- |
+| **Compare** | Starts a selection mode where you pick runs or generations to compare. See [Compare](/docs/dashboard/compare). |
+| **Reproduce** | Opens the **Reproduction** tab. |
+| **Export** | Downloads a JSON file with the experiment, its generations and its training runs. |
+| **Rename** | Renames the experiment. |
+| **Archive** | Archives it, after you confirm. |
+| **Take a tour** | Starts a guided walk through the workspace. |
+| **Refresh data** | Reloads what was recorded, to pick up runs that are still going. |
+
+## Overview
+
+A summary of the whole experiment:
+
+- **Counts**: generations, training runs, completed runs, evaluations, and the time of the last activity.
+- **Flagged runs**: runs that need a look, each with the reason in words, for example "capture incomplete" or "drift in 1 field". The backend decides which runs are flagged, using five fixed checks: the run failed, its capture was partial, its capture was reported as unknown, it never reported capture, or it differs from earlier completed runs in the fields SynthGraph compares. No metric is looked at, so a run that scored badly is not flagged for that.
+- **Run status**: how many runs are running, completed or failed.
+- **Provenance**: whether the experiment has a generation, a dataset, a training run, an evaluation and recorded environment details.
+- **Result**: for each evaluation metric, the average across the recorded evaluations, with the lowest and highest values in brackets.
+- **Recent generations** and **recent training runs**.
+
+## Runs
+
+A table of the experiment's training runs.
+
+| Column | Meaning |
+| --- | --- |
+| **Name** | The run's name. Click it to open the run. |
+| **Status** | Pending, running, completed or failed. |
+| **Capture** | `complete`, `partial` or `not reported`. See [Resource monitoring and capture status](/docs/sdk/resource-monitoring). |
+| **Created** | When the run was recorded. |
+| **Duration** | The time between its start and completion. A run that has not finished shows a dash. |
+| **Steps** | How many metric points were recorded. |
+| **Evaluations** | How many evaluations it has. |
+
+You can sort the table, filter it by name, and select runs to compare.
+
+<Callout type="note" title="Steps can be more than you logged">
+
+Resource samples are stored as metric points too, so a run that used `monitor_resources()` shows those extra points in its step count.
+
+</Callout>
+
+## Lineage
+
+The lineage graph. Each node is a record: a generation, a dataset version, a training run or an evaluation. Each line is a link you recorded.
+
+- Click a node to see its details.
+- A node with no line to the rest of the graph has no recorded link. The tab tells you how many generations have none, for example "1 of 5 generations have no recorded link to a training run", and how to record the link: register a generation's outputs, or tell a run which generation it used with `training.use(generation)`.
+- Nothing is drawn from guesses. The graph never connects two records because they happened close together in time. See [Link data to results](/docs/sdk/lineage).
+
+## Metrics
+
+Training metrics, step by step.
+
+- **Training run** picker: choose which run to look at.
+- Three views: **Chart**, **Table** and **Compare runs**.
+- The metric picker groups metric names and lets you filter them.
+- **Smoothed** draws an exponential moving average in place of the raw line, so the values you read off the chart are the smoothed ones while it is on. **Log scale** uses a logarithmic axis, but only when every plotted value is above zero. Otherwise the chart stays linear. **Normalize** rescales each plotted metric to a range of 0 to 1, using its own lowest and highest value, so metrics of different sizes can be compared by shape.
+- A metric whose direction you [declared](/docs/sdk/metric-directions) is judged as improving or worsening. A metric with no declared direction is shown without a verdict.
+- **Compare runs** overlays the same metric across runs and summarises each run's last and best or highest and lowest value.
+
+<Callout type="warning" title="History is limited to the first 100 points per run">
+
+The workspace loads at most 100 metric points for each run, the earliest by step. A run with more points still has them all stored, but the Metrics tab shows only the first 100.
+
+</Callout>
+
+## Parameters
+
+An exploratory view of how your parameters relate to a result you choose.
+
+- It looks at parameters that **vary** between runs, and at the outcome metric you pick: each run's best evaluation of it, in the declared direction.
+- For each varying parameter it shows how strongly it goes with the result, and how far to trust that given the number of runs. With fewer than five runs it says there is not enough data instead of showing an effect.
+- It shows **association, not cause**. The page says so, and so should you when you read it.
+
+This view is worked out in your browser from the runs on the page. It is labelled exploratory, and it is not an official SynthGraph result.
+
+## Reproduction
+
+How completely the experiment was recorded.
+
+- A summary: how many generations have major gaps, and the average share of fields recorded.
+- Each generation, weakest first, with its grade and the reasons it is held back.
+- **Download report** as Markdown or JSON.
+- For a generation, what is known, what was supplied, what lives outside SynthGraph, and what is missing, with a link to the raw manifest.
+
+It counts which fields were recorded. It does not check they are correct, that the data or code still exist, or that the result can be reproduced. See [The reproduction manifest](/docs/reference/reproduction-manifest).

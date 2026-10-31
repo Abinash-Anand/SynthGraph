@@ -1,50 +1,42 @@
-import { AssetVersioning } from "@/components/sections/AssetVersioning";
-import { CloudLocal } from "@/components/sections/CloudLocal";
-import { Comparison } from "@/components/sections/Comparison";
-import { DatasetVersioning } from "@/components/sections/DatasetVersioning";
-import { Developers } from "@/components/sections/Developers";
-import { FailurePreservation } from "@/components/sections/FailurePreservation";
+import { DashboardShowcase } from "@/components/sections/DashboardShowcase";
 import { FinalCTA } from "@/components/sections/FinalCTA";
 import { Hero } from "@/components/sections/Hero";
-import { Immutability } from "@/components/sections/Immutability";
-import { LargeData } from "@/components/sections/LargeData";
+import { HowItWorks } from "@/components/sections/HowItWorks";
 import { Lineage } from "@/components/sections/Lineage";
-import { ParameterSpace } from "@/components/sections/ParameterSpace";
-import { PlatformIndependence } from "@/components/sections/PlatformIndependence";
 import { Problem } from "@/components/sections/Problem";
-import { ProductPreview } from "@/components/sections/ProductPreview";
-import { Reproduction } from "@/components/sections/Reproduction";
-import { Researchers } from "@/components/sections/Researchers";
-import { SearchSection } from "@/components/sections/SearchSection";
-import { Security } from "@/components/sections/Security";
-import { SignatureAssembly } from "@/components/sections/SignatureAssembly";
-import { ValueChain } from "@/components/sections/ValueChain";
-import { Workflow } from "@/components/sections/Workflow";
+import { TrustedRecords } from "@/components/sections/TrustedRecords";
+import { YourData } from "@/components/sections/YourData";
+import { YourStack } from "@/components/sections/YourStack";
+import { PRODUCT } from "@/data/product";
+import { SITE } from "@/data/site";
+
+// Structured data for search engines. Static text only: nothing here comes from a user.
+const STRUCTURED_DATA = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: SITE.name,
+  applicationCategory: "DeveloperApplication",
+  operatingSystem: "Any",
+  description:
+    "Open source provenance for synthetic-data research: records where training data came from and what it trained.",
+  softwareVersion: PRODUCT.sdkVersion,
+  license: "https://opensource.org/licenses/MIT",
+  codeRepository: PRODUCT.repoUrl,
+  url: SITE.url,
+};
 
 export default function HomePage() {
   return (
     <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(STRUCTURED_DATA) }} />
       <Hero />
       <Problem />
-      <SignatureAssembly />
-      <ValueChain />
+      <HowItWorks />
       <Lineage />
-      <Workflow />
-      <LargeData />
-      <DatasetVersioning />
-      <AssetVersioning />
-      <SearchSection />
-      <Comparison />
-      <ProductPreview />
-      <Reproduction />
-      <FailurePreservation />
-      <Immutability />
-      <ParameterSpace />
-      <Researchers />
-      <Developers />
-      <PlatformIndependence />
-      <Security />
-      <CloudLocal />
+      <DashboardShowcase />
+      <TrustedRecords />
+      <YourStack />
+      <YourData />
       <FinalCTA />
     </>
   );

@@ -1,0 +1,23 @@
+Compare puts two or more runs side by side and shows what differs.
+
+## Compare generations
+
+**Compare** in the sidebar opens the generation comparison. Search for generations by name and add them to the selection, or start from an experiment: in the workspace, choose **Compare** in the header or select runs in the **Runs** tab.
+
+The comparison lists the fields that **differ** between the generations you picked: for example individual parameters, or the seed or generator version if they changed. Fields that are the same are not listed. The start and end times of the runs are listed too, and they will almost always differ. The comparison is computed by the backend.
+
+It shows differences, and says nothing about why a result changed. A parameter that differs between two runs is a candidate explanation, not a cause: nothing in a comparison controls for everything else that changed.
+
+## Compare training runs
+
+On the Compare page, **Compare training runs instead** switches to training runs. Pick two to ten runs. The comparison lists the fields that differ: the status, the trainer, the start and end times and individual parameters.
+
+Run curves are compared in the workspace's **Metrics** tab, using **Compare runs**. See [The experiment workspace](/docs/dashboard/experiment-workspace).
+
+## From the command line
+
+```bash
+synthgraph compare <generation-id-a> <generation-id-b>
+```
+
+Add `--json` to get the raw comparison.

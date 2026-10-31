@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { DemoForm } from "@/components/demo/DemoForm";
 import { Badge } from "@/components/ui/Badge";
+import { SITE } from "@/data/site";
 
 export const metadata: Metadata = {
-  title: "Request a Demo",
+  title: "Contact",
   description:
-    "SynthGraph is available through a limited research pilot. Tell us about your synthetic-data workflow and we will follow up with next steps.",
+    "Ask a question, report a problem, or tell us what you are trying to record with SynthGraph.",
 };
 
 export default function DemoPage() {
@@ -16,15 +17,15 @@ export default function DemoPage() {
       <div className="shell relative">
         <header className="max-w-[68ch]">
           <Badge tone="cyan" dot>
-            Private research pilot
+            Contact
           </Badge>
           <h1 className="mt-7 text-[38px] leading-[1.03] font-medium tracking-[-0.03em] text-gradient-ink md:text-[58px]">
-            See your experiment history as a graph.
+            Ask us anything.
           </h1>
           <p className="mt-6 text-[17px] leading-[1.65] text-ink-muted md:text-[19px]">
-            SynthGraph is currently available through a limited research pilot. Tell us about
-            your workflow and we will use it to determine the best way to demonstrate the
-            platform.
+            A question, a problem you ran into, or what you are trying to record. Only your
+            name, email and a message are needed. You can also write to {SITE.contactEmail}, or
+            open an issue on GitHub.
           </p>
         </header>
 

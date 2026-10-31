@@ -1,0 +1,80 @@
+An evaluation records what a training run scored, and on what. The "on what" is required: a score means nothing without the data it was measured against.
+
+The examples on this page share this setup:
+
+```python
+from synthgraph import SynthGraph
+
+sg = SynthGraph()
+experiment = sg.project("Docs: evaluations").experiment("example")
+generation = experiment.generation(generator="blender", generator_version="4.2", seed=1)
+train_set = generation.dataset(name="train_set", uri="s3://lab-bucket/train")
+test_set = generation.dataset(name="test_clear", uri="s3://lab-bucket/test_clear")
+training = experiment.training(model="yolo", framework="pytorch", dataset=train_set)
+training.start()
+```
+
+## Record an evaluation
+
+```python
+evaluation = training.evaluation(
+    metrics={"mAP": 0.724, "precision": 0.78, "recall": 0.69},
+    dataset_version_id=test_set,
+)
+```
+
+| Argument | Meaning |
+| --- | --- |
+| `metrics` | A dictionary of metric names to values. Required. |
+| `dataset_version_id` | The dataset version the run was scored on. Required. Pass the object or its id. |
+| `name` | A label for this evaluation, for example `"clear_weather"`. |
+| `checkpoint_step` | The training step this evaluation was taken at. |
+| `metadata` | Any extra JSON, such as the conditions of the test. |
+
+Leaving out `dataset_version_id` is a `TypeError`. The SDK will not record a score without saying what it was scored on.
+
+## Evaluate on more than one dataset
+
+Scores on different datasets are different results, so record them as separate evaluations, each naming its own dataset:
+
+```python
+heavy_rain = generation.dataset(name="test_heavy_rain", uri="s3://lab-bucket/test_heavy_rain")
+
+training.evaluation(name="clear", metrics={"mAP": 0.81}, dataset_version_id=test_set)
+training.evaluation(name="heavy_rain", metrics={"mAP": 0.52}, dataset_version_id=heavy_rain)
+```
+
+The dashboard keeps them apart. The efficiency leaderboard, for example, ranks a run's score on one evaluation set only against other runs' scores on that same set, and never blends them.
+
+## Checkpoints
+
+If you evaluate at several points during training, record the step each one belongs to:
+
+```python
+training.evaluation(
+    name="ckpt-100",
+    metrics={"mAP": 0.60},
+    dataset_version_id=test_set,
+    checkpoint_step=100,
+)
+training.evaluation(
+    name="ckpt-200",
+    metrics={"mAP": 0.70},
+    dataset_version_id=test_set,
+    checkpoint_step=200,
+)
+```
+
+`checkpoint_step` is a whole number from 0 up to 2,147,483,647. The dashboard orders and plots checkpoints by it. If you leave it out, the evaluation has no recorded step and is shown in the order it was recorded. The step is never read out of the evaluation's name.
+
+```py
+training.evaluation(metrics={"mAP": 1}, dataset_version_id=test_set, checkpoint_step=-1)
+# SynthGraphValidationError: checkpoint_step must be between 0 and 2147483647, got -1
+```
+
+## Read them back
+
+```python
+for result in training.evaluations():
+    print(result.name, result.checkpoint_step, result.metrics)
+```

@@ -1,0 +1,51 @@
+SynthGraph keeps a small set of records and the links between them. Knowing what they are makes the rest of the docs, and the dashboard, easy to read.
+
+## The lineage chain
+
+```text
+Generation ──▶ Dataset version ──▶ Training run ──▶ Evaluation
+ (how the data     (the data, by       (the model         (what it scored,
+  was made)         reference)          trained on it)     and on what)
+```
+
+Each arrow is a link you recorded. A generation records how data was made. A dataset version points at the data it produced. A training run records the data it used. An evaluation records what the run scored and which dataset version it was scored on.
+
+## The records
+
+**Project and experiment.** A project holds experiments, and an experiment holds the generations and training runs that belong together. Everything you record lives under an experiment.
+
+**Generation.** One run of a generator. It holds the generator's name, its version, your parameters (free-form JSON), the seed, and a status.
+
+**Dataset and dataset version.** A *dataset* is a name. A *dataset version* is one immutable state of it: a URI saying where the data lives, a version label, optionally a format, a size and a checksum. You never upload anything.
+
+**Asset and asset version.** The same idea for scenes, models and textures.
+
+**Training run.** The model, the framework, your configuration, the metrics logged step by step, and a capture status that says how completely its telemetry was recorded.
+
+**Evaluation.** The metrics a training run scored, the dataset version it was scored on (always required), and optionally the checkpoint step it was taken at.
+
+## References, not bytes
+
+A dataset version stores a URI and metadata. The URI can point at S3, a bucket, a local folder or a share, and SynthGraph never reads it. The one exception is a checksum you ask the SDK to compute, which reads a local file or folder on your machine. See [Datasets and checksums](/docs/sdk/datasets).
+
+## Links are recorded, never guessed
+
+The lineage graph in the dashboard draws only links you recorded: a run linked to the data it used, an evaluation linked to the data it was scored on, a run linked to a generation. If you do not record a link, the graph shows no line. It does not infer connections from timestamps. See [Link data to results](/docs/sdk/lineage).
+
+## What cannot change
+
+- **A generation's definition.** The API has no route to edit a generation's generator, version, parameters or seed after it is created. They are written once.
+- **A generation's status only moves forward.** A generation goes from pending to running, then to completed or failed. Completed and failed are final: trying to change them again is rejected with a 409 error. A training run follows the same rules.
+- **Dataset and asset versions.** A version is a record of one state of the data. To record a change, add a new version.
+
+What you can still add after a run has finished: datasets and assets can be attached to a generation later, and evaluations can be added to a training run at any time.
+
+## Projects keep their data apart
+
+A dataset belongs to the first project that references it. Linking that dataset from a training run in a different project is rejected with `SynthGraphCrossProjectReferenceError`, so one project's lineage can never silently pull in another's.
+
+## Where it all shows up
+
+- **The dashboard** shows each experiment as a workspace: its runs, the lineage graph, metrics, parameters and the reproduction manifest.
+- **The command line** reads any record back, and can print JSON.
+- **The reproduction manifest** gathers what you would need to rerun a generation, and says what is missing. It grades how completely things were recorded, not whether a rerun will match.

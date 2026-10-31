@@ -1,0 +1,37 @@
+The **Reports** group in the sidebar looks across your projects rather than into one experiment. Each report has a **Project** filter at the top, so you can look at everything or at one project.
+
+## Capture Completeness
+
+How much of your runs' provenance reached the backend.
+
+- Three counts, as a share of your training runs: **complete** (every integration the run reported was attached and closed out), **partial** (something was reported but not fully captured) and **unknown** (the run never said whether its capture finished).
+- **Show these runs** lists the runs behind a count, each with what is wrong in words, for example "this run never reported whether its capture finished".
+- **By integration** shows, for each integration such as `resource_monitor`, how many runs reported it (coverage) and how many of those finished cleanly (closed).
+
+An integration is flagged for a run when more than half of the runs in the same scope report it and this one does not. A run that never reported counts as unknown, which is why a project that does not use `close()` shows mostly unknown. See [Resource monitoring and capture status](/docs/sdk/resource-monitoring).
+
+## Efficiency Leaderboard
+
+Which runs got the best result for the least training time.
+
+- Choose a **metric** and an **evaluation set**. A run's value is its best checkpoint on that set, and runs are ranked only against other runs scored on the **same** evaluation set. Scores on different evaluation sets are never combined.
+- The chart plots result against training time. Runs on the **frontier** cannot be beaten on both axes at once. Every other run shows which faster, better run beats it. For a metric where bigger is better, value per hour of training is shown too.
+- The direction comes from what you [declared](/docs/sdk/metric-directions). If none was declared, or experiments disagree, you choose the direction for that view, and the page says your choice is not saved.
+- If every result is within about 2 percent of the others, the page warns that the ranking may be within normal run-to-run variation.
+- When the runs come from more than one project, a note reminds you that scores from different tasks are not comparable.
+
+## Best Runs
+
+The best value ever recorded for each metric across your completed runs, and the run that set it.
+
+A best run is shown only for a metric whose direction was declared, and only where every experiment that reports it declared the same one. Every other metric shows both extremes instead of picking a winner.
+
+## Training Run Search
+
+Find training runs where a parameter or a metric crosses a numeric threshold, for example runs with `lr > 0.001`.
+
+Choose a **field** (parameters or metrics), type the **key**, pick an **operator** (greater than, at least, less than, at most, equal to) and a **value**, and search. It matches one condition at a time on numeric values.
+
+## What these reports do not do
+
+They do not pick a "best model". A high score on a metric is a fact about one run, on one evaluation set, in one project. Look at the evaluation set, the number of runs and the spread before you act on a ranking.

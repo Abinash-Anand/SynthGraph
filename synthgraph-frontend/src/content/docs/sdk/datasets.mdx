@@ -1,0 +1,102 @@
+A dataset version is a reference to data: where it lives and what you call it. SynthGraph never uploads, downloads or stores the data itself.
+
+The examples on this page share this setup:
+
+```python
+from synthgraph import SynthGraph
+
+sg = SynthGraph()
+experiment = sg.project("Docs: datasets").experiment("example")
+generation = experiment.generation(generator="blender", generator_version="4.2", seed=1)
+```
+
+## Record a dataset
+
+```python
+dataset = generation.dataset(
+    name="rain_dataset_v1",
+    uri="s3://lab-bucket/rain_dataset_v1",
+    format="image",
+)
+```
+
+| Argument | Meaning |
+| --- | --- |
+| `name` | The dataset's name. Required. |
+| `uri` | Where the data lives: `s3://...`, a path, a URL. Required. It is stored as text and never opened. |
+| `format` | A free-text label such as `"image"` or `"parquet"`. |
+| `size` | The size in bytes, if you know it. |
+| `checksum` | A checksum you computed yourself. See below. |
+| `compute_checksum` | Ask the SDK to hash a **local** path for you. See below. |
+| `version` | A label for this version. If you leave it out, the current UTC time is used. |
+| `dataset_id` | Add a new version to an existing dataset instead of creating a new one. |
+| `role` | How the generation relates to the data. The default is `"output"`. |
+| `metadata` | Any extra JSON you want stored. |
+
+The call returns the new dataset version. Pass it to a training run or an evaluation, which accept either the object or its id:
+
+```python
+evaluation_data = generation.dataset(name="rain_test", uri="s3://lab-bucket/rain_test")
+print(dataset.id, evaluation_data.version)
+```
+
+## Versions
+
+A dataset is a name, and each call records one immutable version of it. Calling `generation.dataset(name=...)` creates a new dataset. To add a new version to a dataset you already have, pass its id:
+
+```py
+v2 = generation.dataset(
+    name="rain_dataset_v1",
+    uri="s3://lab-bucket/rain_dataset_v2",
+    dataset_id=dataset.dataset_id,
+)
+```
+
+A version is never edited. If the data changes, record a new version so earlier results still point at the data they actually used.
+
+## Checksums
+
+By default the SDK never reads your data. A version then records where the data is and what you call it, but it cannot later prove the bytes are unchanged.
+
+You can add a checksum in two ways.
+
+**Hash a local file or folder, with `compute_checksum=True`:**
+
+```python
+import tempfile
+from pathlib import Path
+
+local = Path(tempfile.mkdtemp())
+(local / "frame_0.png").write_bytes(b"example")
+
+hashed = generation.dataset(name="local_frames", uri=str(local), compute_checksum=True)
+print(hashed.checksum)  # sha256-tree:...
+```
+
+- A **file** gets `sha256:<hex>`, identical to what `sha256sum` prints.
+- A **folder** gets `sha256-tree:<hex>`, a hash over every file's relative path and content, independent of the order the filesystem lists files in. It is this SDK's own scheme, so only the SDK can recompute it.
+
+The cost grows with the size of the data.
+
+**Pass a checksum you computed where the data lives:**
+
+```python
+remote = generation.dataset(
+    name="remote_frames",
+    uri="s3://lab-bucket/frames",
+    checksum="sha256:" + "ab" * 32,
+)
+```
+
+The SDK will not download data to hash it. Asking it to hash a remote address is an error:
+
+```py
+generation.dataset(name="x", uri="s3://lab-bucket/frames", compute_checksum=True)
+# SynthGraphValidationError: cannot compute a checksum for 's3://lab-bucket/frames':
+# it is not a local path, and the SDK never downloads data. Hash it where it lives
+# and pass checksum=... yourself.
+```
+
+## One dataset, one project
+
+A dataset belongs to the first project that references it. Linking it from a training run in another project is rejected. See [Core concepts](/docs/concepts).

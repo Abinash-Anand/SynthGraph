@@ -23,46 +23,6 @@ export const LineageScene = dynamic(
   { ssr: false, loading: placeholder("h-[520px] lg:h-[620px]") },
 );
 
-export const StorageScene = dynamic(
-  () => import("./StorageScene").then((mod) => mod.StorageScene),
-  { ssr: false, loading: placeholder("h-[360px] lg:h-[460px]") },
-);
-
-export const DatasetVersionScene = dynamic(
-  () => import("./DatasetVersionScene").then((mod) => mod.DatasetVersionScene),
-  { ssr: false, loading: placeholder("h-[360px] lg:h-[440px]") },
-);
-
-export const AssetScene = dynamic(
-  () => import("./AssetScene").then((mod) => mod.AssetScene),
-  { ssr: false, loading: placeholder("h-[340px] lg:h-[420px]") },
-);
-
-export const ManifestScene = dynamic(
-  () => import("./ManifestScene").then((mod) => mod.ManifestScene),
-  { ssr: false, loading: placeholder("h-[320px] lg:h-[400px]") },
-);
-
-export const ConvergenceScene = dynamic(
-  () => import("./ConvergenceScene").then((mod) => mod.ConvergenceScene),
-  { ssr: false, loading: placeholder("h-[380px] lg:h-[480px]") },
-);
-
-export const AssemblyScene = dynamic(
-  () => import("./AssemblyScene").then((mod) => mod.AssemblyScene),
-  { ssr: false, loading: placeholder("h-full") },
-);
-
-export const StepGraphScene = dynamic(
-  () => import("./StepGraphScene").then((mod) => mod.StepGraphScene),
-  { ssr: false, loading: placeholder("h-[420px] lg:h-[500px]") },
-);
-
-export const ParameterSpaceScene = dynamic(
-  () => import("./ParameterSpaceScene").then((mod) => mod.ParameterSpaceScene),
-  { ssr: false, loading: placeholder("h-[380px] lg:h-[460px]") },
-);
-
 export const DemoGraphScene = dynamic(
   () => import("./DemoGraphScene").then((mod) => mod.DemoGraphScene),
   { ssr: false, loading: placeholder("h-[320px] lg:h-[440px]") },

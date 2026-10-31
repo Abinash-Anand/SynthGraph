@@ -27,15 +27,15 @@ export function DemoSuccess() {
       className="mx-auto flex max-w-3xl flex-col items-center text-center"
     >
       <Badge tone="ok" dot>
-        Request received
+        Message received
       </Badge>
 
       <h2 className="mt-8 text-[34px] leading-[1.08] font-medium tracking-[-0.025em] text-gradient-ink md:text-[44px]">
-        Request received.
+        Message received.
       </h2>
 
       <p className="mt-5 max-w-[54ch] text-[17px] leading-[1.65] text-ink-muted">
-        Thanks. We have your research context and will follow up with next steps.
+        Thanks. We have your message and will reply by email.
       </p>
 
       <div className="mt-12 w-full rounded-xl border border-line bg-surface/50 p-2">
@@ -45,11 +45,12 @@ export function DemoSuccess() {
       <p className="mt-6 max-w-[52ch] font-mono text-[11.5px] leading-[1.7] text-ink-faint">
         The chain above is the shape of a provenance record: who ran it, in what workflow, which
         generation, which dataset version, which training run, and the result it produced.
+        While you wait, the quickstart takes a few minutes.
       </p>
 
       <div className="mt-10">
-        <ButtonLink href="/how-it-works" variant="secondary" size="lg" arrow>
-          See how it works
+        <ButtonLink href="/docs/quickstart" variant="secondary" size="lg" arrow>
+          Read the quickstart
         </ButtonLink>
       </div>
     </div>

@@ -15,7 +15,8 @@ export const ROLE_OPTIONS = [
 export const WORKFLOW_OPTIONS = [
   "Blender",
   "Unity",
-  "NVIDIA Omniverse",
+  "NVIDIA Omniverse or Isaac",
+  "MuJoCo or Brax",
   "Custom simulator",
   "Custom Python",
   "Other",
@@ -48,27 +49,24 @@ const required = (field: string, { min = 2, max = 200 } = {}) =>
 const optional = (max = 200) => z.string().trim().max(max).optional().or(z.literal(""));
 
 export const demoRequestSchema = z.object({
-  // Required
+  // Required: just enough to answer someone.
   name: required("Name", { max: 120 }),
   email: z
     .string()
     .trim()
-    .min(1, "Work email is required.")
+    .min(1, "Email is required.")
     .max(254, "That email address is too long.")
     .email("Enter a valid email address."),
-  institution: required("Institution or company", { max: 160 }),
-  role: z.enum(ROLE_OPTIONS, { message: "Select the closest role." }),
-  researchArea: required("Research area", { max: 200 }),
-  teamSize: z.enum(TEAM_SIZE_OPTIONS, { message: "Select a team size." }),
-  workflow: z
-    .array(z.enum(WORKFLOW_OPTIONS))
-    .min(1, "Select at least one part of your current workflow.")
-    .max(WORKFLOW_OPTIONS.length),
-  currentTools: required("Current tools", { max: 500 }),
-  goal: required("Tell us what you would like to reproduce or track", { min: 10, max: 2000 }),
   message: required("Message", { min: 10, max: 4000 }),
 
-  // Optional
+  // Optional context
+  institution: optional(160),
+  role: z.enum(ROLE_OPTIONS).optional().or(z.literal("")),
+  researchArea: optional(200),
+  teamSize: z.enum(TEAM_SIZE_OPTIONS).optional().or(z.literal("")),
+  workflow: z.array(z.enum(WORKFLOW_OPTIONS)).max(WORKFLOW_OPTIONS.length).default([]),
+  currentTools: optional(500),
+  goal: optional(2000),
   github: optional(),
   linkedin: optional(),
   datasetScale: z.enum(DATASET_SCALE_OPTIONS).optional().or(z.literal("")),
@@ -88,9 +86,9 @@ export const EMPTY_DEMO_REQUEST: DemoRequest = {
   name: "",
   email: "",
   institution: "",
-  role: "PhD Researcher",
+  role: "",
   researchArea: "",
-  teamSize: "Just me",
+  teamSize: "",
   workflow: [],
   currentTools: "",
   goal: "",
