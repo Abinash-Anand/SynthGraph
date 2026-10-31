@@ -9,11 +9,11 @@ This project does not yet have tagged releases - entries accumulate under
 ## [Unreleased]
 
 ### Added
-- SDK/CLI 1.0.0: the first release published under the PyPI name `synthgraph`. It is the
-  same code as 0.6.0; only the version, the package name and the licence metadata differ.
-  The wire-contract items in `synthgraph-sdk-cli/CONTRACT.md` section 4 are still open. The
-  old `synthgraph-sdk` 0.3.1 on PyPI cannot attach a dataset to a training run against the
-  current backend; that was fixed after it was published.
+- SDK/CLI 1.0.0: the next release of `synthgraph-sdk` on PyPI after 0.3.1. It is the same
+  code as 0.6.0; only the version and the licence metadata differ. The wire-contract items
+  in `synthgraph-sdk-cli/CONTRACT.md` section 4 are still open. 0.3.1 cannot attach a
+  dataset to a training run against the current backend; that was fixed after it was
+  published.
 - SDK/CLI 0.4.0: declare a metric's direction (`maximize`, `minimize`,
   `neutral`) per experiment with `experiment.declare_metric_directions()`,
   `experiment.training(metric_directions=...)` or `synthgraph metrics
@@ -62,10 +62,8 @@ This project does not yet have tagged releases - entries accumulate under
   have none, and it is never read from the evaluation name.
 
 ### Changed
-- The PyPI package is now named `synthgraph` (`pip install synthgraph`), replacing
-  `synthgraph-sdk`. The import name (`import synthgraph`) and the `synthgraph` command are
-  unchanged. The package metadata now says MIT, matching the repository `LICENSE`, and the
-  SDK folder ships its own copy of the licence.
+- The package metadata now says MIT, matching the repository `LICENSE`, and the SDK
+  folder ships its own copy of the licence. It said Apache-2.0 before.
 - The lineage graph no longer guesses links from timing. Every edge is a recorded relationship; a
   generation with no recorded link is shown without a line. Link existing runs with
   `synthgraph training-runs link-generation` or `training.use(generation)`. The dashed edges, the

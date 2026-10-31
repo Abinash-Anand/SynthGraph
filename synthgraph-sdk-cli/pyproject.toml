@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "synthgraph"
+name = "synthgraph-sdk"
 version = "1.0.0"
 description = "Python SDK and CLI for SynthGraph experiment provenance and lineage tracking."
 readme = "README.md"

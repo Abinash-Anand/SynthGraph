@@ -27,7 +27,7 @@ you put it.
 ## Install
 
 ```bash
-pip install synthgraph
+pip install synthgraph-sdk
 ```
 
 Requires Python 3.11+. For local resource-metric capture (CPU/memory
@@ -35,11 +35,11 @@ percentages, on top of the CPU-count and GPU stats that need no extra
 dependency), add the `resource` extra:
 
 ```bash
-pip install "synthgraph[resource]"
+pip install "synthgraph-sdk[resource]"
 ```
 
 Framework integrations (below) assume you already have the corresponding
-library installed — `synthgraph` never pulls in stable-baselines3, skrl,
+library installed — `synthgraph-sdk` never pulls in stable-baselines3, skrl,
 rl_games, Isaac Lab, MuJoCo Playground or wandb on your behalf.
 
 ## Configure
