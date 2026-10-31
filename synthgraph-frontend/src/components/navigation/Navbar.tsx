@@ -84,13 +84,19 @@ export function Navbar() {
 
           <div className="flex items-center gap-3">
             <Link
-              href="/demo"
+              href="/login"
+              className="hidden h-9 items-center px-3 text-[13.5px] text-ink-muted transition-colors duration-200 hover:text-ink lg:inline-flex"
+            >
+              Sign in
+            </Link>
+            <Link
+              href="/docs/quickstart"
               className={cn(
                 "hidden h-9 items-center rounded-md bg-ink px-4 text-[13.5px] font-medium text-void",
                 "transition-[background-color,transform] duration-200 hover:bg-white active:scale-[0.98] lg:inline-flex",
               )}
             >
-              Request a Demo
+              Get started
             </Link>
 
             <button

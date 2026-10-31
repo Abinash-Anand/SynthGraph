@@ -83,14 +83,21 @@ export function MobileMenu({ open, onClose, pathname }: MobileMenuProps) {
               className="flex flex-col gap-4"
             >
               <Link
-                href="/demo"
+                href="/docs/quickstart"
                 onClick={onClose}
                 className="flex h-12 items-center justify-center rounded-md bg-ink text-[15px] font-medium text-void"
               >
-                Request a Demo
+                Get started
+              </Link>
+              <Link
+                href="/login"
+                onClick={onClose}
+                className="flex h-12 items-center justify-center rounded-md border border-line text-[15px] text-ink"
+              >
+                Sign in
               </Link>
               <p className="text-center font-mono text-[10px] tracking-[0.14em] text-ink-faint uppercase">
-                Private research pilot
+                Open source · SDK 0.6 alpha
               </p>
             </motion.div>
           </nav>

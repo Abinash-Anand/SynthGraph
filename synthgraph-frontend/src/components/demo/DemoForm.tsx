@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/Button";
 import { CheckboxGroup, SelectField, TextArea, TextField } from "@/components/ui/Field";
 import { SITE } from "@/data/site";
 import {
-  DATASET_SCALE_OPTIONS,
   EMPTY_DEMO_REQUEST,
   ROLE_OPTIONS,
   TEAM_SIZE_OPTIONS,
@@ -164,7 +163,7 @@ export function DemoForm() {
         ) : null}
 
         <fieldset className="flex flex-col gap-6">
-          <legend className="mono-label mb-4">You</legend>
+          <legend className="mono-label mb-4">Your message</legend>
 
           <div className="grid gap-6 sm:grid-cols-2">
             <TextField
@@ -176,7 +175,7 @@ export function DemoForm() {
               autoComplete="name"
             />
             <TextField
-              label="Work email"
+              label="Email"
               required
               type="email"
               value={values.email}
@@ -186,136 +185,92 @@ export function DemoForm() {
             />
           </div>
 
-          <div className="grid gap-6 sm:grid-cols-2">
-            <TextField
-              label="Institution or company"
-              required
-              value={values.institution}
-              onChange={set("institution")}
-              error={errors.institution}
-              autoComplete="organization"
-            />
-            <SelectField
-              label="Role"
-              required
-              value={values.role}
-              onChange={set("role") as (value: string) => void}
-              options={ROLE_OPTIONS}
-              error={errors.role}
-            />
-          </div>
-
-          <div className="grid gap-6 sm:grid-cols-2">
-            <TextField
-              label="Research area"
-              required
-              value={values.researchArea}
-              onChange={set("researchArea")}
-              error={errors.researchArea}
-              placeholder="e.g. object detection in adverse weather"
-            />
-            <SelectField
-              label="Team size"
-              required
-              value={values.teamSize}
-              onChange={set("teamSize") as (value: string) => void}
-              options={TEAM_SIZE_OPTIONS}
-              error={errors.teamSize}
-            />
-          </div>
-        </fieldset>
-
-        <fieldset className="flex flex-col gap-6">
-          <legend className="mono-label mb-4">Your workflow</legend>
-
-          <CheckboxGroup
-            label="Current synthetic-data workflow"
-            options={WORKFLOW_OPTIONS}
-            selected={values.workflow}
-            onToggle={toggleWorkflow}
-            error={errors.workflow}
-            hint="Select everything that applies."
-          />
-
-          <TextField
-            label="Current tools"
-            required
-            value={values.currentTools}
-            onChange={set("currentTools")}
-            error={errors.currentTools}
-            placeholder="e.g. Blender, PyTorch, W&B, Git, lab NAS"
-          />
-
-          <TextArea
-            label="What would you like to reproduce or track?"
-            required
-            value={values.goal}
-            onChange={set("goal")}
-            error={errors.goal}
-            rows={3}
-            placeholder="The experiment or result you most want to be able to reconstruct."
-          />
-
           <TextArea
             label="Message"
             required
             value={values.message}
             onChange={set("message")}
             error={errors.message}
-            rows={4}
-            placeholder="Anything else about your setup that would help us prepare a useful demo."
+            rows={5}
+            placeholder="A question, a problem you ran into, or what you are trying to record."
           />
         </fieldset>
 
-        <fieldset className="flex flex-col gap-6">
-          <legend className="mono-label mb-4">Optional context</legend>
+        <details className="rounded-lg border border-line bg-surface/40 p-5 open:pb-6">
+          <summary className="cursor-pointer font-mono text-[12.5px] text-ink-muted">
+            A little about your work (optional)
+          </summary>
 
-          <div className="grid gap-6 sm:grid-cols-2">
-            <TextField
-              label="Generator"
-              value={values.generator ?? ""}
-              onChange={set("generator")}
-              placeholder="Blender 4.2, custom simulator…"
-            />
-            <TextField
-              label="Training framework"
-              value={values.trainingFramework ?? ""}
-              onChange={set("trainingFramework")}
-              placeholder="PyTorch, JAX…"
-            />
-          </div>
+          <div className="mt-6 flex flex-col gap-6">
+            <div className="grid gap-6 sm:grid-cols-2">
+              <TextField
+                label="Institution or company"
+                value={values.institution ?? ""}
+                onChange={set("institution")}
+                error={errors.institution}
+                autoComplete="organization"
+              />
+              <SelectField
+                label="Role"
+                value={values.role ?? ""}
+                onChange={set("role") as (value: string) => void}
+                options={ROLE_OPTIONS}
+                error={errors.role}
+                placeholder="Select the closest role"
+              />
+            </div>
 
-          <div className="grid gap-6 sm:grid-cols-2">
-            <TextField
-              label="Experiment tracking tool"
-              value={values.experimentTracking ?? ""}
-              onChange={set("experimentTracking")}
-              placeholder="W&B, MLflow, none…"
-            />
-            <SelectField
-              label="Dataset scale"
-              value={values.datasetScale ?? ""}
-              onChange={set("datasetScale") as (value: string) => void}
-              options={DATASET_SCALE_OPTIONS}
-              placeholder="Select a range"
-            />
-          </div>
+            <div className="grid gap-6 sm:grid-cols-2">
+              <TextField
+                label="Research area"
+                value={values.researchArea ?? ""}
+                onChange={set("researchArea")}
+                error={errors.researchArea}
+                placeholder="e.g. detection in adverse weather, legged locomotion"
+              />
+              <SelectField
+                label="Team size"
+                value={values.teamSize ?? ""}
+                onChange={set("teamSize") as (value: string) => void}
+                options={TEAM_SIZE_OPTIONS}
+                error={errors.teamSize}
+                placeholder="Select a size"
+              />
+            </div>
 
-          <div className="grid gap-6 sm:grid-cols-2">
-            <TextField
-              label="GitHub"
-              value={values.github ?? ""}
-              onChange={set("github")}
-              placeholder="github.com/…"
+            <CheckboxGroup
+              label="Where does your synthetic data come from?"
+              options={WORKFLOW_OPTIONS}
+              selected={values.workflow}
+              onToggle={toggleWorkflow}
+              error={errors.workflow}
+              hint="Select everything that applies."
             />
+
             <TextField
-              label="LinkedIn"
-              value={values.linkedin ?? ""}
-              onChange={set("linkedin")}
-              placeholder="linkedin.com/in/…"
+              label="Current tools"
+              value={values.currentTools ?? ""}
+              onChange={set("currentTools")}
+              error={errors.currentTools}
+              placeholder="e.g. Blender, PyTorch, W&B, Git"
             />
+
+            <div className="grid gap-6 sm:grid-cols-2">
+              <TextField
+                label="GitHub"
+                value={values.github ?? ""}
+                onChange={set("github")}
+                placeholder="github.com/…"
+              />
+              <TextField
+                label="LinkedIn"
+                value={values.linkedin ?? ""}
+                onChange={set("linkedin")}
+                placeholder="linkedin.com/in/…"
+              />
+            </div>
           </div>
-        </fieldset>
+        </details>
 
         {/* Honeypot. Hidden from people and from assistive technology. */}
         <div className="hidden" aria-hidden>
@@ -332,10 +287,10 @@ export function DemoForm() {
 
         <div className="flex flex-col gap-4 border-t border-line pt-8">
           <Button type="submit" size="lg" disabled={status === "submitting"} arrow className="sm:self-start">
-            {status === "submitting" ? "Sending…" : "Request Demo Access"}
+            {status === "submitting" ? "Sending…" : "Send message"}
           </Button>
           <p className="max-w-[54ch] font-mono text-[11.5px] leading-[1.7] text-ink-faint">
-            We only use this information to evaluate and respond to your demo request.
+            We only use this to respond to your message.
           </p>
         </div>
       </form>

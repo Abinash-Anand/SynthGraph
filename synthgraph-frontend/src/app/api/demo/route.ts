@@ -61,6 +61,15 @@ export async function POST(request: Request) {
   const endpoint = process.env.DEMO_FORM_ENDPOINT;
 
   if (!isDemoEmailConfigured() && !endpoint) {
+    // A production site that silently drops messages is worse than one that
+    // says it could not take them. Locally and in previews, log and carry on.
+    if (process.env.NODE_ENV === "production") {
+      console.error("[demo-request] no delivery channel is configured; the message was NOT recorded");
+      return NextResponse.json(
+        { ok: false, error: "We could not take your message here. Please email us directly instead." },
+        { status: 503 },
+      );
+    }
     console.info("[demo-request] received (no delivery channel configured)", {
       institution: submission.institution,
       role: submission.role,

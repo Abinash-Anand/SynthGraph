@@ -1,77 +1,56 @@
 import type { Metadata } from "next";
 import { FinalCTA } from "@/components/sections/FinalCTA";
-import { CloudLocal } from "@/components/sections/CloudLocal";
 import { ButtonLink } from "@/components/ui/Button";
 import { FeatureList, type Feature } from "@/components/ui/FeatureBlock";
 import { PageHero } from "@/components/ui/PageHero";
 import { Reveal } from "@/components/ui/Reveal";
+import { PRODUCT } from "@/data/product";
+import { SITE } from "@/data/site";
 
 export const metadata: Metadata = {
   title: "Security",
   description:
-    "How SynthGraph approaches authentication, authorization, data isolation, credential protection, transport security, logging, privacy by design and deployment choice.",
+    "How SynthGraph handles API keys, passwords, access and your data, what it does not do, and how to report a vulnerability.",
 };
 
 const FEATURES: Feature[] = [
   {
-    id: "principles",
-    eyebrow: "Security principles",
-    title: "Hold as little as the job requires.",
-    body: "Most of what makes an experiment reproducible is metadata: parameters, versions, seeds, references. SynthGraph is built around storing that, which means the system does not need custody of the datasets themselves in order to be useful.",
+    id: "data",
+    eyebrow: "Your data",
+    title: "References and metadata, not the data.",
+    body: "A dataset or asset version is a URI, a name and optionally a checksum. SynthGraph never reads, uploads or stores the data. The only time the SDK reads your files is when you ask it to compute a checksum.",
+    note: "The SDK also records your Python version, operating system, architecture and git details by default, with credentials stripped from the remote URL. You can turn that off.",
   },
   {
-    id: "authentication",
-    eyebrow: "Authentication",
-    title: "API keys are credentials.",
-    body: "The SDK authenticates with an API key supplied by the environment. Keys are treated as secrets: not committed to research code, not printed in output, and not written into logs.",
-  },
-  {
-    id: "authorization",
-    eyebrow: "Authorization",
-    title: "Access decisions belong to the server.",
-    body: "Authorization is enforced by the API rather than by the client. A client that asks for a record it should not have does not receive it, regardless of what the client believes about itself.",
+    id: "api-keys",
+    eyebrow: "API keys",
+    title: "Stored as hashes, shown once.",
+    body: "A key is sg_ followed by 64 random hexadecimal characters. The backend stores only a SHA-256 hash, so it cannot show a key again. Revoking one makes it stop working at once. The SDK never logs a key or puts it in an error, and the CLI has no option that would put one in your shell history.",
   },
   {
     id: "isolation",
-    eyebrow: "Data isolation",
-    title: "Records belong to an owner and a project.",
-    body: "Ownership runs User → Project → Experiment, and access follows that structure. Provenance from one group’s project is not visible to another’s.",
+    eyebrow: "Access",
+    title: "Every record belongs to an owner.",
+    body: "Each request is checked against the owner of what it asks for, along the chain from user to project to experiment to the record. A record you do not own looks the same as one that does not exist, so one user cannot discover another's ids.",
   },
   {
-    id: "credentials",
-    eyebrow: "Credential protection",
-    title: "No secrets in logs.",
-    body: "Structured logging is used for operational visibility, and credential material is excluded from it. Log output is intended to be safe to read and safe to keep.",
+    id: "sessions",
+    eyebrow: "Passwords and sessions",
+    title: "Hashed passwords and a short-lived sign-in.",
+    body: "Passwords are hashed with argon2. Signing in to the dashboard creates an API key that runs your browser session, held in a cookie that scripts on the page cannot read, and that is sent only over HTTPS in production. You can see and revoke those keys under Settings.",
   },
   {
-    id: "transport",
-    eyebrow: "Transport security",
-    title: "HTTPS/TLS between the SDK and the API.",
-    body: "All API traffic is served over HTTPS. The SDK’s endpoint is configurable so the same code can talk to a hosted deployment or one inside your own network.",
+    id: "limits",
+    eyebrow: "Abuse limits",
+    title: "Rate limits on keys, addresses and sign-in.",
+    body: "Requests are limited per API key and per address, and sign-in and sign-up are limited more tightly.",
   },
   {
-    id: "logging",
-    eyebrow: "Logging",
-    title: "Structured, operational, and bounded.",
-    body: "Logs exist to answer operational questions — whether a request succeeded, how long it took, what failed. They are not a second copy of your research data.",
-  },
-  {
-    id: "privacy",
-    eyebrow: "Privacy by design",
-    title: "Data minimisation as a default, not a setting.",
-    body: "Because the product records references and metadata rather than datasets, the smallest useful footprint is also the normal one. Nothing has to be turned on to avoid collecting more than necessary.",
-  },
-  {
-    id: "storage",
-    eyebrow: "Storage choices",
-    title: "Your data stays in storage you control.",
-    body: "Generated datasets can remain on the researcher’s filesystem, on lab storage, or in object storage. SynthGraph records the reference, the version and — where available — the checksum.",
-  },
-  {
-    id: "deployment",
-    eyebrow: "Deployment model",
-    title: "Cloud-hosted or self-controlled.",
-    body: "The same provenance model is intended to run in a hosted deployment or one operated inside an institution’s own environment, with the SDK pointed at a different endpoint.",
+    id: "hosting",
+    eyebrow: "Hosted or self-hosted",
+    title: "Run it yourself if the records must stay with you.",
+    body: `The code is open source under the ${PRODUCT.license} license. You can run the database, the backend and the dashboard in your own environment. The hosted backend is an alpha service.`,
+    note: "The backend serves plain HTTP and adds no security headers of its own, so put it behind HTTPS and a proxy you control. In production it refuses to start with an unset or default JWT secret.",
   },
 ];
 
@@ -80,27 +59,28 @@ export default function SecurityPage() {
     <>
       <PageHero
         eyebrow="Security"
-        title="Research provenance without unnecessary data collection."
-        lede="This page describes how SynthGraph is designed. It does not present certifications, audits or compliance claims, because there are none to present."
+        title="Plain about what it does and does not do."
+        lede="This page describes how SynthGraph works today. It does not present certifications, audits or compliance claims, because there are none."
       >
-        <ButtonLink href="/demo" arrow>
-          Request a Demo
-        </ButtonLink>
+        <div className="flex flex-wrap gap-3">
+          <ButtonLink href="/docs/operate/security" arrow>
+            Read the full security page
+          </ButtonLink>
+          <ButtonLink href="/docs/operate/self-hosting" variant="secondary">
+            Self-hosting
+          </ButtonLink>
+        </div>
       </PageHero>
 
       <section className="border-t border-line">
         <div className="shell">
           <Reveal>
             <div className="rounded-lg border border-warn/25 bg-warn/[0.03] p-6">
-              <p className="font-mono text-[10px] tracking-[0.16em] text-warn uppercase">
-                What this page does not claim
-              </p>
+              <p className="font-mono text-[10px] tracking-[0.16em] text-warn uppercase">What this page does not claim</p>
               <p className="mt-3 max-w-[76ch] text-[15px] leading-[1.7] text-ink-muted">
-                SynthGraph is designed with privacy and security requirements in mind. Formal
-                legal compliance claims — SOC 2, ISO 27001, GDPR conformance and similar —
-                require appropriate legal and audit review, and none are claimed here. If your
-                institution needs a specific assurance, tell us in a demo request and we will
-                tell you plainly where things actually stand.
+                SynthGraph has no SOC 2 or ISO 27001 certification and makes no claim of conformance with
+                a regulation such as GDPR. It has no audit log and no hard delete through the API. If your
+                institution needs a specific assurance, ask, and the answer will be plain.
               </p>
             </div>
           </Reveal>
@@ -113,7 +93,26 @@ export default function SecurityPage() {
         </div>
       </section>
 
-      <CloudLocal />
+      <section className="border-t border-line py-20">
+        <div className="shell">
+          <Reveal>
+            <p className="mono-label">Report a vulnerability</p>
+            <h2 className="mt-4 max-w-[24ch] text-[26px] leading-[1.15] font-medium tracking-[-0.02em] text-ink md:text-[32px]">
+              Please do not open a public issue.
+            </h2>
+            <p className="mt-5 max-w-[66ch] text-[15.5px] leading-[1.7] text-ink-muted">
+              Email {SITE.contactEmail} with what you found and its impact, the steps to reproduce it, and
+              the component and version or commit. The maintainers will acknowledge it and work on a fix and
+              a disclosure plan before details are published. No response time is promised. The full policy is{" "}
+              <a href={`${SITE.github}/blob/main/SECURITY.md`} className="text-ink underline underline-offset-2">
+                SECURITY.md
+              </a>{" "}
+              in the repository.
+            </p>
+          </Reveal>
+        </div>
+      </section>
+
       <FinalCTA />
     </>
   );

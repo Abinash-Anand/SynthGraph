@@ -6,7 +6,7 @@ import { LogoMark } from "./Logo";
 export function Footer() {
   return (
     <footer className="border-t border-line bg-base/40">
-      <div className="shell grid gap-12 py-16 md:grid-cols-[1.4fr_repeat(3,1fr)] md:py-20">
+      <div className="shell grid gap-12 py-16 md:grid-cols-[1.4fr_repeat(4,1fr)] md:py-20">
         <div className="flex flex-col gap-4">
           <div className="flex items-center gap-2.5 text-ink">
             <LogoMark />

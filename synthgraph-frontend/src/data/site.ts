@@ -15,8 +15,8 @@ export type NavLink = { href: string; label: string };
 export const NAV_LINKS: NavLink[] = [
   { href: "/product", label: "Product" },
   { href: "/how-it-works", label: "How It Works" },
-  { href: "/research", label: "For Researchers" },
-  { href: "/developers", label: "Developers" },
+  { href: "/research", label: "Use Cases" },
+  { href: "/docs", label: "Docs" },
   { href: "/security", label: "Security" },
 ];
 
@@ -26,10 +26,19 @@ export const FOOTER_GROUPS: Array<{ title: string; links: NavLink[] }> = [
     links: [
       { href: "/product", label: "Product" },
       { href: "/how-it-works", label: "How It Works" },
-      { href: "/research", label: "For Researchers" },
+      { href: "/research", label: "Use Cases" },
       { href: "/developers", label: "Developers" },
       { href: "/security", label: "Security" },
-      { href: "/demo", label: "Request a Demo" },
+    ],
+  },
+  {
+    title: "Documentation",
+    links: [
+      { href: "/docs", label: "Introduction" },
+      { href: "/docs/quickstart", label: "Quickstart" },
+      { href: "/docs/sdk/generations", label: "SDK guides" },
+      { href: "/docs/cli/overview", label: "Command line" },
+      { href: "/docs/reference/changelog", label: "Changelog" },
     ],
   },
   {
