@@ -1,0 +1,101 @@
+The integrations are small helpers for reinforcement learning libraries. They turn an object you already have, such as an agent, a model or a config, into the configuration SynthGraph records, and for two of them they log metrics for you.
+
+Three rules hold for all of them:
+
+- **Nothing runs unless you call it.** The core `synthgraph` package never imports them.
+- **Nothing is patched.** They read the objects you hand them.
+- **The library must already be installed.** `synthgraph-sdk` never installs stable-baselines3, skrl, rl_games, Isaac Lab, MuJoCo Playground or Weights & Biases for you, and each helper imports its library only when you call it.
+
+| Library | Module | What it gives you | Logs metrics itself |
+| --- | --- | --- | --- |
+| stable-baselines3 | `synthgraph.integrations.stable_baselines3` | `extract_training_config(model)`, `create_callback(training)` | Yes, with the callback |
+| skrl | `synthgraph.integrations.skrl` | `extract_training_config(agent)`, `create_writer(training)` | Yes, with the writer |
+| rl_games | `synthgraph.integrations.rl_games` | `extract_training_config(source)` | No |
+| Isaac Lab | `synthgraph.integrations.isaaclab` | `extract_event_config(source)` | No |
+| MuJoCo Playground | `synthgraph.integrations.mujoco_playground` | `extract_env_config(config)`, `extract_domain_randomize_fn(func)` | No |
+| Weights & Biases | `synthgraph.integrations.wandb` | `extract_run_config(run)`, `extract_run_metrics(run)` | No |
+
+There are no helpers for Blender, Unity, Omniverse or PyTorch itself. Your script calls the SDK directly for those.
+
+## stable-baselines3
+
+```py
+from stable_baselines3 import PPO
+from synthgraph import SynthGraph
+from synthgraph.integrations.stable_baselines3 import create_callback, extract_training_config
+
+sg = SynthGraph()
+experiment = sg.project("CartPole").experiment("ppo")
+
+model = PPO("MlpPolicy", "CartPole-v1", learning_rate=3e-4)
+training = experiment.training(
+    model=type(model).__name__,
+    framework="stable-baselines3",
+    config=extract_training_config(model),
+)
+training.start()
+model.learn(total_timesteps=100_000, callback=create_callback(training))
+training.complete()
+```
+
+`extract_training_config` records the algorithm, policy, device, observation and action spaces, and the hyperparameters it can represent as JSON. A learning rate given as a schedule is recorded as its value at the start of training, and the schedule is listed so you can tell.
+
+`create_callback` logs at the end of every rollout, using stable-baselines3's own logged values, with the current timestep as the step. You add it to `learn()` once and need no other `log_metric` calls. The metrics are recorded under the names stable-baselines3 itself uses.
+
+## skrl
+
+```py
+from synthgraph.integrations.skrl import create_writer, extract_training_config
+
+training = experiment.training(model="PPO", framework="skrl", config=extract_training_config(agent))
+training.start()
+
+agent.init()
+agent.writer = create_writer(training, wrapped=agent.writer)
+
+# ... train ...
+training.close()
+training.complete()
+```
+
+Assign the writer after `agent.init(...)`, because skrl only creates its own writer there. skrl writes many values at once. The writer groups them into one `log_metric` call per timestep, at whatever interval your skrl `write_interval` sets. Pass `wrapped=agent.writer` to keep your existing TensorBoard logging working too. If reaching SynthGraph fails for one batch, the writer warns instead of raising.
+
+## rl_games, Isaac Lab, MuJoCo Playground
+
+These return configuration only. You log metrics yourself.
+
+```py
+from synthgraph.integrations.isaaclab import extract_event_config
+from synthgraph.integrations.mujoco_playground import extract_domain_randomize_fn, extract_env_config
+from synthgraph.integrations.rl_games import extract_training_config
+
+# rl_games: a loaded config dict, its params, or an agent
+config = extract_training_config(params)
+
+# Isaac Lab: domain-randomization event terms, grouped by mode
+events = extract_event_config(env_cfg.events)
+
+# MuJoCo Playground: the task's config, and the randomization function
+env_config = extract_env_config(task.default_config())
+randomization = extract_domain_randomize_fn(domain_randomize)
+```
+
+- **Isaac Lab.** It finds event terms in the config and returns them grouped by mode, each with its function name and parameters. A parameter that cannot be written as JSON is left out and listed, instead of raising.
+- **MuJoCo Playground.** `extract_domain_randomize_fn` records the function's qualified name, and its source text when the original `.py` file is still on disk.
+
+Put the result in `parameters=` of a generation, for domain randomization, or `config=` of a training run, and link the run to its generation with [`link_generation`](/docs/sdk/lineage).
+
+## Weights & Biases
+
+```py
+from synthgraph.integrations.wandb import extract_run_config, extract_run_metrics
+
+config = extract_run_config(run)     # the run's config
+summary = extract_run_metrics(run)   # its latest logged values; W&B's own underscore keys are dropped
+```
+
+Pass the object you got from `wandb.init(...)`. This reads a run once. It is not a live stream into SynthGraph.
+
+## Errors
+
+If you hand a helper the wrong kind of object, for example something with no `policy` to the stable-baselines3 helper, it raises `SynthGraphValidationError` with a message saying what it expected.

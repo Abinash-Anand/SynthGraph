@@ -1,0 +1,69 @@
+## Requirements
+
+- **Python 3.11 or later.** The SDK is a pure Python package.
+- **A SynthGraph backend and an API key.** Use the hosted backend, or run your own. See the [Quickstart](/docs/quickstart) for creating a key.
+- **git**, only if you install from GitHub (see below).
+
+## Install
+
+<Install />
+
+Check it worked:
+
+```bash
+python -c "import synthgraph; print(synthgraph.__version__)"
+synthgraph --version
+```
+
+The package installs two things: the `synthgraph` Python module, and the `synthgraph` command line tool.
+
+### CPU and memory percentages
+
+Resource monitoring always records the CPU count, and GPU usage if `nvidia-smi` is on your path. For CPU and memory percentages it also needs `psutil`:
+
+```bash
+pip install "psutil>=5.9,<7"
+```
+
+Without `psutil` the SDK still works. Those fields are simply absent.
+
+## Configure
+
+The SDK and the command line tool read their settings from environment variables.
+
+| Variable | Required | Meaning |
+| --- | --- | --- |
+| `SYNTHGRAPH_API_KEY` | yes | Your API key, starting with `sg_`. |
+| `SYNTHGRAPH_API_URL` | yes | The backend's address, for example `https://synthgraph.onrender.com` or your own. `SYNTHGRAPH_BASE_URL` is accepted as an alias. |
+| `SYNTHGRAPH_PROJECT_ID` | no | A default project. When set, `sg.experiment("name")` creates an experiment in that project without opening the project first. |
+| `SYNTHGRAPH_TIMEOUT` | no | Request timeout in seconds. The default is 30. |
+| `SYNTHGRAPH_MAX_ATTEMPTS` | no | How many times a read is attempted, from 1 to 10. The default is 3. See [Errors and retries](/docs/sdk/errors). |
+
+Settings resolve in this order: arguments you pass in code, then the environment, then the defaults. In code:
+
+```python
+from synthgraph import SynthGraph
+
+sg = SynthGraph(api_key="sg_...", api_url="https://your-synthgraph-backend", timeout=60)
+```
+
+With no arguments, `SynthGraph()` reads everything from the environment.
+
+<Callout type="note" title="Your key stays out of sight">
+
+The SDK never logs the API key, never writes it into a model or a manifest, and never puts it in an error message. Printing the client shows its address, not the key. The command line tool deliberately has no `--api-key` option, because that would put the key in your shell history.
+
+</Callout>
+
+## Use it as a context manager
+
+`SynthGraph` holds an HTTP connection. Using it in a `with` block closes the connection when you are done:
+
+```python
+from synthgraph import SynthGraph
+
+with SynthGraph() as sg:
+    print(sg.auth.me())
+```
+
+`sg.auth.me()` returns the account behind your key. It is a quick way to check the key and the URL are right.

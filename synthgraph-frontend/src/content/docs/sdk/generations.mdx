@@ -1,0 +1,107 @@
+A generation is one run of your generator: Blender, Unity, a simulator, a script. Recording it means writing down what defines the run before you know how it ends.
+
+The examples on this page share this setup:
+
+```python
+from synthgraph import SynthGraph
+
+sg = SynthGraph()
+experiment = sg.project("Docs: generations").experiment("example")
+```
+
+## Record a generation
+
+```python
+generation = experiment.generation(
+    generator="blender",
+    generator_version="4.2",
+    parameters={"weather": "rain", "occlusion": 0.3, "camera_distance": 12},
+    seed=42,
+)
+print(generation.status)  # "pending"
+```
+
+| Argument | Meaning |
+| --- | --- |
+| `generator` | The generator's name. Required. |
+| `generator_version` | Its version, for example `"4.2"`. |
+| `parameters` | Your configuration: any JSON object. SynthGraph does not impose a schema. |
+| `seed` | The random seed, if the run has one. |
+| `name` | A name for the run. If you leave it out, the generator's name is used. |
+| `description`, `metadata` | Free text, and any extra JSON you want stored. |
+| `code_version`, `environment` | Override what the SDK would otherwise capture. See [Code and environment provenance](/docs/sdk/provenance). |
+
+A new generation is `pending`. Nothing has run yet, and nothing has been decided: the definition is on record before the outcome.
+
+## Let the with block run the lifecycle
+
+The usual way is a `with` block:
+
+```python
+with experiment.generation(
+    generator="blender",
+    generator_version="4.2",
+    parameters={"weather": "rain"},
+    seed=7,
+) as generation:
+    pass  # your rendering code goes here
+```
+
+- Entering the block marks the generation **running**.
+- Leaving it normally marks it **completed**.
+- If your code raises, it is marked **failed** and your exception is raised again, untouched. SynthGraph never swallows it.
+
+A failed generation stays in your history. A failed experiment is still a result, and the parameters that failed are exactly what you will want to find later.
+
+## Or call the steps yourself
+
+If a `with` block does not fit, for example the work spans several processes, call the steps directly:
+
+```python
+generation = experiment.generation(generator="blender", seed=8)
+generation.start()
+# ... hours of rendering ...
+generation.complete()   # or generation.fail()
+```
+
+The order matters. A generation has to be started before it can be completed:
+
+```py
+generation = experiment.generation(generator="blender")
+generation.complete()
+# SynthGraphConflictError: ... Cannot transition generation from pending to completed
+```
+
+Completed and failed are final. Trying to change a finished generation raises `SynthGraphConflictError` (HTTP 409), and nothing is changed.
+
+## Attach what it produced
+
+Record the data and scenes a generation produced or used, by reference, with [`generation.dataset(...)`](/docs/sdk/datasets) and [`generation.asset(...)`](/docs/sdk/assets). You can attach them while the generation runs or after it has finished.
+
+## Find and read generations back
+
+```python
+# Every generation in the experiment
+experiment.generations()
+
+# Only those whose parameters match
+experiment.generations(parameters={"weather": "rain"})
+
+# Re-read one from the backend
+generation.refresh()
+```
+
+The parameter filter runs on the backend. The SDK does not filter locally.
+
+Two more calls read derived views of a generation:
+
+```py
+generation.manifest()        # the reproduction manifest
+generation.documentation()   # generated Markdown documentation
+```
+
+<Callout type="note" title="Environment details are captured by default">
+
+Creating a generation records a few facts about your machine and code unless you turn it off: Python version, operating system and architecture, and git commit, branch, remote and whether the working tree has uncommitted changes. Pass `capture_environment=False` to turn this off. See [Code and environment provenance](/docs/sdk/provenance) for the full list.
+
+</Callout>

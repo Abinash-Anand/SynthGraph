@@ -1,0 +1,71 @@
+Reproducing a result means knowing what code and what machine produced it. This page covers what the SDK records about both, what it records on its own, and what only happens when you ask.
+
+## Recorded by default
+
+When you create a generation or a training run, the SDK records a small, fixed set of facts about your environment and code:
+
+| Key | What it is |
+| --- | --- |
+| `python_version`, `python_implementation` | For example `3.12.10` and `CPython`. |
+| `os`, `os_release`, `machine` | Operating system, its release, and the CPU architecture. |
+| `commit`, `branch` | The git commit and branch of the code you run, if you run inside a git repository. |
+| `repository` | The git remote URL. Any credentials in it are removed, so `https://user:secret@github.com/org/repo.git` is recorded as `https://github.com/org/repo.git`. |
+| `dirty` | Whether the working tree has uncommitted changes. |
+
+Outside a git repository the git fields are simply left out, and nothing is raised.
+
+The values are read fresh on every call, not cached, because `dirty` is meaningful precisely because it can change between two calls in one process.
+
+### Turn it off
+
+```python
+from synthgraph import SynthGraph
+
+sg = SynthGraph()
+experiment = sg.project("Docs: provenance").experiment("example")
+
+generation = experiment.generation(generator="blender", capture_environment=False)
+print(generation.generation.reproducibility.environment)  # {}
+```
+
+`capture_environment=False` turns the default capture off entirely. Anything you pass yourself with `environment=` always wins over the automatic capture.
+
+### What is never collected automatically
+
+- **Resource usage.** CPU, memory and GPU readings are taken only if you call `training.monitor_resources()` or `resource_metadata()`.
+- **Installed packages.** The SDK never lists your environment on its own.
+- **Your files and your data.** The SDK never reads repository contents, and never reads a dataset unless you ask it to compute a checksum.
+- **Environment variables.**
+
+## Record more, on purpose
+
+Three functions collect more, and you decide where the result goes.
+
+```python
+from synthgraph import environment_metadata, git_metadata, installed_packages_metadata, resource_metadata
+
+print(git_metadata())                                   # commit, branch, repository, dirty
+print(environment_metadata(include_packages=["numpy"])) # plus the versions of packages you name
+print(resource_metadata())                              # a one-off CPU, memory and GPU reading
+```
+
+| Function | What it adds |
+| --- | --- |
+| `git_metadata(path=None)` | The git facts above, for the repository at `path` or the current directory. Returns an empty dictionary outside a git repository. |
+| `environment_metadata(include_packages=None)` | The platform facts above, and the installed versions of the packages you list by name. |
+| `resource_metadata()` | A point-in-time snapshot of CPU, memory and GPU. It takes about 100 ms, because the CPU percentage needs a short measuring interval. |
+| `installed_packages_metadata()` | Every installed package and its version. It is a full dependency inventory, so it is never called for you. |
+
+Pass the result as `environment=` or `metadata=` when you create a generation or training run:
+
+```py
+experiment.generation(
+    generator="blender",
+    environment=environment_metadata(include_packages=["torch", "numpy"]),
+    metadata={"packages": installed_packages_metadata()},
+)
+```
+
+## The reproduction manifest
+
+Everything recorded here feeds the generation's reproduction manifest, which lists what you would need to rerun it and what is missing. See the manifest page in the reference section.

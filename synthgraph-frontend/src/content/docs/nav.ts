@@ -32,6 +32,76 @@ export const DOCS_NAV: DocSection[] = [
         title: "Quickstart",
         description: "Record a generation, a training run and an evaluation, and see them in the dashboard.",
       },
+      {
+        slug: "installation",
+        title: "Installation and configuration",
+        description: "Install the SDK, set the environment variables, and know what each setting does.",
+      },
+      {
+        slug: "concepts",
+        title: "Core concepts",
+        description: "The records SynthGraph keeps, how they link into a lineage, and what cannot change once recorded.",
+      },
+    ],
+  },
+  {
+    title: "SDK guides",
+    pages: [
+      {
+        slug: "sdk/generations",
+        title: "Record a generation",
+        description: "Capture one run of a generator: its parameters, seed and outcome, including when it fails.",
+      },
+      {
+        slug: "sdk/datasets",
+        title: "Datasets and checksums",
+        description: "Record a dataset by reference, version it, and optionally prove its bytes have not changed.",
+      },
+      {
+        slug: "sdk/assets",
+        title: "Assets",
+        description: "Record the scenes, models and textures a generation used or produced.",
+      },
+      {
+        slug: "sdk/training-runs",
+        title: "Training runs and metrics",
+        description: "Record a training run, move it through its lifecycle, and log metrics step by step.",
+      },
+      {
+        slug: "sdk/evaluations",
+        title: "Evaluations and checkpoints",
+        description: "Record what a training run scored, on which dataset version, and at which checkpoint.",
+      },
+      {
+        slug: "sdk/lineage",
+        title: "Link data to results",
+        description: "Say which data a run used, so the lineage graph shows recorded links and nothing guessed.",
+      },
+      {
+        slug: "sdk/metric-directions",
+        title: "Declare metric directions",
+        description: "State whether a bigger or smaller value of a metric is better, once, per experiment.",
+      },
+      {
+        slug: "sdk/resource-monitoring",
+        title: "Resource monitoring and capture status",
+        description: "Sample CPU, memory and GPU use during a run, and see how completely it was captured.",
+      },
+      {
+        slug: "sdk/provenance",
+        title: "Code and environment provenance",
+        description: "What the SDK records about your code and machine by default, and how to control it.",
+      },
+      {
+        slug: "sdk/integrations",
+        title: "Framework integrations",
+        description: "Helpers for stable-baselines3, skrl, rl_games, Isaac Lab, MuJoCo Playground and Weights & Biases.",
+      },
+      {
+        slug: "sdk/errors",
+        title: "Errors and retries",
+        description: "The error types, what is retried, and what happens when a write fails in transit.",
+      },
     ],
   },
 ];

@@ -1,0 +1,44 @@
+An asset is a scene, a model, a texture or any other file a generation used or produced. Like a dataset, it is recorded by reference: SynthGraph stores where it lives, never the file.
+
+The examples on this page share this setup:
+
+```python
+from synthgraph import SynthGraph
+
+sg = SynthGraph()
+experiment = sg.project("Docs: assets").experiment("example")
+generation = experiment.generation(generator="blender", generator_version="4.2", seed=1)
+```
+
+## Record an asset
+
+```python
+scene = generation.asset(
+    name="street-scene.blend",
+    uri="s3://lab-bucket/scenes/street-scene.blend",
+    type="scene",
+    checksum="sha256:" + "cd" * 32,
+)
+print(scene.id, scene.version)
+```
+
+| Argument | Meaning |
+| --- | --- |
+| `name` | The asset's name. Required. |
+| `uri` | Where the file lives. Required. Stored as text and never opened. |
+| `type` | A free-text label such as `"scene"`, `"model"` or `"texture"`. |
+| `version` | A label for this version. If you leave it out, the current UTC time is used. |
+| `checksum`, `size` | A checksum and a size in bytes, if you have them. |
+| `asset_id` | Add a new version to an existing asset instead of creating a new one. |
+| `role` | How the generation relates to the asset. The default is `"output"`. |
+| `metadata` | Any extra JSON you want stored. |
+
+Each call records one immutable version. To record a changed file, call `generation.asset(...)` again with `asset_id=` set to the existing asset's id, so the history of that asset stays together.
+
+## Unlike datasets, assets have no hashing helper
+
+The SDK can hash a local dataset for you with `compute_checksum=True`. It has no such option for assets. If you want a checksum on an asset, compute it yourself and pass `checksum=`.
+
+## When to record assets
+
+Record the assets that define what a generation could produce: the scene file, the 3D models, the textures, the randomization configuration files. When a result looks wrong later, the scene a generation used is often the first thing you will want to check.

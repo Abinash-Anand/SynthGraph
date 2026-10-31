@@ -1,0 +1,71 @@
+The lineage graph is only as connected as the links you record. The SDK never guesses them. This page covers the ways to say which data a training run used.
+
+The examples on this page share this setup:
+
+```python
+from synthgraph import SynthGraph
+
+sg = SynthGraph()
+experiment = sg.project("Docs: lineage").experiment("example")
+generation = experiment.generation(generator="blender", generator_version="4.2", seed=1)
+generation.dataset(name="rain_v1", uri="s3://lab-bucket/rain_v1")
+generation.start()
+generation.complete()
+```
+
+## At the moment you create the run
+
+Pass what the run used to `experiment.training(...)`:
+
+```python
+# The dataset versions the run trained on
+training = experiment.training(model="yolo", framework="pytorch", datasets=generation.datasets)
+
+# Or hand over the generation, and it links the datasets the generation recorded in this process
+training = experiment.training(model="yolo", framework="pytorch", generations=[generation])
+```
+
+`dataset=` takes a single dataset version, and `datasets=` takes a list. Each one is linked to the run.
+
+## After the fact
+
+```python
+training = experiment.training(model="yolo", framework="pytorch")
+
+training.use(generation)   # link everything the generation recorded
+```
+
+`use()` never links the same thing twice, so calling it again, or after you already passed the same data when creating the run, is harmless.
+
+To link a single dataset version instead, use `add_dataset`:
+
+```python
+other = experiment.training(model="yolo", framework="pytorch")
+other.add_dataset(generation.datasets[0])
+```
+
+`add_dataset()` is stricter: linking a dataset that is already linked to the run raises `SynthGraphConflictError` (HTTP 409, "Training run dataset reference already exists"). Prefer `use()` when you are not sure.
+
+A generation remembers the datasets recorded through it **in this process**. If you recorded them in an earlier script, pass the dataset version objects, or their ids, instead. Handing `use()` a generation with none recorded is an error rather than a quiet nothing.
+
+## Link a generation directly
+
+Some runs use a generation without a dataset: a simulation with randomized physics that never writes data to disk, for example. Record that link on its own:
+
+```python
+sim = experiment.generation(generator="mujoco_playground", seed=3, parameters={"friction": [0.5, 1.5]})
+policy = experiment.training(model="ppo", framework="brax")
+
+policy.link_generation(sim)
+print([g.generation_name for g in policy.generations()])
+```
+
+`policy.generations()` lists the generations a run was recorded as using, oldest first. Calling `link_generation` again for the same generation does nothing. In the dashboard, the lineage graph draws that link.
+
+## What the dashboard draws
+
+The graph shows exactly the links above, plus the links from a generation to the datasets it produced and from an evaluation to the dataset it was scored on. If you record nothing, it draws nothing: the nodes appear without lines. It does not infer a connection from the order things happened in.
+
+## Links across projects are rejected
+
+A dataset belongs to the first project that references it. Linking it from a run in another project raises `SynthGraphCrossProjectReferenceError`, and the SDK checks before it writes anything, so a rejected link leaves no half-finished record behind.
