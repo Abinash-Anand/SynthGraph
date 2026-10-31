@@ -6,6 +6,7 @@ import { CodeBlock } from "@/components/ui/CodeBlock";
 import { PageHero } from "@/components/ui/PageHero";
 import { Reveal } from "@/components/ui/Reveal";
 import { INTEGRATIONS, PRODUCT, SDK_INSTALL_COMMAND } from "@/data/product";
+import { CONFIGURE_SNIPPET, RECORD_SNIPPET } from "@/data/snippets";
 
 export const metadata: Metadata = {
   title: "Developers",
@@ -15,43 +16,7 @@ export const metadata: Metadata = {
 
 const INSTALL = `$ ${SDK_INSTALL_COMMAND}`;
 
-const CONFIGURE = `$ export SYNTHGRAPH_API_KEY="..."
-$ export SYNTHGRAPH_API_URL="https://your-synthgraph-backend"`;
 
-// Run against a real backend with SDK 0.6.0 before it was put here.
-const RECORD = `from synthgraph import SynthGraph
-
-with SynthGraph() as sg:  # reads the two environment variables above
-    project = sg.project("Adverse weather detection")
-    experiment = project.experiment("vehicle_detection_rain")
-
-    with experiment.generation(
-        generator="blender",
-        generator_version="4.2",
-        parameters={"weather": "rain", "occlusion": 0.3, "camera_distance": 12},
-        seed=42,
-    ) as generation:
-        run_my_blender_pipeline()  # your code, unchanged
-
-        dataset = generation.dataset(
-            name="rain_dataset_v1",
-            uri="s3://lab-bucket/rain_dataset_v1",
-            format="image",
-        )
-
-    training = experiment.training(
-        model="yolo",
-        framework="pytorch",
-        dataset=dataset,
-        config={"epochs": 50, "batch_size": 32, "learning_rate": 0.001},
-    )
-    training.start()
-    training.log_metric(step=1, metrics={"loss": 0.9})
-    training.evaluation(
-        metrics={"mAP": 0.724, "precision": 0.78, "recall": 0.69},
-        dataset_version_id=dataset,
-    )
-    training.complete()`;
 
 const CLI = `$ synthgraph projects list
 $ synthgraph experiments list --project <project-id>
@@ -74,7 +39,7 @@ const SECTIONS = [
     id: "configure",
     title: "Configure",
     body: "Credentials come from the environment, never from code. Create an API key in the dashboard under Settings, then point the SDK at your backend: the hosted one or your own.",
-    code: CONFIGURE,
+    code: CONFIGURE_SNIPPET,
     language: "bash" as const,
     filename: "shell",
   },
@@ -82,7 +47,7 @@ const SECTIONS = [
     id: "record",
     title: "Record",
     body: "A few lines around the code you already have. The with block starts and finishes the generation for you, and marks it failed if your code raises. A training run is started and completed with explicit calls. Your dataset stays where it is: SynthGraph stores the reference, not the bytes.",
-    code: RECORD,
+    code: RECORD_SNIPPET,
     language: "python" as const,
     filename: "capture.py",
   },

@@ -1,10 +1,11 @@
 import { Badge } from "@/components/ui/Badge";
 import { ButtonLink } from "@/components/ui/Button";
 import { Reveal } from "@/components/ui/Reveal";
+import { PRODUCT } from "@/data/product";
 
 export function FinalCTA() {
   return (
-    <section id="pilot" className="relative overflow-hidden border-t border-line py-28 md:py-36">
+    <section id="get-started" className="relative overflow-hidden border-t border-line py-28 md:py-36">
       <div
         className="grid-field pointer-events-none absolute inset-0"
         style={{ maskImage: "radial-gradient(ellipse 70% 80% at 50% 100%, #000 10%, transparent 75%)" }}
@@ -14,7 +15,7 @@ export function FinalCTA() {
       <div className="shell relative flex flex-col items-center text-center">
         <Reveal>
           <Badge tone="cyan" dot>
-            Private research pilot
+            Open source · {PRODUCT.license}
           </Badge>
         </Reveal>
 
@@ -26,26 +27,26 @@ export function FinalCTA() {
 
         <Reveal delay={0.12}>
           <p className="mt-6 max-w-[58ch] text-[17px] leading-[1.65] text-ink-muted md:text-[19px]">
-            SynthGraph is currently available through a limited research pilot. Request a demo to
-            see how provenance fits into your existing workflow.
+            Install the SDK and record your next generation. The next time someone asks which seed, you
+            will already have the answer.
           </p>
         </Reveal>
 
         <Reveal delay={0.18}>
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-            <ButtonLink href="/demo" size="lg" arrow>
-              Request a Demo
+            <ButtonLink href="/docs/quickstart" size="lg" arrow>
+              Get started
             </ButtonLink>
-            <ButtonLink href="/product" size="lg" variant="secondary">
-              Explore the product
+            <ButtonLink href="/register" size="lg" variant="secondary">
+              Create an account
             </ButtonLink>
           </div>
         </Reveal>
 
         <Reveal delay={0.24}>
-          <p className="mt-8 font-mono text-[11.5px] leading-[1.7] text-ink-faint">
-            SynthGraph is being developed with a small number of research workflows before
-            broader access.
+          <p className="mt-8 max-w-[62ch] font-mono text-[11.5px] leading-[1.7] text-ink-faint">
+            SDK {PRODUCT.sdkVersion} is an alpha: the API only changes by adding, and the SDK can still
+            change. See the docs for what it does and what it does not do.
           </p>
         </Reveal>
       </div>
