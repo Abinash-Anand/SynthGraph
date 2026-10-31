@@ -1,141 +1,124 @@
 import type { Metadata } from "next";
 import { FinalCTA } from "@/components/sections/FinalCTA";
-import { Badge, StatusBadge } from "@/components/ui/Badge";
+import { Badge } from "@/components/ui/Badge";
 import { ButtonLink } from "@/components/ui/Button";
 import { CodeBlock } from "@/components/ui/CodeBlock";
 import { PageHero } from "@/components/ui/PageHero";
 import { Reveal } from "@/components/ui/Reveal";
+import { INTEGRATIONS, PRODUCT, SDK_INSTALL_COMMAND } from "@/data/product";
 
 export const metadata: Metadata = {
   title: "Developers",
   description:
-    "Instrument synthetic-data research in Python. The SynthGraph SDK records generations, dataset versions, training runs and evaluation results from the code you already run.",
+    "Record generations, datasets, training runs and evaluations from the Python code you already run. The SynthGraph SDK and CLI.",
 };
 
-const INSTALL = `$ pip install synthgraph`;
+const INSTALL = `$ ${SDK_INSTALL_COMMAND}`;
 
-const CONFIGURE = `import os
+const CONFIGURE = `$ export SYNTHGRAPH_API_KEY="..."
+$ export SYNTHGRAPH_API_URL="https://your-synthgraph-backend"`;
 
-from synthgraph import SynthGraphClient
+// Run against a real backend with SDK 0.6.0 before it was put here.
+const RECORD = `from synthgraph import SynthGraph
 
-client = SynthGraphClient(
-    api_key=os.environ["SYNTHGRAPH_API_KEY"],
-    # Point at a hosted or self-controlled deployment.
-    api_url=os.environ.get("SYNTHGRAPH_API_URL"),
-)`;
+with SynthGraph() as sg:  # reads the two environment variables above
+    project = sg.project("Adverse weather detection")
+    experiment = project.experiment("vehicle_detection_rain")
 
-const PROJECTS = `project = client.projects.create(
-    name="Wildlife Detection",
-    description="Synthetic rain scenes for detection in adverse weather",
-)
-
-experiment = client.experiments.create(
-    project_id=project.id,
-    name="Rainy Scene Generation",
-)`;
-
-const GENERATIONS = `from synthgraph import Generator, Reproducibility
-
-generation = client.generations.create(
-    experiment_id=experiment.id,
-    name="Rainy Scene Generation",
-    generator=Generator(
-        name="blender",
-        version="4.2.0",
-    ),
-    parameters={
-        "weather": "rain",
-        "occlusion": 0.30,
-        "camera_distance": 12,
-    },
-    reproducibility=Reproducibility(
+    with experiment.generation(
+        generator="blender",
+        generator_version="4.2",
+        parameters={"weather": "rain", "occlusion": 0.3, "camera_distance": 12},
         seed=42,
-    ),
-)`;
+    ) as generation:
+        run_my_blender_pipeline()  # your code, unchanged
 
-const REFERENCES = `# The dataset stays where it already lives. SynthGraph records
-# the reference, the version and the checksum — not the bytes.
-client.generations.complete(
-    generation.id,
-    dataset={
-        "name": "rain_dataset",
-        "version": "v7",
-        "uri": "s3://research/rain-v7",
-        "checksum": "sha256:9c1f...e40b",
-    },
-    assets=[
-        {"name": "vehicle-model", "version": "v7"},
-        {"name": "forest-texture", "version": "v4"},
-    ],
-)`;
+        dataset = generation.dataset(
+            name="rain_dataset_v1",
+            uri="s3://lab-bucket/rain_dataset_v1",
+            format="image",
+        )
 
-const LIFECYCLE = `try:
-    frames = render_dataset(**parameters)
-except RenderError as error:
-    # A failed run keeps its provenance and stays in the history.
-    client.generations.fail(generation.id, reason=str(error))
-    raise
+    with experiment.training(
+        model="yolo",
+        framework="pytorch",
+        dataset=dataset,
+        config={"epochs": 50, "batch_size": 32, "learning_rate": 0.001},
+    ) as training:
+        training.log_metric(step=1, metrics={"loss": 0.9})
+        training.evaluation(
+            metrics={"mAP": 0.724, "precision": 0.78, "recall": 0.69},
+            dataset_version_id=dataset,
+        )`;
 
-client.generations.complete(generation.id, frame_count=len(frames))`;
+const CLI = `$ synthgraph projects list
+$ synthgraph experiments list --project <project-id>
+$ synthgraph training-runs get <training-run-id>
+$ synthgraph manifest <generation-id>     # the reproduction manifest
+$ synthgraph docs <generation-id>         # generated Markdown documentation`;
 
 const SECTIONS = [
   {
     id: "installation",
-    title: "Installation",
-    body: "The SDK is a Python package with a small dependency surface. It targets the Python versions research environments actually run.",
+    title: "Install",
+    body: PRODUCT.sdkOnPyPI
+      ? `The SDK needs Python ${PRODUCT.pythonRequires}. It installs the synthgraph Python package and a synthgraph command.`
+      : `The SDK needs Python ${PRODUCT.pythonRequires}. The version on PyPI is behind the repository, so for now install the current ${PRODUCT.sdkVersion} straight from GitHub.`,
     code: INSTALL,
     language: "bash" as const,
     filename: "shell",
   },
   {
-    id: "client",
-    title: "Client configuration",
-    body: "The API key is read from the environment, never hard-coded. The endpoint is configurable so the same code can run against a hosted deployment or one you operate yourself.",
+    id: "configure",
+    title: "Configure",
+    body: "Credentials come from the environment, never from code. Create an API key in the dashboard under Settings, then point the SDK at your backend: the hosted one or your own.",
     code: CONFIGURE,
-    language: "python" as const,
-    filename: "client.py",
+    language: "bash" as const,
+    filename: "shell",
   },
   {
-    id: "projects",
-    title: "Projects and experiments",
-    body: "Ownership runs User → Project → Experiment. An experiment holds the generations and training runs that belong together.",
-    code: PROJECTS,
+    id: "record",
+    title: "Record",
+    body: "A few lines around the code you already have. The with blocks start and finish the generation and the training run for you, and mark them failed if your code raises. Your dataset stays where it is: SynthGraph stores the reference, not the bytes.",
+    code: RECORD,
     language: "python" as const,
-    filename: "setup.py",
+    filename: "capture.py",
   },
   {
-    id: "generations",
-    title: "Generations",
-    body: "A generation is created before the run, with the generator, parameters and seed that define it. That ordering is what makes the record trustworthy: the configuration is written down before the outcome is known.",
-    code: GENERATIONS,
-    language: "python" as const,
-    filename: "sweep.py",
-  },
-  {
-    id: "references",
-    title: "References",
-    body: "Datasets and assets are attached by reference and version. Nothing requires uploading a dataset to SynthGraph in order to record its provenance.",
-    code: REFERENCES,
-    language: "python" as const,
-    filename: "sweep.py",
-  },
-  {
-    id: "lifecycle",
-    title: "Lifecycle",
-    body: "A generation moves from pending to running to completed or failed. Once it is running, the fields that define the run are fixed; a failure is recorded rather than discarded.",
-    code: LIFECYCLE,
-    language: "python" as const,
-    filename: "sweep.py",
+    id: "cli",
+    title: "Inspect from the command line",
+    body: "The same data, from a terminal. Every command can print JSON for scripts.",
+    code: CLI,
+    language: "bash" as const,
+    filename: "shell",
   },
 ];
 
 const RELIABILITY = [
-  ["Safe retries", "A dropped connection during a long sweep should not leave a half-written record."],
-  ["Idempotency", "Repeating a create call does not produce a duplicate run."],
-  ["Backend validation", "The API decides what a valid record is; the client does not get to disagree."],
-  ["Typed models", "Generator, Reproducibility and reference types are typed rather than loose dictionaries."],
-  ["Flexible metadata", "Domain-specific metadata rides alongside the fields the model defines."],
-  ["Storage neutrality", "References describe where data lives without assuming a provider."],
+  [
+    "Reads are retried",
+    "GET requests are retried with exponential backoff on connection failures, timeouts and 408, 429 and 5xx responses.",
+  ],
+  [
+    "Writes are never retried blindly",
+    "The API has no idempotency key yet, so repeating a create call could duplicate a record. A write that fails in transit raises an error that says its outcome is unknown, instead of pretending it saved.",
+  ],
+  [
+    "Backend validation",
+    "The API decides what a valid record is. The SDK checks what it can before a request leaves, so a rejected call leaves nothing behind.",
+  ],
+  [
+    "Typed models",
+    "Responses are typed models, not loose dictionaries, and errors form one hierarchy you can catch.",
+  ],
+  [
+    "Opt-in capture",
+    "Hashing your data, reading git state, recording the environment and sampling resources only happen when you ask.",
+  ],
+  [
+    "Your key stays private",
+    "The API key is never logged, never written into a model or a manifest, and never placed in an error message.",
+  ],
 ];
 
 export default function DevelopersPage() {
@@ -144,21 +127,19 @@ export default function DevelopersPage() {
       <PageHero
         eyebrow="Developers"
         title="Instrument your research in Python."
-        lede="The SDK is the primary integration surface. It wraps the generation and training code you already run and sends structured provenance to the API over HTTPS."
+        lede="The SDK is called from the generator and training code you already run, and sends structured records to the API over HTTPS. A command line tool reads them back."
       >
         <div className="flex flex-col gap-5">
-          <CodeBlock
-            code={`from synthgraph import SynthGraphClient`}
-            language="python"
-            filename="python"
-            className="max-w-[520px]"
-          />
+          <CodeBlock code={INSTALL} language="bash" filename="shell" className="max-w-[640px]" />
           <div className="flex flex-wrap items-center gap-3">
-            <ButtonLink href="/demo" arrow>
-              Request a Demo
+            <ButtonLink href="/docs" arrow>
+              Read the docs
+            </ButtonLink>
+            <ButtonLink href={PRODUCT.repoUrl} variant="secondary">
+              GitHub
             </ButtonLink>
             <Badge tone="cyan" dot>
-              SDK in early development
+              SDK {PRODUCT.sdkVersion} · alpha
             </Badge>
           </div>
         </div>
@@ -186,11 +167,7 @@ export default function DevelopersPage() {
                       {section.body}
                     </p>
                   </div>
-                  <CodeBlock
-                    code={section.code}
-                    language={section.language}
-                    filename={section.filename}
-                  />
+                  <CodeBlock code={section.code} language={section.language} filename={section.filename} />
                 </article>
               </Reveal>
             ))}
@@ -203,54 +180,40 @@ export default function DevelopersPage() {
           <div>
             <p className="mono-label">Reliability</p>
             <h2 className="mt-4 max-w-[20ch] text-[26px] leading-[1.15] font-medium tracking-[-0.02em] text-ink md:text-[32px]">
-              A sweep runs for hours. The client has to survive it.
+              What the client does when the network does not.
             </h2>
             <ul className="mt-8 flex flex-col gap-5">
               {RELIABILITY.map(([title, body]) => (
                 <li key={title}>
                   <h3 className="font-mono text-[12.5px] text-ink">{title}</h3>
-                  <p className="mt-1 max-w-[48ch] text-[14px] leading-[1.6] text-ink-muted">
-                    {body}
-                  </p>
+                  <p className="mt-1 max-w-[52ch] text-[14px] leading-[1.6] text-ink-muted">{body}</p>
                 </li>
               ))}
             </ul>
           </div>
 
           <div>
-            <p className="mono-label">API architecture</p>
-            <ol className="mt-5 flex flex-col">
-              {[
-                ["Your code", "generator, training script, notebook"],
-                ["SynthGraph SDK", "typed models, retries, idempotency"],
-                ["HTTPS / JSON", "authenticated request"],
-                ["SynthGraph API", "server-side validation and authorization"],
-                ["Provenance storage", "records, versions, relationships"],
-              ].map(([layer, detail], index, all) => (
-                <li key={layer}>
-                  <div className="rounded-md border border-line bg-surface/50 px-4 py-3">
-                    <p className="font-mono text-[13px] text-ink">{layer}</p>
-                    <p className="mt-0.5 font-mono text-[11px] text-ink-dim">{detail}</p>
-                  </div>
-                  {index < all.length - 1 ? (
-                    <div className="py-1.5 pl-6">
-                      <span aria-hidden className="block h-3 w-px bg-cyan/40" />
-                    </div>
-                  ) : null}
+            <p className="mono-label">Framework helpers</p>
+            <p className="mt-4 max-w-[52ch] text-[14.5px] leading-[1.7] text-ink-muted">
+              Helpers turn objects you already have into the configuration SynthGraph records. Nothing is
+              imported or patched unless you call it. There are no plugins for Blender, Unity or Omniverse:
+              your script calls the SDK.
+            </p>
+            <ul className="mt-6 flex flex-col gap-3">
+              {INTEGRATIONS.map((item) => (
+                <li key={item.name} className="rounded-md border border-line bg-surface/50 px-4 py-3">
+                  <p className="font-mono text-[13px] text-ink">{item.name}</p>
+                  <p className="mt-0.5 text-[13px] leading-[1.55] text-ink-muted">{item.does}</p>
                 </li>
               ))}
-            </ol>
+            </ul>
 
             <div className="mt-8 rounded-lg border border-line bg-surface/50 p-5">
-              <div className="flex flex-wrap items-center gap-3">
-                <p className="mono-label">Current status</p>
-                <StatusBadge status="private-pilot" />
-              </div>
+              <p className="mono-label">Current status</p>
               <p className="mt-4 max-w-[52ch] text-[14.5px] leading-[1.7] text-ink-muted">
-                The SDK is in early development and is being integrated against real research
-                workflows during the pilot. It is not a released v1.0, the surface is still
-                changing, and the snippets on this page describe the intended shape of the
-                client rather than a frozen contract.
+                The SDK is at version {PRODUCT.sdkVersion}, an alpha. It is open source under the{" "}
+                {PRODUCT.license} license, it is not a finished v1.0 release, and the surface can still
+                change.
               </p>
             </div>
           </div>

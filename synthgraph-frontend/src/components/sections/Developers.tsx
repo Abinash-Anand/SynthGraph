@@ -7,8 +7,7 @@ const PRINCIPLES = [
   ["Typed models", "Generators, parameters, reproducibility and references are typed rather than free-form dictionaries."],
   ["Canonical contract", "One provenance shape across every generator and training framework."],
   ["Flexible metadata", "Arbitrary domain metadata alongside the fields the model defines."],
-  ["Safe retries", "Network failures during a long sweep should not corrupt a record."],
-  ["Idempotency", "Repeating a call does not create a duplicate run."],
+  ["Honest failures", "Reads are retried with backoff. Writes are never retried blindly, and a write that fails in transit says its outcome is unknown instead of claiming success."],
   ["Backend validation", "The server, not the client, decides what a valid record is."],
   ["Configurable endpoint", "Point the SDK at a hosted or self-controlled deployment."],
   ["Minimal instrumentation", "A small number of calls around code you do not have to restructure."],
@@ -30,13 +29,13 @@ export function Developers() {
         <SectionHeader
           eyebrow="Developers"
           title="A Python SDK, not another platform you have to live inside."
-          lede="The SDK is the primary integration surface. It wraps the generator and training code you already run, and sends structured records to the API."
+          lede="The SDK is the primary integration surface. You call it from the generator and training code you already run, and it sends structured records to the API."
         >
           <div className="flex flex-wrap gap-2">
             <Badge tone="cyan" dot>
               Early development
             </Badge>
-            <Badge tone="planned">Private integration stage</Badge>
+            <Badge tone="planned">Open source · MIT</Badge>
           </div>
         </SectionHeader>
 
@@ -59,9 +58,8 @@ export function Developers() {
             </ol>
 
             <p className="mt-8 max-w-[46ch] text-[14.5px] leading-[1.7] text-ink-muted">
-              The SDK is in early development and is being integrated against real research
-              workflows during the pilot. It is not a finished v1.0 release, and the surface is
-              still changing.
+              The SDK is at version 0.6, an alpha. It is used against real research workflows,
+              it is not a finished v1.0 release, and the surface can still change.
             </p>
           </Reveal>
 

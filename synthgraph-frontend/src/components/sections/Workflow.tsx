@@ -39,7 +39,7 @@ const TOOLS = [
 
 const PIPELINE = [
   { label: "Python process", detail: "your script, notebook or job" },
-  { label: "SynthGraph SDK", detail: "typed models, retries, idempotency" },
+  { label: "SynthGraph SDK", detail: "typed models, read retries, honest failures" },
   { label: "HTTPS / JSON", detail: "authenticated request" },
   { label: "SynthGraph API", detail: "server-side validation" },
   { label: "Provenance storage", detail: "records, versions, relationships" },

@@ -1,10 +1,12 @@
 export const SITE = {
   name: "SynthGraph",
-  tagline: "Synthetic-data provenance for computer-vision research.",
-  url: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
-  /** Update when a public repository / docs site actually exists. */
-  github: null as string | null,
-  docs: null as string | null,
+  tagline: "Provenance for synthetic-data and simulation-driven research.",
+  // Production falls back to the real domain, so a missing environment variable
+  // can no longer put localhost URLs into the sitemap and robots.txt.
+  url:
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    (process.env.NODE_ENV === "production" ? "https://synthgraph.dev" : "http://localhost:3000"),
+  github: "https://github.com/Abinash-Anand/SynthGraph",
   contactEmail: "contact@synthgraph.dev",
 } as const;
 
