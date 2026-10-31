@@ -7,20 +7,41 @@ import {
 } from "../../shared/lib/metric-direction.ts";
 import { compareMetricKeys, isOutcomeMetric } from "../../shared/lib/metric-semantics.ts";
 
-export type EfficiencyRunInput = {
+// The ranking, the Pareto frontier, value per hour and "dominated by" are decided
+// by the backend (registry entry ARCH-005): `GET /reports/efficiency-leaderboard`
+// returns `analysis`, every numeric metric ranked per evaluation set. Scores are
+// only ever ranked against other scores on the same set. Nothing here ranks or
+// finds a frontier; this module joins the backend's answer to run names, picks
+// what to show first, and prepares chart bounds.
+
+export const EFFICIENCY_UNAVAILABLE =
+  "The efficiency ranking is not available from this backend version, so the runs are listed fastest first without a ranking.";
+
+type RunSummary = { trainingRunId: string; name: string; durationSeconds: number };
+
+type RankedRow = {
   trainingRunId: string;
-  name: string;
-  durationSeconds: number;
-  evaluations: Array<{ metrics: Record<string, unknown> }>;
+  value: number;
+  perHour: number | null;
+  pareto: boolean;
+  dominatedBy: string | null;
 };
+
+type SetAnalysis = {
+  datasetVersionId: string;
+  runCount: number;
+  rankings: Partial<Record<RankingDirection, { rows: RankedRow[] }>>;
+};
+
+type MetricAnalysis = { sets: SetAnalysis[] };
 
 export type EfficiencyRow = {
   runId: string;
   name: string;
   durationSeconds: number;
-  /** Best evaluation value in the ranking direction, or null if the run never recorded it. */
+  /** The run's best value on the chosen evaluation set, or null when it has none there. */
   value: number | null;
-  /** Value per hour of training - only meaningful when maximizing and the value is positive. */
+  /** Value per hour of training, as the backend computed it. */
   perHour: number | null;
   /** On the frontier: no other run is both at-least-as-fast and at-least-as-good, and strictly better on one. */
   pareto: boolean;
@@ -29,16 +50,10 @@ export type EfficiencyRow = {
 };
 
 /** Metrics worth ranking runs by - outcomes only; elapsed time and system readings are excluded. */
-export function rankableMetricKeys(runs: EfficiencyRunInput[]): string[] {
-  const keys = new Set<string>();
-  for (const run of runs) {
-    for (const evaluation of run.evaluations) {
-      for (const [key, value] of Object.entries(evaluation.metrics)) {
-        if (typeof value === "number" && Number.isFinite(value) && isOutcomeMetric(key)) keys.add(key);
-      }
-    }
-  }
-  return Array.from(keys).sort(compareMetricKeys);
+export function rankableMetricKeys(analysis: Readonly<Record<string, unknown>> | null | undefined): string[] {
+  return Object.keys(analysis ?? {})
+    .filter(isOutcomeMetric)
+    .sort(compareMetricKeys);
 }
 
 /** Prefers a metric with a declared direction, so the default ranking is never arbitrary. */
@@ -46,69 +61,78 @@ export function defaultMetricKey(keys: string[], directions: AggregatedDirection
   return keys.find((key) => rankingDirection(aggregatedDirection(directions, key).direction) !== null) ?? keys[0] ?? "";
 }
 
-function bestOf(values: number[], direction: RankingDirection): number | null {
-  if (values.length === 0) return null;
-  return direction === "minimize" ? Math.min(...values) : Math.max(...values);
-}
-
-// "At least as good" in the chosen direction.
-function atLeastAsGood(a: number, b: number, direction: RankingDirection): boolean {
-  return direction === "minimize" ? a <= b : a >= b;
+/** The evaluation set to show first: the backend lists the one most runs were scored on first. */
+export function defaultSetId(analysis: MetricAnalysis | undefined): string {
+  return analysis?.sets[0]?.datasetVersionId ?? "";
 }
 
 /**
- * Ranks runs and finds the frontier. The direction is required: with none there is no
- * "best" value and no frontier, so callers decide first (declared, or chosen by the
- * user for this view) and do not call this until they have one.
+ * Labels for the evaluation-set picker. Two sets can share a dataset name and
+ * version, so a repeated label gets a short id to stay distinguishable.
  */
-export function analyzeEfficiency(
-  runs: EfficiencyRunInput[],
-  metricKey: string,
-  direction: RankingDirection,
+export function evaluationSetOptions(
+  sets: ReadonlyArray<{ datasetVersionId: string; runCount: number }>,
+  names: ReadonlyArray<{ datasetVersionId: string; datasetName: string; version: string }>,
+): Array<{ id: string; label: string }> {
+  const nameOf = new Map(names.map((entry) => [entry.datasetVersionId, `${entry.datasetName} ${entry.version}`]));
+  const labels = sets.map(
+    (set) =>
+      `${nameOf.get(set.datasetVersionId) ?? "Unnamed evaluation set"} · ${set.runCount} ${set.runCount === 1 ? "run" : "runs"}`,
+  );
+  return sets.map((set, index) => ({
+    id: set.datasetVersionId,
+    label:
+      labels.filter((label) => label === labels[index]).length > 1
+        ? `${labels[index]} (${set.datasetVersionId.slice(0, 8)})`
+        : labels[index],
+  }));
+}
+
+/**
+ * The backend's ranking of one metric on one evaluation set, joined to run names,
+ * with the runs that have no value there listed after it. With no ranking (no
+ * direction chosen, or a metric or set the backend did not rank) there is just
+ * the runs, fastest first.
+ */
+export function efficiencyRows(
+  runs: readonly RunSummary[],
+  analysis: MetricAnalysis | undefined,
+  setId: string,
+  direction: RankingDirection | null,
 ): EfficiencyRow[] {
-  const rows: EfficiencyRow[] = runs.map((run) => {
-    const values = run.evaluations
-      .map((evaluation) => evaluation.metrics[metricKey])
-      .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
-    const value = bestOf(values, direction);
-    return {
+  const nameOf = new Map(runs.map((run) => [run.trainingRunId, run.name]));
+  const ranked =
+    direction === null
+      ? []
+      : (analysis?.sets.find((set) => set.datasetVersionId === setId)?.rankings[direction]?.rows ?? []);
+  const rankedIds = new Set(ranked.map((row) => row.trainingRunId));
+  const byDuration = new Map(runs.map((run) => [run.trainingRunId, run.durationSeconds]));
+
+  const scored: EfficiencyRow[] = ranked.map((row) => ({
+    runId: row.trainingRunId,
+    name: nameOf.get(row.trainingRunId) ?? row.trainingRunId,
+    durationSeconds: byDuration.get(row.trainingRunId) ?? 0,
+    value: row.value,
+    perHour: row.perHour,
+    pareto: row.pareto,
+    dominatedBy:
+      row.dominatedBy === null
+        ? null
+        : { runId: row.dominatedBy, name: nameOf.get(row.dominatedBy) ?? row.dominatedBy },
+  }));
+  const unscored: EfficiencyRow[] = runs
+    .filter((run) => !rankedIds.has(run.trainingRunId))
+    .sort((a, b) => a.durationSeconds - b.durationSeconds)
+    .map((run) => ({
       runId: run.trainingRunId,
       name: run.name,
       durationSeconds: run.durationSeconds,
-      value,
-      // A sub-second duration would divide by ~0 and sort above every real
-      // result, and a per-hour rate is meaningless when minimizing.
-      perHour:
-        value !== null && direction === "maximize" && value > 0 && run.durationSeconds > 0
-          ? value / (run.durationSeconds / 3600)
-          : null,
+      value: null,
+      perHour: null,
       pareto: false,
       dominatedBy: null,
-    };
-  });
-
-  const scored = rows.filter((row): row is EfficiencyRow & { value: number } => row.value !== null);
-  for (const row of scored) {
-    const dominators = scored.filter(
-      (other) =>
-        other.runId !== row.runId &&
-        other.durationSeconds <= row.durationSeconds &&
-        atLeastAsGood(other.value, row.value, direction) &&
-        (other.durationSeconds < row.durationSeconds || other.value !== row.value),
-    );
-    row.pareto = dominators.length === 0;
-    if (dominators.length > 0) {
-      const nearest = dominators.reduce((a, b) => (a.durationSeconds <= b.durationSeconds ? a : b));
-      row.dominatedBy = { runId: nearest.runId, name: nearest.name };
-    }
-  }
-
-  const better = (a: number, b: number) => (direction === "minimize" ? a - b : b - a);
-  return rows.sort((a, b) => {
-    if (a.value === null || b.value === null) return a.value === b.value ? 0 : a.value === null ? 1 : -1;
-    if (a.pareto !== b.pareto) return a.pareto ? -1 : 1;
-    return better(a.value, b.value) || a.durationSeconds - b.durationSeconds;
-  });
+    }));
+  return [...scored, ...unscored];
 }
 
 export type AxisRange = { min: number; max: number };

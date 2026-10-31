@@ -49,7 +49,42 @@ export type EfficiencyLeaderboardEntry = {
     id: string;
     name: string | null;
     metrics: Record<string, unknown>;
+    /** The evaluation set this was scored on. Absent from a backend that predates evaluation sets. */
+    datasetVersionId?: string;
+    checkpointStep?: number | null;
   }>;
+};
+
+/** One run's place in a ranking, decided by the backend. */
+export type EfficiencyRankedRow = {
+  trainingRunId: string;
+  value: number;
+  perHour: number | null;
+  pareto: boolean;
+  /** The run that beats this one on both axes, or null. */
+  dominatedBy: string | null;
+};
+
+/** A metric ranked on one evaluation set, in each direction that applies to it. */
+export type EfficiencySetAnalysis = {
+  datasetVersionId: string;
+  runCount: number;
+  rankings: Partial<Record<"maximize" | "minimize", { rows: EfficiencyRankedRow[] }>>;
+};
+
+export type EfficiencyMetricAnalysis = {
+  /** The declared direction, or null when none was declared, it is neutral, or experiments disagree. */
+  direction: "maximize" | "minimize" | null;
+  directionStatus: "declared" | "neutral" | "mixed" | "undeclared";
+  /** The set with the most runs first. */
+  sets: EfficiencySetAnalysis[];
+};
+
+export type EfficiencyEvaluationSet = {
+  datasetVersionId: string;
+  datasetId: string;
+  datasetName: string;
+  version: string;
 };
 
 export type EfficiencyLeaderboard = {
@@ -59,6 +94,10 @@ export type EfficiencyLeaderboard = {
    * backend that predates declared directions, which reads the same as nothing declared.
    */
   metricDirections?: AggregatedDirections;
+  /** The evaluation sets the rankings are split by. Absent from a backend that does not rank. */
+  evaluationSets?: EfficiencyEvaluationSet[];
+  /** The backend's ranking of every numeric metric per evaluation set. Absent from a backend that does not rank. */
+  analysis?: Record<string, EfficiencyMetricAnalysis>;
 };
 
 export type ParameterCorrelationGroup = {

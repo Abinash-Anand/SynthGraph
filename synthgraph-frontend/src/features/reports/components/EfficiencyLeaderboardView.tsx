@@ -10,18 +10,19 @@ import { cn } from "@/lib/utils";
 import { formatDurationSeconds, formatMetricValue } from "@/shared/lib/format";
 import {
   type RankingDirection,
-  aggregatedDirection,
   directionLabel,
   noRankingReason,
 } from "@/shared/lib/metric-direction";
 import {
-  analyzeEfficiency,
+  EFFICIENCY_UNAVAILABLE,
   closeResultsSpread,
   defaultMetricKey,
+  defaultSetId,
+  efficiencyRows,
+  evaluationSetOptions,
   paddedAxisRange,
   paretoPath,
   rankableMetricKeys,
-  type EfficiencyRow,
 } from "../efficiency-model";
 import type { RunLink } from "../server/resolve-run-links";
 import type { EfficiencyLeaderboard } from "../types/report";
@@ -39,10 +40,13 @@ const CHOICES: Array<{ value: RankingDirection; label: string }> = [
   { value: "minimize", label: "↓ lower" },
 ];
 
-// Which metric matters is the researcher's call, but which direction is better is
-// declared when the metric is logged and read from the backend. With no usable
-// declaration nothing is ranked until the user chooses a direction for this
-// view; that choice is theirs, is not saved, and is labelled as such.
+// The ranking is the backend's: every metric ranked per evaluation set, with the
+// frontier, value per hour and "beaten by" already decided. Scores are only ever
+// ranked against scores on the same evaluation set. Which metric matters and
+// which set to look at are the researcher's call; which direction is better is
+// declared when the metric is logged. With no usable declaration the backend
+// ranks both ways and the user chooses for this view; that choice is theirs, is
+// not saved, and is labelled as such.
 export function EfficiencyLeaderboardView({
   leaderboard,
   linksByRunId = {},
@@ -53,41 +57,34 @@ export function EfficiencyLeaderboardView({
   /** True when the page is already filtered to one project. */
   projectScoped?: boolean;
 }) {
-  const metricKeys = useMemo(() => rankableMetricKeys(leaderboard.runs), [leaderboard.runs]);
+  const metricKeys = useMemo(() => rankableMetricKeys(leaderboard.analysis), [leaderboard.analysis]);
   const [metricKey, setMetricKey] = useState(() => defaultMetricKey(metricKeys, leaderboard.metricDirections));
+  const [setChoice, setSetChoice] = useState("");
   const [override, setOverride] = useState<RankingDirection | null>(null);
 
   const activeMetricKey = metricKeys.includes(metricKey)
     ? metricKey
     : defaultMetricKey(metricKeys, leaderboard.metricDirections);
-  const { direction: declaredValue, mixed: declaredMixed } = aggregatedDirection(
-    leaderboard.metricDirections,
-    activeMetricKey,
+  const metricAnalysis = leaderboard.analysis?.[activeMetricKey];
+  const setOptions = useMemo(
+    () => evaluationSetOptions(metricAnalysis?.sets ?? [], leaderboard.evaluationSets ?? []),
+    [metricAnalysis, leaderboard.evaluationSets],
   );
-  // Spelled out rather than calling rankingDirection(): the React Compiler cannot
-  // prove a call result is a primitive and would stop memoizing this component.
-  const declaredRanking: RankingDirection | null =
-    declaredValue === "maximize" ? "maximize" : declaredValue === "minimize" ? "minimize" : null;
-  const direction: RankingDirection | null = override ?? declaredRanking;
+  const activeSetId = setOptions.some((option) => option.id === setChoice) ? setChoice : defaultSetId(metricAnalysis);
+  const activeSet = metricAnalysis?.sets.find((set) => set.datasetVersionId === activeSetId);
 
-  const rows = useMemo<EfficiencyRow[]>(() => {
-    if (direction === null) {
-      // Nothing says which way is better, so there is no value, frontier or order
-      // to compute: just the runs, fastest first.
-      return [...leaderboard.runs]
-        .sort((a, b) => a.durationSeconds - b.durationSeconds)
-        .map((run) => ({
-          runId: run.trainingRunId,
-          name: run.name,
-          durationSeconds: run.durationSeconds,
-          value: null,
-          perHour: null,
-          pareto: false,
-          dominatedBy: null,
-        }));
-    }
-    return analyzeEfficiency(leaderboard.runs, activeMetricKey, direction);
-  }, [leaderboard.runs, activeMetricKey, direction]);
+  // The backend says whether this metric has a declared direction. Without one it
+  // ranks both ways and the user picks; with one there is nothing to pick.
+  const declaredRanking: RankingDirection | null = metricAnalysis?.direction ?? null;
+  const direction: RankingDirection | null = declaredRanking ?? override;
+  const declaredValue =
+    metricAnalysis?.directionStatus === "neutral" ? "neutral" : declaredRanking;
+  const declaredMixed = metricAnalysis?.directionStatus === "mixed";
+
+  const rows = useMemo(
+    () => efficiencyRows(leaderboard.runs, metricAnalysis, activeSetId, direction),
+    [leaderboard.runs, metricAnalysis, activeSetId, direction],
+  );
 
   const projectCount = useMemo(() => {
     const ids = new Set<string>();
@@ -201,46 +198,77 @@ export function EfficiencyLeaderboardView({
         </p>
       ) : null}
 
-      {metricKeys.length > 0 ? (
-        <div className="flex flex-wrap items-end gap-4">
-          <div className="w-full max-w-[280px]">
-            <SelectField
-              label="Rank by metric"
-              value={activeMetricKey}
-              onChange={(next) => {
-                setMetricKey(next);
-                setOverride(null);
-              }}
-              options={metricKeys}
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[13px] text-research-ink-muted">Better means</span>
-            <div role="group" aria-label="Better means" className="inline-flex rounded-md border border-research-border p-0.5">
-              {CHOICES.map(({ value: choice, label }) => (
-                <button
-                  key={choice}
-                  type="button"
-                  aria-pressed={direction === choice}
-                  onClick={() => setOverride(choice)}
-                  className={cn(
-                    "rounded px-3 py-1.5 text-[13px] transition-colors",
-                    direction === choice
-                      ? "bg-research-accent-subtle/30 text-research-ink"
-                      : "text-research-ink-muted hover:text-research-ink",
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
+      {leaderboard.analysis === undefined ? (
+        <p role="note" className="text-[13px] text-research-ink-secondary">
+          {EFFICIENCY_UNAVAILABLE}
+        </p>
+      ) : metricKeys.length > 0 ? (
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="w-full max-w-[280px]">
+              <SelectField
+                label="Rank by metric"
+                value={activeMetricKey}
+                onChange={(next) => {
+                  setMetricKey(next);
+                  setSetChoice("");
+                  setOverride(null);
+                }}
+                options={metricKeys}
+              />
             </div>
+            {setOptions.length > 0 ? (
+              <div className="w-full max-w-[340px]">
+                <SelectField
+                  label="Evaluation set"
+                  value={setOptions.find((option) => option.id === activeSetId)?.label ?? ""}
+                  onChange={(label) => setSetChoice(setOptions.find((option) => option.label === label)?.id ?? "")}
+                  options={setOptions.map((option) => option.label)}
+                />
+              </div>
+            ) : null}
+            {declaredRanking === null ? (
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[13px] text-research-ink-muted">Better means</span>
+                <div
+                  role="group"
+                  aria-label="Better means"
+                  className="inline-flex rounded-md border border-research-border p-0.5"
+                >
+                  {CHOICES.map(({ value: choice, label }) => (
+                    <button
+                      key={choice}
+                      type="button"
+                      aria-pressed={direction === choice}
+                      onClick={() => setOverride(choice)}
+                      className={cn(
+                        "rounded px-3 py-1.5 text-[13px] transition-colors",
+                        direction === choice
+                          ? "bg-research-accent-subtle/30 text-research-ink"
+                          : "text-research-ink-muted hover:text-research-ink",
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <p className="max-w-[44ch] pb-1 text-[12px] text-research-ink-muted">
+              {declaredRanking
+                ? `Direction: ${directionLabel(declaredRanking)}.`
+                : override
+                  ? `Your choice for this view: ${override === "maximize" ? "higher" : "lower"} is better. It is not saved.`
+                  : `${noRankingReason(declaredValue, declaredMixed)} Choose how to compare these runs for this view; the choice is not saved.`}
+            </p>
           </div>
-          <p className="max-w-[44ch] pb-1 text-[12px] text-research-ink-muted">
-            {override
-              ? `Your choice for this view: ${override === "maximize" ? "higher" : "lower"} is better. It is not saved.`
-              : direction
-                ? `Direction: ${directionLabel(direction)}.`
-                : `${noRankingReason(declaredValue, declaredMixed)} Choose how to compare these runs for this view; the choice is not saved.`}
+          <p role="note" className="max-w-[72ch] text-[12px] text-research-ink-muted">
+            {setOptions.length > 1
+              ? `${activeMetricKey} was scored on ${setOptions.length} different evaluation sets. A run is ranked only against runs scored on the same set, so scores from different sets are never combined. `
+              : ""}
+            {activeSet
+              ? `Showing ${activeSet.runCount} ${activeSet.runCount === 1 ? "run" : "runs"} scored on this set; a run's value is its best checkpoint on it.`
+              : ""}
           </p>
         </div>
       ) : (
@@ -310,7 +338,7 @@ export function EfficiencyLeaderboardView({
                     ) : null}
                   </>
                 ) : (
-                  direction ? <p className="text-[13px] text-ink-faint">No {activeMetricKey || "metric"} recorded</p> : null
+                  direction ? <p className="text-[13px] text-ink-faint">No {activeMetricKey || "metric"} on this evaluation set</p> : null
                 )}
               </div>
             </Card>

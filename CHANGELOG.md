@@ -35,6 +35,11 @@ This project does not yet have tagged releases - entries accumulate under
   another project, or reusing a dataset of another project, is refused before anything
   is created (`SynthGraphCrossProjectReferenceError`). `use(generation)` no longer
   fails for a generation that produced no dataset.
+- `GET /reports/efficiency-leaderboard` gains `analysis` (every numeric metric ranked on each evaluation set,
+  with the Pareto frontier, value per hour and the run that beats each dominated one) and `evaluationSets`;
+  each run evaluation gains `datasetVersionId` and `checkpointStep`. The Efficiency Leaderboard shows the
+  backend's ranking and lets you pick the evaluation set. A metric with a declared direction is ranked that
+  way only; the "Better means" choice appears only when nothing is declared.
 - `GET /reports/capture-completeness/runs` lists the runs behind the capture report's counts with what is
   wrong with each one's capture, and `GET /reports/capture-completeness` gains `integrations` (left open,
   close rate, coverage). The Capture Completeness page shows the backend's answer. Its "unknown" list now
