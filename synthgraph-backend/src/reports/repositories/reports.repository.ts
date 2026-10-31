@@ -252,6 +252,37 @@ export class ReportsRepository {
       .getMany();
   }
 
+  // Names for evaluation sets, so a client can say which set a ranking is on.
+  // The ids come from the caller's own evaluations, so no ownership check here.
+  async findDatasetVersionLabels(
+    datasetVersionIds: string[],
+  ): Promise<
+    Array<{
+      datasetVersionId: string;
+      datasetId: string;
+      datasetName: string;
+      version: string;
+    }>
+  > {
+    if (datasetVersionIds.length === 0) return [];
+
+    const rows = await this.datasetVersionRepository
+      .createQueryBuilder('version')
+      .innerJoin('version.dataset', 'dataset')
+      .select('version.id', 'datasetVersionId')
+      .addSelect('dataset.id', 'datasetId')
+      .addSelect('dataset.name', 'datasetName')
+      .addSelect('version.version', 'version')
+      .where('version.id IN (:...datasetVersionIds)', { datasetVersionIds })
+      .getRawMany<{
+        datasetVersionId: string;
+        datasetId: string;
+        datasetName: string;
+        version: string;
+      }>();
+    return rows;
+  }
+
   // Last `limit` rows by step - the health-signal window. Ordering here
   // matches findAllForTrainingRun's own ASC-by-step convention so a caller
   // can just take the tail for "most recent N points".

@@ -6,6 +6,10 @@ import {
   type AggregatedMetricDirection,
 } from '../../metric-directions/metric-direction.js';
 import { MetricDirectionsService } from '../../metric-directions/metric-directions.service.js';
+import {
+  analyzeEfficiency,
+  type EfficiencyMetricAnalysis,
+} from '../efficiency-analysis.js';
 import { ReportsRepository } from '../repositories/reports.repository.js';
 
 export type EfficiencyLeaderboardEntry = {
@@ -16,7 +20,18 @@ export type EfficiencyLeaderboardEntry = {
     id: string;
     name: string | null;
     metrics: Record<string, unknown>;
+    /** The evaluation set this was scored on. */
+    datasetVersionId: string;
+    checkpointStep: number | null;
   }>;
+};
+
+/** An evaluation set the leaderboard has scores for. */
+export type EfficiencyEvaluationSet = {
+  datasetVersionId: string;
+  datasetId: string;
+  datasetName: string;
+  version: string;
 };
 
 @Injectable()
@@ -26,11 +41,11 @@ export class GetEfficiencyLeaderboardService {
     private readonly metricDirectionsService: MetricDirectionsService,
   ) {}
 
-  // Deliberately does not pre-rank or pick "the" metric: which metric
-  // matters and which direction is "better" (higher mAP vs. lower loss)
-  // is a UI concern, not something the backend should guess. The real
-  // value added here is the join - one call instead of the frontend doing
-  // N+1 fetches across every run and every evaluation.
+  // Does not pick "the" metric: which one matters is the researcher's call, so
+  // `analysis` ranks every numeric metric. Which direction is "better" is the
+  // declared one (ARCH-001); with none declared both are ranked and the client
+  // lets the user choose. Scores are ranked only against other scores on the
+  // same evaluation set (ARCH-005): see efficiency-analysis.ts.
   async execute(
     userId: string,
     projectId?: string,
@@ -38,6 +53,10 @@ export class GetEfficiencyLeaderboardService {
     runs: EfficiencyLeaderboardEntry[];
     /** See BestRunsReport.metricDirections: declared where every experiment agrees, mixed otherwise, absent if undeclared. */
     metricDirections: Record<string, AggregatedMetricDirection>;
+    /** The evaluation sets the rankings in `analysis` are split by. */
+    evaluationSets: EfficiencyEvaluationSet[];
+    /** Every numeric metric, ranked per evaluation set. */
+    analysis: Record<string, EfficiencyMetricAnalysis>;
   }> {
     const trainingRuns =
       await this.reportsRepository.findCompletedTrainingRunsForUser(
@@ -74,6 +93,8 @@ export class GetEfficiencyLeaderboardService {
             id: evaluation.id,
             name: evaluation.name,
             metrics: evaluation.metrics,
+            datasetVersionId: evaluation.datasetVersionId,
+            checkpointStep: evaluation.checkpointStep,
           }),
         ),
       };
@@ -96,15 +117,27 @@ export class GetEfficiencyLeaderboardService {
       ...keysByExperiment.keys(),
     ]);
 
-    return {
-      runs,
-      metricDirections: aggregateMetricDirections(
-        [...keysByExperiment].map(([experimentId, metricKeys]) => ({
-          experimentId,
-          metricKeys,
-        })),
-        declared,
-      ),
-    };
+    const metricDirections = aggregateMetricDirections(
+      [...keysByExperiment].map(([experimentId, metricKeys]) => ({
+        experimentId,
+        metricKeys,
+      })),
+      declared,
+    );
+
+    const analysis = analyzeEfficiency(runs, metricDirections);
+    const setIds = new Set<string>();
+    for (const metric of Object.values(analysis)) {
+      for (const set of metric.sets) setIds.add(set.datasetVersionId);
+    }
+    const evaluationSets = (
+      await this.reportsRepository.findDatasetVersionLabels([...setIds])
+    ).sort(
+      (a, b) =>
+        a.datasetName.localeCompare(b.datasetName) ||
+        a.version.localeCompare(b.version),
+    );
+
+    return { runs, metricDirections, evaluationSets, analysis };
   }
 }
