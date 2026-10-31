@@ -104,6 +104,7 @@ export function DashboardShowcase() {
                   width={active.width}
                   height={active.height}
                   alt={active.alt}
+                  unoptimized
                   sizes="(min-width: 1240px) 1160px, 100vw"
                   className="h-auto w-full"
                 />

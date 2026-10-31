@@ -105,7 +105,14 @@ export default function HowItWorksPage() {
                   ) : step.image ? (
                     <div>
                       <div className="overflow-hidden rounded-xl border border-line-strong bg-surface shadow-2xl">
-                        <Image src={step.image.src} alt={step.image.alt} width={1800} height={1126} className="h-auto w-full" />
+                        <Image
+                          src={step.image.src}
+                          alt={step.image.alt}
+                          width={1800}
+                          height={1126}
+                          unoptimized
+                          className="h-auto w-full"
+                        />
                       </div>
                       <p className="mt-3 font-mono text-[11px] text-ink-faint">
                         Demo data: an invented adverse-weather detection project.
