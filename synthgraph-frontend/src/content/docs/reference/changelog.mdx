@@ -2,6 +2,12 @@ What changed in SynthGraph, newest first. There are no tagged releases yet, so e
 
 ## October 2026
 
+### SDK 1.0.0: first release under the name `synthgraph`
+
+- The PyPI package is now called `synthgraph`: `pip install synthgraph`. The earlier `synthgraph-sdk` name is no longer used. The import (`import synthgraph`) and the `synthgraph` command are unchanged.
+- It is the same code as 0.6.0. The package metadata now says MIT, matching the repository licence.
+- Some of the wire contract is not frozen yet. The SDK's contract file lists what is still open, for example an API versioning scheme and idempotency keys for writes.
+
 ### SDK 0.6.0: explicit lineage
 
 - `training.use(generation)` and `training.link_generation(generation)` record that a training run used a generation, including a simulation that wrote no dataset. `experiment.training(..., generations=[...])` does the same at creation. `synthgraph training-runs link-generation` and `training-runs generations` do it from the command line. See [Link data to results](/docs/sdk/lineage).

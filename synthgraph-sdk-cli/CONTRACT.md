@@ -2,8 +2,9 @@
 
 Status of the wire contract between this client and the SynthGraph backend.
 
-**Package version:** 0.6.0 — not 1.0. Sections 3 and 4 must be closed before a
-1.0 release.
+**Package version:** 1.0.0. The 1.0.0 release was cut on 2026-10-31 by decision of the
+maintainer, without closing section 4 first. Those items are still unchecked and are the
+record of what is not yet frozen.
 
 This file exists because the handoff specification (§66) requires one
 deliberate, documented contract decision per divergence, rather than
@@ -308,9 +309,9 @@ Two smaller unknowns in a related category:
 
 ---
 
-## 4. Still open before v1.0
+## 4. Still open at 1.0
 
-Per spec §36, §67 and §68, these must be frozen and this file updated:
+Per spec §36, §67 and §68, these should be frozen and this file updated as each one is:
 
 - [ ] exact wire field names (and whether the backend emits snake_case or camelCase)
 - [ ] required vs optional fields per payload
@@ -364,7 +365,7 @@ function the caller calls explicitly (e.g. into `metadata=`), never wired
 into `auto_capture()`. `cpu_count` and GPU stats need no dependency
 (`nvidia-smi`, when present, is queried the same subprocess-based way
 `git_metadata()` queries `git`); CPU percent and memory come from the
-optional `psutil` extra (`pip install synthgraph-sdk[resource]`) and are
+optional `psutil` extra (`pip install synthgraph[resource]`) and are
 simply absent without it - verified end-to-end against real hardware
 (`psutil`'s CPU/memory sampling and a real `nvidia-smi` GPU query) in this
 environment, not just mocked, before the mocked tests were written.

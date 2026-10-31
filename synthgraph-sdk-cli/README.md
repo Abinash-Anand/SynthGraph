@@ -27,7 +27,7 @@ you put it.
 ## Install
 
 ```bash
-pip install synthgraph-sdk
+pip install synthgraph
 ```
 
 Requires Python 3.11+. For local resource-metric capture (CPU/memory
@@ -35,11 +35,11 @@ percentages, on top of the CPU-count and GPU stats that need no extra
 dependency), add the `resource` extra:
 
 ```bash
-pip install "synthgraph-sdk[resource]"
+pip install "synthgraph[resource]"
 ```
 
 Framework integrations (below) assume you already have the corresponding
-library installed — `synthgraph-sdk` never pulls in stable-baselines3, skrl,
+library installed — `synthgraph` never pulls in stable-baselines3, skrl,
 rl_games, Isaac Lab, MuJoCo Playground or wandb on your behalf.
 
 ## Configure
@@ -140,8 +140,8 @@ ids) instead; handing `use()` a generation that has none recorded is an error, n
 a silent no-op.
 
 Without these links the dashboard can still show your generations, runs and
-evaluations, but the connections between them are dashed guesses from timing,
-not provenance.
+evaluations, but nothing connects them: the dashboard draws a line only where you
+recorded a link, and it flags the generations that have none.
 
 ### Checksums (opt-in)
 
@@ -433,6 +433,7 @@ pytest -m integration
 
 ## Contract status
 
-This package is pre-1.0. Several wire-contract items are still open, and some
-routes have not been verified against the backend implementation. See
-[CONTRACT.md](CONTRACT.md) before depending on them.
+This is version 1.0.0, but the wire contract is not fully frozen. Several items in
+[CONTRACT.md](CONTRACT.md) section 4 are still open, such as an API versioning scheme
+and idempotency keys for writes (which is why writes are never retried). Read it
+before depending on them.

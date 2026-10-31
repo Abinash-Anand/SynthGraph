@@ -25,7 +25,7 @@ describe("website code samples", () => {
 
 describe("install command", () => {
   it("installs from GitHub until the repository version is on PyPI", () => {
-    if (PRODUCT.sdkOnPyPI) assert.equal(SDK_INSTALL_COMMAND, "pip install synthgraph-sdk");
+    if (PRODUCT.sdkOnPyPI) assert.equal(SDK_INSTALL_COMMAND, "pip install synthgraph");
     else assert.match(SDK_INSTALL_COMMAND, /git\+https:\/\/github\.com\/.+#subdirectory=synthgraph-sdk-cli/);
   });
 });

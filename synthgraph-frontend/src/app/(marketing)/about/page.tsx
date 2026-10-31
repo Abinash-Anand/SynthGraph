@@ -93,7 +93,7 @@ export default function AboutPage() {
               <p className="mono-label">Current status</p>
               <p className="mt-3 text-[15px] leading-[1.7] text-ink-muted">
                 SynthGraph is an alpha. The SDK is at version {PRODUCT.sdkVersion}, the API only changes by
-                adding, and the SDK can still change. There are no customers or published benchmarks to point
+                adding, and parts of the wire contract are not frozen yet. There are no customers or published benchmarks to point
                 at, and this site does not claim any. What it does today, and what it does not, is written down
                 in the docs.
               </p>

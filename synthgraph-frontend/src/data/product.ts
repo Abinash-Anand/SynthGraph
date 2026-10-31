@@ -7,18 +7,18 @@
  * instructions switch to the short `pip install` line.
  */
 export const PRODUCT = {
-  sdkVersion: "0.6.0",
+  sdkVersion: "1.0.0",
   sdkOnPyPI: false,
   pythonRequires: "3.11+",
   repoUrl: "https://github.com/Abinash-Anand/SynthGraph",
-  pypiUrl: "https://pypi.org/project/synthgraph-sdk/",
+  pypiUrl: "https://pypi.org/project/synthgraph/",
   license: "MIT",
 } as const;
 
 const GITHUB_INSTALL = `pip install "git+${PRODUCT.repoUrl}.git#subdirectory=synthgraph-sdk-cli"`;
 
 /** The command that installs the current SDK today. */
-export const SDK_INSTALL_COMMAND = PRODUCT.sdkOnPyPI ? "pip install synthgraph-sdk" : GITHUB_INSTALL;
+export const SDK_INSTALL_COMMAND = PRODUCT.sdkOnPyPI ? "pip install synthgraph" : GITHUB_INSTALL;
 
 /** The integrations that exist in the SDK, and what each one really does. */
 export const INTEGRATIONS = [
