@@ -15,10 +15,11 @@ export function Install() {
         </pre>
       </DocsCode>
       {PRODUCT.sdkOnPyPI ? null : (
-        <Callout type="note" title="Why not pip install synthgraph?">
+        <Callout type="note" title="Why not pip install synthgraph-sdk?">
           <p>
-            Version {PRODUCT.sdkVersion} of the SDK is not on PyPI yet. Until it is, install from GitHub as
-            shown. You need Python {PRODUCT.pythonRequires} and git.
+            The version of <code>synthgraph-sdk</code> on PyPI is older than the one in the repository and does
+            not work with the current backend. Until {PRODUCT.sdkVersion} is published there, install from
+            GitHub as shown. You need Python {PRODUCT.pythonRequires} and git.
           </p>
         </Callout>
       )}

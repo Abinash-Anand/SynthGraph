@@ -365,7 +365,7 @@ function the caller calls explicitly (e.g. into `metadata=`), never wired
 into `auto_capture()`. `cpu_count` and GPU stats need no dependency
 (`nvidia-smi`, when present, is queried the same subprocess-based way
 `git_metadata()` queries `git`); CPU percent and memory come from the
-optional `psutil` extra (`pip install synthgraph[resource]`) and are
+optional `psutil` extra (`pip install synthgraph-sdk[resource]`) and are
 simply absent without it - verified end-to-end against real hardware
 (`psutil`'s CPU/memory sampling and a real `nvidia-smi` GPU query) in this
 environment, not just mocked, before the mocked tests were written.
